@@ -1,0 +1,44 @@
+/* tokens.css — Broadsheet design tokens for "Yearly".
+   Lift these into whatever your repo uses (CSS :root vars shown here;
+   for Tailwind put them in theme.extend; for a JS theme object, copy the values). */
+:root {
+  /* ---- Surfaces ---- */
+  --paper:        #F4F1E8;   /* page background — warm paper, NEVER pure white */
+  --paper-tint:   #EFEBE0;   /* very subtly sunk areas (rare; prefer hairlines over fills) */
+  --ink:          #221F19;   /* primary text / display numbers — near-black, NEVER #000 */
+  --ink-2:        #5B5547;   /* secondary text (hero subline, body emphasis) */
+  --muted:        #8D846F;   /* tertiary: eyebrows, meta, axis labels */
+  --hair:         rgba(34, 28, 18, 0.13);  /* hairline rules, dividers, light borders */
+  --hair-strong:  rgba(34, 28, 18, 0.28);  /* the 1.5px under section headers */
+
+  /* ---- Accent + state (used SPARINGLY) ---- */
+  --terra:        #BE4A30;   /* the single accent: links, active nav, alert/mover dots, key numbers */
+  --amber:        #C0852B;   /* "watch" severity */
+  --sage:         #5E7C54;   /* "good"/under-target severity */
+
+  /* ---- Chart palette ---- */
+  --chart-actual: #BE4A30;   /* cumulative actual line + area stroke */
+  --chart-proj:   #B98E6A;   /* dashed projection line (muted terracotta) */
+  --chart-target: #8D846F;   /* dashed target reference line */
+  --chart-pace:   #B6AD95;   /* faint linear-pace diagonal */
+  --chart-grid:   rgba(34, 28, 18, 0.10);
+  --chart-axis:   #9A9176;   /* axis tick labels (mono) */
+  --chart-fill-top: 0.22;    /* opacity of the area gradient's top stop */
+
+  /* ---- Type ---- */
+  --serif: 'Newsreader', Georgia, 'Times New Roman', serif;        /* display numbers + section headers */
+  --sans:  'Hanken Grotesk', system-ui, -apple-system, sans-serif; /* UI + body */
+  --mono:  'JetBrains Mono', ui-monospace, 'SF Mono', monospace;   /* ALL figures, labels, eyebrows, ticks */
+
+  /* ---- Radii / spacing ---- */
+  --r-pill: 999px;
+  --screen-pad: 26px;        /* horizontal padding of every screen */
+}
+
+/* Google Fonts (or self-host these three families):
+   https://fonts.googleapis.com/css2?family=Newsreader:opsz,wght@6..72,300;6..72,400;6..72,500&family=Hanken+Grotesk:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;700&display=swap
+   Weights used: Newsreader 300 (hero number) / 500 (headers, wordmark);
+                 Hanken Grotesk 400 (body) / 500 / 700;
+                 JetBrains Mono 400 / 500 (inline numbers) / 700 (emphasis numbers). */
+
+.tnum { font-variant-numeric: tabular-nums; }

@@ -1,7 +1,7 @@
 // home.jsx — calm overview: status hero + callouts + recent peek.
 (function () {
   const { YUI, YCalc } = window;
-  const { StatusHero, CalloutCard, TxRow, SectionH } = YUI;
+  const { StatusHero, CalloutCard, SpendCurve, SectionH } = YUI;
 
   function sliceCallouts(callouts, density) {
     const sev = { alert: 3, watch: 2, info: 1, good: 0 };
@@ -13,15 +13,18 @@
     return callouts.slice(0, 4); // balanced
   }
 
-  function HomeScreen({ stats, callouts, density, onCallout, onSeeAllTx, onEditTx, onGoCategories }) {
+  function HomeScreen({ stats, callouts, density, onCallout }) {
     const shown = sliceCallouts(callouts, density);
-    const recent = stats.txns.slice().reverse().slice(0, 5);
+    const noteCount = shown.length;
     return (
       <div className="screen stagger">
         <StatusHero stats={stats} />
 
         <div>
-          <SectionH title={stats.complete ? "The year in review" : "What's happening"} />
+          <SectionH
+            title={stats.complete ? "The year in review" : "What's happening"}
+            meta={noteCount + (noteCount === 1 ? " NOTE" : " NOTES")}
+          />
           <div className="callouts">
             {shown.map((c) => (
               <CalloutCard key={c.id} c={c} onClick={() => onCallout(c)} />
@@ -30,15 +33,9 @@
         </div>
 
         <div>
-          <SectionH title="Recent" action="All activity" onAction={onSeeAllTx} />
-          <div className="panel panel-pad" style={{ paddingTop: 4, paddingBottom: 4 }}>
-            {recent.length ? (
-              <div className="txlist">
-                {recent.map((t) => <TxRow key={t.id} t={t} onClick={() => onEditTx(t)} />)}
-              </div>
-            ) : (
-              <div className="empty">No transactions yet this year.<br />Tap + to log your first.</div>
-            )}
+          <SectionH title="Spend curve" />
+          <div style={{ marginTop: 14 }}>
+            <SpendCurve stats={stats} />
           </div>
         </div>
       </div>

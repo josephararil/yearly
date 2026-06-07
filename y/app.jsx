@@ -19,13 +19,13 @@
     return (
       <nav className="nav">
         <button className={"nav-tab" + (route === "home" ? " active" : "")} onClick={() => onRoute("home")}>
-          <window.Icon name="home" size={22} /><span>Overview</span>
+          <span>Overview</span>
         </button>
         <div className="nav-fab-wrap">
-          <button className="fab" onClick={onAdd} aria-label="Log an expense"><window.Icon name="plus" size={26} /></button>
+          <button className="fab" onClick={onAdd} aria-label="Log an expense">+</button>
         </div>
         <button className={"nav-tab" + (route === "analysis" ? " active" : "")} onClick={() => onRoute("analysis")}>
-          <window.Icon name="layers" size={22} /><span>Analysis</span>
+          <span>Analysis</span>
         </button>
       </nav>
     );
@@ -65,8 +65,6 @@
     const callouts = React.useMemo(() => YCalc.buildCallouts(store, stats), [store, stats]);
 
     const onCallout = (c) => { setAnalysisFocus({ ...c.drill, _n: Date.now() }); setRoute("analysis"); };
-    const goCategories = () => { setAnalysisFocus({ section: "categories", _n: Date.now() }); setRoute("analysis"); };
-    const seeAllTx = () => { setAnalysisFocus({ section: "activity", _n: Date.now() }); setRoute("analysis"); };
 
     const addTx = (tx) => setStore((s) => ({ ...s, transactions: [...s.transactions, tx] }));
     const saveTx = (tx) => setStore((s) => ({ ...s, transactions: s.transactions.map((x) => (x.id === tx.id ? tx : x)) }));
@@ -91,7 +89,7 @@
               <window.Icon name="chevronLeft" size={16} /> Done
             </button>
           ) : (
-            <div className="brand"><span className="brand-mark">Yearly<span className="dot">.</span></span></div>
+            <div className="brand"><span className="brand-mark">Yearly</span></div>
           )}
           <span className="spacer" />
           {inSettings ? (
@@ -113,7 +111,7 @@
         <div className="scroll" ref={scrollRef}>
           {route === "home" && (
             <YHome.HomeScreen stats={stats} callouts={callouts} density={store.density || "balanced"}
-              onCallout={onCallout} onSeeAllTx={seeAllTx} onEditTx={setEditTx} onGoCategories={goCategories} />
+              onCallout={onCallout} />
           )}
           {route === "analysis" && (
             <YAnalysis.AnalysisScreen stats={stats} focus={analysisFocus} onEditTx={setEditTx} />
