@@ -39,7 +39,7 @@
           {years.map((y) => (
             <button key={y} className="setrow" onClick={() => { setViewYear(Number(y)); onClose(); }}>
               <span className="setrow-main"><span className="setrow-title num">{y}{Number(y) === store.currentYear ? "  ·  current" : ""}</span></span>
-              {Number(y) === viewYear && <window.Icon name="check" size={18} style={{ color: "var(--accent)" }} />}
+              {Number(y) === viewYear && <window.Icon name="check" size={18} style={{ color: "var(--terra)" }} />}
             </button>
           ))}
         </div>
@@ -99,7 +99,7 @@
               <button className="yearpill" onClick={() => setYearOpen(true)}>
                 <span className="num">{viewYear}</span>
                 {viewYear !== store.currentYear && <span className="muted" style={{ fontSize: 11 }}>past</span>}
-                <window.Icon name="chevronDown" size={15} style={{ color: "var(--text-3)" }} />
+                <window.Icon name="chevronDown" size={15} style={{ color: "var(--muted)" }} />
               </button>
               <button className="yearpill" onClick={() => setRoute("settings")} style={{ width: 32, padding: 0, justifyContent: "center" }} aria-label="Settings">
                 <window.Icon name="settings" size={17} />

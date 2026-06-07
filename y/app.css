@@ -25,7 +25,7 @@ body {
   position: relative;
   width: 100%; max-width: var(--col-w);
   height: 100dvh; margin: 0 auto;
-  background: var(--bg);
+  background: var(--paper);
   display: flex; flex-direction: column;
   overflow: hidden;
 }
@@ -77,7 +77,7 @@ body {
 .linklike { color: var(--terra); font-family: var(--mono); font-size: 11px; letter-spacing: 0.1em; font-weight: 500; cursor: pointer; background: none; border: 0; padding: 4px 0; display: inline-flex; align-items: center; gap: 3px; }
 
 .panel {
-  background: var(--surface); border: 1px solid var(--hairline);
+  background: var(--paper); border: 1px solid var(--hair);
   border-radius: var(--r-card); box-shadow: var(--shadow-rest);
 }
 .panel-pad { padding: 18px; }
@@ -106,7 +106,7 @@ body {
 /* gauge */
 .gauge-wrap { display: grid; place-items: center; padding: 6px 0 2px; }
 .gauge-num { font-size: 34px; font-weight: 600; letter-spacing: -0.03em; }
-.gauge-label { font-size: 11px; color: var(--text-3); letter-spacing: 0.06em; text-transform: uppercase; }
+.gauge-label { font-size: 11px; color: var(--muted); letter-spacing: 0.06em; text-transform: uppercase; }
 
 /* ---- callouts — hairline list rows, never filled cards ---- */
 .callouts { display: flex; flex-direction: column; }
@@ -120,10 +120,10 @@ body {
 .callout:hover { opacity: 0.72; }
 .callout-dot { flex: 0 0 auto; width: 7px; height: 7px; border-radius: 99px; margin-top: 7px; }
 .callout-body { flex: 1; min-width: 0; }
-.callout-text { font-family: var(--sans); font-size: 15px; line-height: 1.5; color: #3b352a; text-wrap: pretty; }
+.callout-text { font-family: var(--sans); font-size: 15px; line-height: 1.5; color: var(--ink); text-wrap: pretty; }
 .callout-text .num { color: var(--ink); font-weight: 500; }
 .callout-text b { font-weight: 700; color: var(--ink); }
-.callout-arrow { color: #bdb39a; font-family: var(--serif); font-size: 18px; margin-top: -2px; flex: 0 0 auto; }
+.callout-arrow { color: var(--muted); font-family: var(--serif); font-size: 18px; margin-top: -2px; flex: 0 0 auto; }
 
 /* ---- transaction rows ---- */
 .txlist { display: flex; flex-direction: column; }
@@ -265,8 +265,8 @@ textarea.inp { height: auto; padding: 12px 15px; resize: vertical; min-height: 6
 .year-row { display: flex; align-items: center; gap: 12px; padding: 14px 4px; border-bottom: 1px solid var(--hair); }
 .year-row:last-child { border-bottom: 0; }
 
-.muted { color: var(--text-3); }
-.empty { text-align: center; color: var(--text-3); font-size: 13.5px; padding: 30px 20px; line-height: 1.5; }
+.muted { color: var(--muted); }
+.empty { text-align: center; color: var(--muted); font-size: 13.5px; padding: 30px 20px; line-height: 1.5; }
 
 /* slider */
 .rangewrap { display: flex; align-items: center; gap: 14px; }

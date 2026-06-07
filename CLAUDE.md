@@ -15,7 +15,7 @@ the README as the source of truth for *intended* behavior; treat the code below 
 > production stack (Vite/Next + Recharts + a real component library). The files here are a
 > working prototype, not the production app.
 
-## Visual layer: the "Broadsheet" restyle (in progress)
+## Visual layer: the "Broadsheet" restyle (complete)
 
 The app is being reskinned from the old Aperture **dark** theme to **Broadsheet** — an
 editorial light look (warm paper, hairline rules, three fonts, one terracotta accent). The
@@ -24,13 +24,10 @@ authoritative spec is `design/BROADSHEET_DESIGN_SPEC.md` with a runnable referen
 visual-layer-only change — logic, data, projection math, the callout engine, routing, and
 persistence are untouched.**
 
-- **Phase 0 (done):** `y/tokens.css` now defines the Broadsheet token set (`--paper`,
+- **Phase 0 (done):** `y/tokens.css` defines the Broadsheet token set (`--paper`,
   `--ink`, `--ink-2`, `--muted`, `--hair`/`--hair-strong`, `--terra`/`--amber`/`--sage`,
-  the `--chart-*` palette, and `--serif`/`--sans`/`--mono`). A **legacy-remap block** at the
-  bottom points the old Aperture names (`--bg`, `--surface`, `--text*`, `--hairline*`,
-  `--accent`, `--font*`) at their Broadsheet equivalents, so screens not yet migrated still
-  render on paper. The three fonts (Newsreader / Hanken Grotesk / JetBrains Mono) are wired
-  via a Google Fonts `<link>` in `index.html`.
+  the `--chart-*` palette, and `--serif`/`--sans`/`--mono`). The three fonts (Newsreader /
+  Hanken Grotesk / JetBrains Mono) are wired via a Google Fonts `<link>` in `index.html`.
 - **Phase 1 (done):** **Overview** is restyled pixel-for-pixel to the reference:
   hero (no card, serif-`ink` number, over/under as a small mono `terra`/`sage` figure, a
   3px pace rule), "What's happening" callouts as hairline list rows with severity dots
@@ -89,11 +86,16 @@ persistence are untouched.**
   check `--terra`. All inline legacy token names (`--text`, `--text-2`, `--text-3`, `--accent`,
   `--font`, `--font-mono`, `--surface-sunk`, `--hairline`, `--hairline-strong`, `--watch`)
   replaced with canonical equivalents. SW cache bumped to `yearly-v8`.
+- **Phase 3 (done):** **Consistency sweep.** All remaining legacy token usages replaced with
+  canonical names throughout `y/app.css` and `y/app.jsx`: `.device` `--bg`→`--paper`;
+  `.panel` `--surface`→`--paper`, `--hairline`→`--hair`; `.gauge-label`, `.muted`, `.empty`
+  `--text-3`→`--muted`; `.callout-text` hardcoded `#3b352a`→`--ink`; `.callout-arrow`
+  hardcoded `#bdb39a`→`--muted`; inline `--accent`→`--terra`, `--text-3`→`--muted` in
+  `app.jsx`. The **legacy-remap block** removed from `y/tokens.css` — file now contains only
+  canonical Broadsheet names. SW cache bumped to `yearly-v9`.
 - **Spend curve note:** the spec §4 calls for Recharts, but this repo is deliberately
   self-contained/offline-first, so `SpendCurve` and `ProjectionChart` are dependency-free
   themed SVGs. Adopting the Recharts engine is an optional future decision.
-- **Phases 2+ (pending):** Final shared-primitive + consistency sweeps. Settings is done;
-  remaining screens render via the legacy-remap tokens until restyled.
 
 ## Running it
 
@@ -114,9 +116,8 @@ browser.
 The app is fully self-contained — **no `_ds/` directory is needed**. The original Aperture
 design system dependency has been replaced by two local files:
 
-- **`y/tokens.css`** — defines the Broadsheet token set plus a legacy-remap block for the
-  old Aperture names (`--bg`, `--surface`, `--text`, `--accent`, `--r-card`, `--shadow-rest`,
-  etc.) still consumed by `y/app.css`. Loaded in `index.html` before `y/app.css`. See the
+- **`y/tokens.css`** — defines the complete Broadsheet token set. No legacy remaps remain;
+  all screens use canonical names. Loaded in `index.html` before `y/app.css`. See the
   "Visual layer" section above.
 - **`y/ds.jsx`** — an IIFE that sets `window.ApertureDesignSystem_72a4cd = { Button,
   SegmentedControl, Input, Chip }`, matching exactly the props the app passes to each.
@@ -227,9 +228,8 @@ The app is a fully installable PWA:
   **Cache-versioning rule:** bump `CACHE_NAME` in `sw.js` whenever the shell changes (new
   file added to the precache list, CDN URL pinned to a new version, etc.). The old cache is
   deleted on `activate`. `skipWaiting()` + `clients.claim()` ensure the new SW takes over
-  immediately without waiting for old tabs to close. Current version: `yearly-v4` (bumped
-  for the Broadsheet Phase 0+1 shell change: `index.html`, `y/tokens.css`, `y/app.css`,
-  `y/ui.jsx`, `y/home.jsx`, `y/app.jsx`).
+  immediately without waiting for old tabs to close. Current version: `yearly-v9` (Phase 3
+  consistency sweep: `y/tokens.css`, `y/app.css`, `y/app.jsx`, `sw.js`).
 - **`manifest.json`** — includes `id`, `scope`, `start_url`, and an `icons` array with
   192×192, 512×512, and a maskable 512×512 variant (all SVG). SVG icons work in Chrome 91+
   and modern WebKit/Firefox; for production Android/iOS you would swap in PNGs.
