@@ -1,8 +1,5 @@
-/* tokens.css — "Broadsheet" design tokens for Yearly.
-   The canonical Broadsheet variables are defined first (see BROADSHEET_DESIGN_SPEC.md §1).
-   The "legacy remaps" block below points the old Aperture dark-theme names at their
-   Broadsheet equivalents, so screens not yet migrated still render on warm paper. Each
-   Phase-2 session should replace its screen's legacy-name usages with the canonical ones. */
+/* tokens.css — "Broadsheet" design tokens for Yearly (see BROADSHEET_DESIGN_SPEC.md §1).
+   All screens fully migrated (Phases 0–3). Only canonical names remain — no legacy remaps. */
 
 :root {
   /* ---- Broadsheet surfaces ---- */
@@ -48,28 +45,4 @@
   --shadow-rest:  0 1px 2px rgba(60, 52, 38, 0.06);
   --shadow-modal: 0 30px 80px rgba(60, 52, 38, 0.22), 0 6px 18px rgba(60, 52, 38, 0.12);
 
-  /* ============================================================
-     Legacy Aperture names → Broadsheet remaps.
-     Keep un-migrated screens (Analysis / Settings / Add) on paper
-     until their Phase-2 session restyles them to the names above.
-     ============================================================ */
-  --bg:           var(--paper);
-  --bg-2:         var(--paper-tint);
-  --surface:      var(--paper);
-  --surface-2:    var(--paper);
-  --surface-sunk: var(--paper-tint);
-  --topbar-bg:    rgba(244, 241, 232, 0.82);
-  --scrim:        rgba(34, 28, 18, 0.35);
-
-  --text:   var(--ink);
-  --text-2: var(--ink-2);
-  --text-3: var(--muted);
-
-  --hairline:        var(--hair);
-  --hairline-strong: var(--hair-strong);
-
-  --accent: var(--terra);
-
-  --font:      var(--sans);
-  --font-mono: var(--mono);
 }
