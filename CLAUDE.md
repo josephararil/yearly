@@ -59,10 +59,14 @@ own export to `window`**. There are no imports/exports. Two consequences:
 ### The brain (port these first to any production target)
 - `y/calc.jsx` (`window.YCalc`) — **all numbers come from here.** `computeStats(store, year, asOfDate?)`
   (linear projection + per-year buffer uplift + status thresholds; `asOfDate` defaults to `new Date()`)
-  and `buildCallouts(store, stats)` (the ranked detector engine). Pure functions, no UI deps.
+  and `buildCallouts(store, stats)` (the ranked detector engine — 6 detectors). Pure functions, no UI deps.
   Also exports `cumulativeByDay(txns)` → `number[366]` (shared with `analysis.jsx`),
+  `priorYearCumulative(store, year, asOfDate)` → number (prior year spend at same day-of-year),
   `projectionAsOf` (trend detector), and the standard formatters.
+  `computeStats` return includes `priorCum` (number[366] | null) and `priorSpent` (number | null)
+  for the prior year — consumed by `analysis.jsx` without needing store.
   Future-year guard: `Number(year) > currentYear` → spent 0, projection 0, status "good".
+  Detector #6 (yoy): current year only — compares spent to prior year at same doy; watch/info/good.
 - `y/data.jsx` (`window.YData`) — the persisted store shape, the fixed 18-category list
   (`CATEGORIES`, id→icon→color), default templates, deterministic seed generator, and
   `loadStore`/`saveStore`/`resetStore`.
