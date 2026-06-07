@@ -1,0 +1,9 @@
+{
+  "name": "Yearly — annual budgeting",
+  "short_name": "Yearly",
+  "display": "standalone",
+  "orientation": "portrait",
+  "background_color": "#000000",
+  "theme_color": "#000000",
+  "start_url": "./Yearly.html"
+}
