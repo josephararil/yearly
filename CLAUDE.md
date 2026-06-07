@@ -244,7 +244,7 @@ spend, no projection/buffer).
 - Screens: `y/home.jsx` (Overview — hero + callouts + FunStrip + spend curve),
   `y/analysis.jsx` (Projection/Categories/Activity/Fun tabs; charts are hand-built SVG that
   double as the Recharts spec), `y/settings.jsx`
-  (target/buffer/years/fun-budget/density/templates/CSV import-export/JSON backup-restore/clear),
+  (ceiling/buffer/years/fun-budget/density/templates/CSV import-export/JSON backup-restore/clear),
   `y/addflow.jsx` (Quick keypad + Manual add, Edit sheet, category picker, fun toggle).
   `analysis.jsx` — `AnalysisScreen` receives `fun`, `store`, `setStore`, `addTx` in addition to
   `stats`/`focus`/`onEditTx`; renders `<YFun.FunTab>` on the "Fun" segment; focus effect handles

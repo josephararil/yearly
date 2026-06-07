@@ -96,11 +96,14 @@ Persisted to `localStorage` under key `yearly:store:v1`:
 {
   "version": 1,
   "currentYear": 2026,
+  "density": "balanced",
   "years": {
-    "2024": { "target": 21000, "buffer": 0.04 },
-    "2025": { "target": 23000, "buffer": 0.04 },
-    "2026": { "target": 25000, "buffer": 0.04 }
+    "2024": { "ceiling": 21000, "buffer": 0.04 },
+    "2025": { "ceiling": 23000, "buffer": 0.04 },
+    "2026": { "ceiling": 25000, "buffer": 0.04 }
   },
+  "people": [ /* Person[] */ ],
+  "wishlist": [ /* WishlistItem[] */ ],
   "templates": [ /* Template[] */ ],
   "transactions": [ /* Transaction[] */ ]
 }
@@ -118,6 +121,31 @@ Persisted to `localStorage` under key `yearly:store:v1`:
   category: CategoryId;
   note?: string;
   source: "manual" | "import";
+  fun?: true;                // present + true on fun-budget tx only
+  person?: "joseph" | "marti"; // required when fun === true
+}
+```
+
+**Person** (fun-budget rate schedule):
+```ts
+{
+  id: string;               // "joseph" | "marti"
+  name: string;
+  startMonth: string;       // "YYYY-MM" — rates accrue from here
+  rates: Array<{ from: string; amount: number }>; // sorted ascending by `from`
+}
+```
+`rates` is a **forward-only dated schedule**: each entry means "from this month onwards, the rate is €X/mo". Past entries are never modified; a new entry is appended when the user changes the amount. `rateForMonth(person, ym)` picks the latest entry with `from ≤ ym`, returning 0 before `startMonth`.
+
+**WishlistItem** (per-person savings goal):
+```ts
+{
+  id: string;
+  owner: string;            // person.id
+  name: string;
+  price: number;
+  note?: string;
+  createdMonth: string;     // "YYYY-MM"
 }
 ```
 
@@ -127,43 +155,78 @@ Persisted to `localStorage` under key `yearly:store:v1`:
 ```
 
 **Key model decisions:**
-- **Targets are per-year, not a global setting** — they change over time (inflation,
-  life changes). The Years view shows target vs actual for each tracked year so a
-  10-year export is a real history.
+- **`ceiling` is per-year, sacred, user-set** — renamed from `target`. It is the total allowed annual outflow. Never derived. Old backups with `target` are migrated automatically by `migrateStore`.
+- **Fun budget is layered on top** — fun-tagged transactions are excluded from all main budget math; only the combined verdict is measured against `ceiling`. See *Fun budget model* below.
 - **`buffer` is per-year** (a fraction, e.g. `0.04` = 4%). See *Projection math*.
-- Year is derived from `date.slice(0,4)`; actuals are always computed from
-  transactions, never stored as aggregates.
+- Year is derived from `date.slice(0,4)`; actuals are always computed from transactions, never stored as aggregates.
 
 ---
 
 ## Projection math  (`y/calc.jsx → computeStats`)
 
+### Vocabulary
+
+| Name | Meaning | Stored? |
+|---|---|---|
+| `ceiling` | per-year household ceiling (sacred, user-set) | yes — `years[y].ceiling` |
+| `funPlanAnnual` | Σ planned fun allocations for the year | derived |
+| `mainTarget` | `ceiling − funPlanAnnual` (non-discretionary budget) | derived, never stored |
+| `spent` / `projection` | main (non-fun) YTD / projection | derived |
+| `funSpent` / `funProjection` | fun YTD / linear projection | derived |
+| `combinedProjection` | `projection + funProjection` | derived |
+| `combinedDelta` / `combinedStatus` | combined vs `ceiling` | derived |
+
+### Main budget (non-fun transactions only)
+
 Linear pace model (intentionally simple for v1 — Christmas isn't linear, accepted):
 
 ```
 doy            = day-of-year of "as of" date          // today for current year, 365 for past years
-target         = years[year].target
+ceiling        = years[year].ceiling
+funPlanAnnual  = Σ over people of Σ over months 1..12 of rateForMonth(person, "YYYY-MM")
+mainTarget     = ceiling − funPlanAnnual               // derived, never stored
 buffer         = years[year].buffer                   // fraction
-spent          = sum(amount_eur) for txns in year, date <= asOf
+spent          = sum(amount_eur) for NON-FUN txns in year, date <= asOf
 dailyRate      = spent / doy
 projNoBuffer   = dailyRate * 365                       // raw linear projection
 projection     = projNoBuffer * (1 + buffer)           // missed-entry buffer applied
 bufferAmt      = projection - projNoBuffer
-pace           = (doy / 365) * target                  // "what you should have spent by today"
-delta          = projection - target
-deltaPct       = delta / target
+pace           = (doy / 365) * mainTarget              // on-pace benchmark
+delta          = projection - mainTarget
+deltaPct       = delta / mainTarget
 ```
 
 For a **completed (past) year**: `projection = spent` (no extrapolation, no buffer).
 
-**Status thresholds** (drive green/amber/red everywhere):
-- Current year: `good` if `projection ≤ target`; `watch` if `≤ target × 1.08`; else `alert`.
-- Completed year: `good` if `spent ≤ target`; `watch` if `≤ target × 1.03`; else `alert`.
+**Main budget status thresholds** (drive green/amber/red on the main budget):
+- Current year: `good` if `projection ≤ mainTarget`; `watch` if `≤ mainTarget × 1.08`; else `alert`.
+- Completed year: `good` if `spent ≤ mainTarget`; `watch` if `≤ mainTarget × 1.03`; else `alert`.
 
 **Missed-entry buffer** is a **flat % uplift on the projection**, adjustable 0–15% via a
 slider in Settings, and made visible: the Analysis projection panel shows a "Buffer
 adds +€X" stat, and a callout explicitly explains "logged spend alone projects to €X;
 the N% buffer lifts that to €Y."
+
+### Fun figures and combined verdict
+
+```
+funSpent       = sum(amount_eur) for FUN txns in year, date <= asOf
+funProjection  = funSpent / doy * 365    // current year (linear — approximate, lumpy)
+               = funSpent               // completed year
+               = 0                     // future year
+combinedProjection = projection + funProjection
+combinedDelta  = combinedProjection − ceiling
+combinedStatus = good if combinedProjection ≤ ceiling
+                 watch if ≤ ceiling × 1.08
+                 alert otherwise        (completed year uses × 1.03)
+```
+
+> **Lumpiness caveat:** fun spend is often lumpy (one big purchase rather than a steady
+> monthly drip). The linear fun projection is an accepted v1 approximation; the ceiling
+> callout text uses "~" to signal it is advisory.
+
+**Combined verdict is the sacred number** — the hero always leads with `combinedProjection`
+vs `ceiling`. The main budget figures are a decomposition, not the primary verdict.
 
 ---
 
@@ -176,27 +239,93 @@ Pure function `(store, stats) → Callout[]`, ranked. Each callout:
 `text` is a number-led analytical sentence; numbers within it are rendered in mono.
 Tapping a callout navigates to Analysis and focuses the relevant section/category.
 
-**Detectors** (current year):
-1. **Projection trend** — recompute projection as of 28 days ago (using only txns up to
-   then); if it moved > 1.2% of target, emit "Year-end projection has moved up/down €X
-   over the last 4 weeks, now €Y." (`alert` if worsened > 4% of target, else `watch`/`good`).
-2. **14-day pace streak** — last-14-day daily rate vs linear daily (`target/365`); if
+**Detectors** (current year, main budget — detectors 1–7; combined verdict — detector 8):
+
+1. **Projection trend** — recompute projection as of 28 days ago (using only main txns up to
+   then); if it moved > 1.2% of mainTarget, emit "Year-end projection has moved up/down €X
+   over the last 4 weeks, now €Y." (`alert` if worsened > 4% of mainTarget, else `watch`/`good`).
+2. **14-day pace streak** — last-14-day daily rate vs linear daily (`mainTarget/365`); if
    > 1.15× or < 0.7×, emit "Last 14 days are running +N% above/below linear pace — €X/day
    vs €Y/day." (`alert` if > 1.35×).
 3. **Category month-over-month mover** — biggest change between last *full* month and the
    month before (only categories with > €50 that month, change > €60): "Restaurants: €340
    in May, +60% vs April."
-4. **Top category share / drift** — if the largest category is > 26% of spend: "Groceries
+4. **Top category share / drift** — if the largest category is > 26% of main spend: "Groceries
    is 27% of spend so far — €X across N entries." (`watch` if > 34%).
 5. **Buffer explanation** (info) — see *Projection math*.
+6. **Year-over-year** (current year, when prior year has main data) — "Spending is €X (+N%)
+   higher/lower than the same point in [year−1]." (`watch` if higher by > 8% of mainTarget).
+7. **Required daily pace** (current year, when projection > mainTarget) — "Spend ≤ €X/day
+   from here to finish on main budget target." (`watch` if status is alert, else `info`).
+8. **Ceiling verdict** (current year, **always top**, replaces calm fallback) —
+   - `combinedProjection > ceiling`: "Household projects to €X against your €Y ceiling —
+     trim fun spending by ~€Z/mo to stay within it." (`alert` if over by > 8% of ceiling,
+     else `watch`). Drill → Fun tab.
+   - `combinedProjection < ceiling × 0.94`: "You're tracking €X under your €Y ceiling —
+     room to raise the fun budget by ~€Z/mo if you want." (`good`). Drill → Fun tab.
+   - Between 0.94× and 1×: no ceiling callout; calm fallback applies if no hot detectors.
 
-**Ranking:** by severity (`alert > watch > info > good`), then by `mag`.
-**Calm state:** if nothing reaches `watch`/`alert`, prepend a single neutral line
-("Projection steady at €X … nothing notable in the data") — never show filler callouts.
-**Completed years:** a single review callout ("Finished under/over target by €X …").
+**Ranking:** by severity (`alert > watch > info > good`), then by `mag`. Detector #8 is
+always prepended first when present.
+**Calm state:** if nothing reaches `watch`/`alert` *and* no ceiling callout, prepend a
+single neutral line ("Projection steady at €X … nothing notable in the data").
+**Completed years:** a single review callout ("Finished under/over main budget by €X …").
+**Future years:** a single "hasn't started yet" callout.
 
 **Overview density** (a Tweak): `minimal` = top ≤2 hot callouts (or 1 calm), `balanced`
 = top 4, `all` = everything.
+
+---
+
+## Fun budget model  (`y/calc.jsx → computeFun`, `y/fun.jsx`)
+
+### Concept
+
+Each person has a **monthly fun allowance** — a "no questions asked" discretionary
+budget. Fun transactions are tagged `fun:true` + `person` at log time and are **excluded
+from all main budget math**. The fun budget layers on top of the main budget; together
+they measure against the household `ceiling`.
+
+### All-time running balance
+
+```
+balance(person, asOf) =
+  Σ(rateForMonth(person, m) for each month m from person.startMonth to asOf month, inclusive)
+  − Σ(amount_eur for all fun txns of that person, date ≤ asOf)
+```
+
+Balance **can be negative** ("buy now, earn it back"). The UI shows negative balances
+explicitly ("owe back") and never clamps the number to zero. Progress bars (wishlist
+goal completion) do clamp to 0–100%.
+
+`computeFun(store, asOfDate?)` returns:
+- `people[]` — per-person: `{ id, name, balance, monthlyRate, usedThisMonth, spentAllTime }`
+- `funSpentYTD` — fun spend in `store.currentYear` up to asOf
+- `funProjection` — linear projection of fun spend (approximate)
+- `funCatList` — fun-only category breakdown for `currentYear`
+
+The per-person balance is an **all-time, as-of-now concept** — it does not change
+when the user switches `viewYear`. The combined verdict for a non-current viewYear
+uses that year's actuals vs that year's `ceiling` (no projection for past years; zero
+for future years).
+
+### Dated rate schedule
+
+`person.rates` is a forward-only sorted array of `{ from: "YYYY-MM", amount }`. Editing
+the monthly rate appends (or updates) a new entry for the current `YYYY-MM`; past entries
+are never modified. `rateForMonth(person, ym)` returns the latest `from ≤ ym`, or 0
+before `startMonth`.
+
+This means `funPlanAnnual` sums per-month rates across all 12 months — a mid-year rate
+change is immediately reflected in `mainTarget` from that month forward.
+
+### Wishlist
+
+Each person has a wishlist of savings goals `{ id, owner, name, price, createdMonth }`.
+Progress = `max(0, balance) / price` clamped 0–100%. Months-to-afford =
+`max(0, ceil((price − balance) / monthlyRate))`; "ready now" if balance ≥ price.
+**"Bought it"** logs a fun-tagged shopping transaction for `item.price` and removes the
+item — removal is the v1 archive mechanism.
 
 ---
 
@@ -222,67 +351,87 @@ Add sheet from anywhere. Settings is reached via the gear, not the nav. Active t
 
 ### 1. Overview  (`y/home.jsx`) — the calm surface
 Top → bottom:
-- **Status hero** (a card). Default treatment = **numerals**:
-  - Eyebrow "PROJECTED YEAR-END" (or "FINAL SPEND · 2025" for past years).
-  - Giant mono numeral = projection (or final spend), colored by status
-    (green/amber/red). ~46–62px, weight 600, letter-spacing −0.04em.
-  - Sub-row: "vs €25,000 target" + a **delta chip** ("↗ +€1,308 over" / "↘ −€660 under"),
-    chip tinted by status.
-  - Foot: "€10,950 spent · day 158 of 365" (mono numbers).
-  - Hero treatment is a Tweak: `numerals` / `gauge` (semicircle arc % of target) /
-    `bar` (pace bar with on-pace marker) / `projection` (sparkline). See `StatusHero` in
-    `y/ui.jsx`.
-- **"What's happening"** — the callouts list (sliced by density). Each callout is a card:
-  a rounded severity-tinted icon badge, an optional small tag ("Worth a look" / "Watch"),
-  the analytical sentence (numbers in mono), and a chevron. Whole card is tappable → drills
-  into Analysis.
-- **"Recent"** — a card listing the last 5 transactions; tap any row to edit. "All activity"
-  link → Analysis › Activity.
+- **Status hero** (`StatusHero` in `y/ui.jsx`) — Broadsheet numerals:
+  - Headline = `combinedProjection` (current year), combined spent for complete years,
+    `ceiling` for future years.
+  - Sub-line: combined vs ceiling (over/under by €N), coloured by `combinedStatus`.
+  - Pace rule fills to `combinedProjection / ceiling`; day-of-year marker.
+  - Decomposition line beneath: `main €A / €mainTarget` (coloured by main status)
+    and `fun €B` (ink-2), so all three states are readable at a glance.
+- **"What's happening"** — the callouts list (sliced by density). Each callout is a hairline
+  row: a severity dot (terra/amber/sage), the analytical sentence, a faded "→". Whole row
+  tappable → drills into Analysis.
+- **Fun strip** (`FunStrip` from `y/fun.jsx`) — compact hairline section labelled "Fun budget":
+  one row per person showing name, all-time balance (sage if ≥0, terra if negative with
+  "owe back" hint), and nearest wishlist goal name + progress bar. Whole strip tappable →
+  Analysis Fun tab.
+- **Spend curve** — a dependency-free SVG cumulative spend curve for the current year
+  (main spend only).
 
 ### 2. Analysis  (`y/analysis.jsx`) — the deep surface
-A sticky **segmented control**: `Projection` · `Categories` · `Activity`.
+A sticky **segmented control**: `Projection` · `Categories` · `Activity` · `Fun`.
 
 - **Projection tab:** a "Spend vs pace" card with the projection chart + legend, an
   explanatory line about the linear model, then a 2-col **stat grid**: Spent YTD,
   On-pace-by-today, Daily rate (vs linear), Buffer adds, Projected finish (status-colored),
-  vs target (status-colored).
+  vs mainTarget (status-colored).
   - **Chart spec (use Recharts):** X = day-of-year 0–365 with month ticks; Y = €, domain
-    `[0, max(target, projection) × 1.1]`. Series: **actual** cumulative line (status color,
+    `[0, max(mainTarget, projection) × 1.1]`. Series: **actual** cumulative line (status color,
     with a soft area fill) up to today; **projected** dashed line (amber) from today→year-end;
-    **linear pace** dotted reference line from 0→target; a dashed horizontal **target**
-    reference line labeled "target €25k"; a dot at today and at the projected endpoint.
+    **linear pace** dotted reference line from 0→mainTarget; a dashed horizontal **mainTarget**
+    reference line labeled "main €21.4k"; a dot at today and at the projected endpoint.
 - **Categories tab:** "Where it's going" — every category that has spend, sorted by amount,
   as an interactive bar row: icon, name, amount (mono), a colored share bar, and a sub-line
   ("27% of spend · 84 entries · +22% MoM"). **Tap to expand** → a per-month **bar trend**
   mini-chart (last full month highlighted) + the 5 most recent transactions in that category.
   No per-category targets. This is *diagnostic depth on demand*, not a passive list.
 - **Activity tab:** a search input (filter by description) + horizontally scrolling category
-  filter chips + the full transaction list (reverse-chronological), each row tappable to edit.
-  Footer "N of M entries."
+  filter chips + the full transaction list (reverse-chronological, **main txns only** — fun
+  tx are excluded), each row tappable to edit. Footer "N of M entries."
+- **Fun tab** (`FunTab` from `y/fun.jsx`): per-person cards (balance, monthly rate, this-month
+  usage, all-time spent), fun-only category breakdown, and the full wishlist with progress
+  bars, months-to-afford ETA, "Bought it" button, and an "Add item" sheet. Reached by tapping
+  the Overview fun strip or any callout that drills `{ section: "fun" }`.
 
 ### 3. Add an expense  (`y/addflow.jsx`) — bottom sheet, frictionless
 Header "Log an expense" + a `Quick | Manual` segmented control.
-- **Quick (default):** a 4-column grid of **template tiles** (icon badge in the category
-  color + name). Tap a tile → an entry step in the same sheet: template chip, a big mono
-  amount display, a **custom numeric keypad** (1–9, ., 0, ⌫ — for fast thumb entry), a date
-  field (defaults to today), an optional note, and a primary "Add €X" button. Prefills
-  category/name (and amount if the template has a default).
-- **Manual:** description, amount, a 3-column **category picker** (all 18, icon+label, selected
-  highlights in accent), date (defaults today), optional note, "Add expense".
+- **Quick (default):** a 4-column grid of **template tiles** (category color dot + name). Tap
+  a tile → an entry step in the same sheet: template chip, a big mono amount display, a
+  **custom numeric keypad** (1–9, ., 0, ⌫ — for fast thumb entry), a date field (defaults to
+  today), an optional note, and a primary "Add €X" button. Prefills category/name (and amount
+  if the template has a default).
+- **Manual:** description, amount, a 3-column **category picker** (all 18, color dot+label,
+  selected highlights in accent), date (defaults today), optional note, "Add expense".
+- Both flows expose a **Fun budget toggle** (off by default). When on, an owner picker
+  (Joseph / Marti chips) appears. The saved transaction has `fun:true` + `person` set.
 
 ### 4. Edit / delete  (`y/addflow.jsx → EditSheet`)
-Tapping any transaction (Recent, Activity, category drill) opens a sheet identical to Manual,
-prefilled, with a "Delete" (secondary) + "Save changes" (primary) row.
+Tapping any transaction (Activity, category drill) opens a sheet prefilled from the
+transaction, with a "Delete" (secondary) + "Save changes" (primary) row. Includes the
+same **Fun budget toggle** as AddSheet; pre-populates from `txn.fun`/`txn.person`.
+
+### 4. Edit / delete  (`y/addflow.jsx → EditSheet`)
+Tapping any transaction (Activity, category drill) opens a sheet prefilled from the
+transaction, with a "Delete" (secondary) + "Save changes" (primary) row. Includes the
+same **Fun budget toggle** as AddSheet.
 
 ### 5. Settings  (`y/settings.jsx`) — behind the gear
 Grouped rows:
-- **This year:** Annual target (€, opens numeric sheet) · Missed-entry buffer (opens a
-  slider sheet 0–15% with live "projection €X → €Y" preview) · Past years (opens **Years**
-  list: each tracked year with target, projected/final, and an over/under delta chip).
+- **This year:** Household ceiling (€, opens numeric sheet labelled "Your total annual
+  outflow ceiling — the sacred number everything is measured against") · Missed-entry buffer
+  (opens a slider sheet 0–15% with live "projection €X → €Y" preview) · Past years (opens
+  **Years** list: each year shows `ceiling`, combined projection/final, and a delta chip;
+  tapping a year drills into a year detail view with ceiling + buffer rows).
+- **Fun budget:** one row per person, showing their current monthly rate, opens
+  `FunConfigSheet` to set the rate for the current month onwards (forward-only, past entries
+  preserved). Shows the derived split: `ceiling = main/yr + fun/yr`.
+- **Display:** Overview density (minimal/balanced/all — controls how many callouts are shown).
 - **Data:** Quick templates (manager sheet: reorder ▲▼, edit, delete, add — name/category/
-  default amount) · Import CSV · Export all data (downloads CSV) · Restore sample data.
+  default amount) · Import CSV · Export all data (downloads CSV) · Back up JSON · Restore
+  JSON (runs `migrateStore` so old backups with `target`/no `people` migrate cleanly) ·
+  Restore sample data.
 - **Danger zone:** Clear all data (type `DELETE` to confirm; clears transactions, keeps
-  targets/templates).
+  ceiling/templates).
 
 ### 6. Import CSV  (`y/settings.jsx → ImportSheet`)
 File picker **or** paste, with a "Try sample" button. Expected columns:
@@ -303,7 +452,7 @@ Confirm imports non-skipped rows with `source: "import"`.
   to that tab and pre-expands the focused category.
 - **Year switching** uses a separate `viewYear` (not `currentYear`); viewing a past year
   flips the whole app into "completed year" mode (final spend, no projection/buffer, review
-  callout, green/amber by final vs target).
+  callout, green/amber by final vs mainTarget).
 - **Bottom sheets:** slide up (`translateY(100%)→0`, 0.34s, Aperture ease) over a
   blurred scrim; close on scrim tap or Escape; mount/unmount with a 340ms exit.
   > Implementation note: the prototype toggles the open class via `setTimeout`, not
@@ -320,13 +469,18 @@ Confirm imports non-skipped rows with `source: "import"`.
 
 App-level state (see `y/app.jsx`):
 - `store` — the full persisted object (see Data model). All mutations go through a
-  `setStore` that persists.
-- `tweaks` — `{ heroVariant, accent, density }`, persisted separately.
-- `route`, `viewYear`, `analysisFocus`, `addOpen`, `editTx`, `yearOpen` — ephemeral UI state.
+  `setStore` that persists to `localStorage` on every write.
+- `route`, `viewYear`, `analysisFocus`, `addOpen`, `editTx`, `yearOpen`, `deletedTx`,
+  `showToast` — ephemeral UI state.
 
-Derived (memoized): `stats = computeStats(store, viewYear)` and
-`callouts = buildCallouts(store, stats)`. **All numbers shown anywhere derive from these
-two pure functions** — re-implement them faithfully and the UI follows.
+Derived (memoized):
+- `stats = computeStats(store, viewYear)` — main budget figures for the viewed year.
+- `callouts = buildCallouts(store, stats)` — ranked callout list including the ceiling verdict.
+- `fun = computeFun(store)` — all-time per-person fun ledger (always as-of now, independent
+  of `viewYear`).
+
+**All numbers shown anywhere derive from these three pure functions** — re-implement them
+faithfully and the UI follows.
 
 ---
 
@@ -419,17 +573,17 @@ Default ease `cubic-bezier(.22,.61,.36,1)`; durations 150–340ms; everything gu
 | `y/tokens.css` | All ~25 CSS custom properties the app consumes (`--bg`, `--surface`, `--text`, `--accent`, etc.). Loaded before `y/app.css`. |
 | `y/ds.jsx` | Local `Button`, `SegmentedControl`, `Input`, `Chip` primitives exposed as `window.ApertureDesignSystem_72a4cd`. No external DS bundle needed. |
 | `y/app.css` | All app styling, built on the token variables. **The source of truth for layout, spacing, and the visual system.** |
-| `y/data.jsx` | Categories (18, icon+color), default templates (8), seeded sample data generator (deterministic), localStorage load/save/reset. |
-| `y/calc.jsx` | **Projection math + callout engine** + formatters + date helpers. Port verbatim. |
+| `y/data.jsx` | Categories (18, icon+color), default templates (8), seeded sample data generator (deterministic), localStorage load/save/reset/migrate. Exports `migrateStore` (idempotent) for both `loadStore` and JSON restore. |
+| `y/calc.jsx` | **Projection math + callout engine** + `computeFun` + `rateForMonth` + formatters + date helpers. Port verbatim. |
 | `y/icons.jsx` | Inline SVG icon set. |
-| `y/ui.jsx` | Shared primitives: `StatusHero` (numerals design), `CalloutCard`, `TxRow`, `CatIcon`, `DeltaChip`, `Sheet`, `SectionH`, `Toast`, mono-number rich-text helper. |
-| `y/home.jsx` | Overview screen + callout density slicing. |
-| `y/addflow.jsx` | Add sheet (Quick keypad + Manual), Edit sheet, category picker, numpad. |
-| `y/analysis.jsx` | Analysis screen: projection chart (chart spec), category diagnostics, activity. |
-| `y/settings.jsx` | Settings + Years + Templates manager + CSV import/export/backup + clear. |
-| `y/app.jsx` | Root: nav, routing, year switch, store wiring, undo-on-delete toast, mount. |
+| `y/ui.jsx` | Shared primitives: `StatusHero` (combined-vs-ceiling hero), `CalloutCard`, `TxRow`, `CatIcon`, `DeltaChip`, `Sheet`, `SectionH`, `Toast`, mono-number rich-text helper. |
+| `y/fun.jsx` | Fun budget UI: `FunStrip` (Overview compact strip) + `FunTab` (Analysis workshop: per-person cards, wishlist, category breakdown). |
+| `y/home.jsx` | Overview screen: hero + callouts (density-sliced) + FunStrip + spend curve. |
+| `y/addflow.jsx` | Add sheet (Quick keypad + Manual + fun toggle), Edit sheet, category picker, numpad. |
+| `y/analysis.jsx` | Analysis screen: Projection / Categories / Activity / Fun tabs. Projection + Spend curve are dependency-free SVG; Fun tab renders `FunTab`. |
+| `y/settings.jsx` | Settings + Years + Fun budget config + Templates manager + CSV import/export/backup/restore + density + clear. |
+| `y/app.jsx` | Root: nav, routing, year switch, store wiring, `computeFun` memo, `onOpenFun`, undo-on-delete toast, mount. |
 | `calc.test.html` | Dev-only regression test for `y/calc.jsx` — open over HTTP to run assertions. Not precached by the SW. |
-| `y/tweaks-panel.jsx` | Prototype-only tweak panel scaffold (not part of the product). |
 
 > The prototype also references the **Aperture design system** under `_ds/` (dark theme
 > tokens + a few React components: Button, SegmentedControl, Input, Chip). These are the
@@ -447,5 +601,5 @@ Default ease `cubic-bezier(.22,.61,.36,1)`; durations 150–340ms; everything gu
    (status hero + callouts + recent).
 4. Build the **Add** flow (Quick keypad + Manual) — the most-used surface; optimize for speed.
 5. Build **Analysis** (Recharts projection chart first, then category diagnostics, then activity).
-6. Build **Settings** (target, buffer, years, templates, import/export, clear).
+6. Build **Settings** (ceiling, buffer, years, fun budget config, templates, import/export, clear).
 7. Wire localStorage persistence and the year switcher last.
