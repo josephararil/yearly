@@ -65,26 +65,7 @@
     return { byMonth, catMonth };
   }
 
-  function buildSeries(upto, doy, target, complete) {
-    const dayCum = cumulativeByDay(upto);
-    const series = [];
-    for (let x = 0; x <= 365; x += 7) {
-      const within = x <= doy;
-      series.push({
-        x,
-        pace: Math.round((x / 365) * target),
-        actual: within ? Math.round(dayCum[Math.min(365, x)]) : null,
-      });
-    }
-    if (!complete) {
-      const spent = dayCum[Math.min(365, doy)];
-      series.push({ x: doy, pace: Math.round((doy / 365) * target), actual: Math.round(spent) });
-      series.sort((a, b) => a.x - b.x);
-    }
-    return series;
-  }
-
-  function computeStats(store, year, asOfDate) {
+function computeStats(store, year, asOfDate) {
     const real = asOfDate || new Date();
     const currentYear = Number(store.currentYear);
     const y = store.years[String(year)] || { target: 25000, buffer: 0.04 };
@@ -125,7 +106,6 @@
 
     const { byCat, catList } = aggregateByCategory(upto, spent);
     const { byMonth, catMonth } = aggregateByMonth(upto);
-    const series = buildSeries(upto, doy, target, complete || isFuture);
 
     // Prior year cumulative curve — null when no prior year data exists.
     const priorTxns = yearTxns(store, Number(year) - 1);
@@ -136,7 +116,7 @@
       year: Number(year), target, buffer, isCurrent, complete,
       asOf, asOfStr, doy, spent, dailyRate, projection, projNoBuffer, bufferAmt,
       pace, delta, deltaPct, status, txns, upto, byCat, catList, byMonth, catMonth,
-      series, priorCum, priorSpent,
+      priorCum, priorSpent,
     };
   }
 

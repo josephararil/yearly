@@ -1,14 +1,14 @@
 // Bump this version whenever the app shell changes to invalidate the old cache.
-const CACHE_NAME = 'yearly-v1';
+const CACHE_NAME = 'yearly-v2';
 
 const PRECACHE = [
-  './Yearly.html',
+  './',
+  './index.html',
   './manifest.json',
   './icons/icon.svg',
   './icons/icon-maskable.svg',
   './y/tokens.css',
   './y/app.css',
-  './y/tweaks-panel.jsx',
   './y/icons.jsx',
   './y/ds.jsx',
   './y/data.jsx',
@@ -19,7 +19,7 @@ const PRECACHE = [
   './y/analysis.jsx',
   './y/settings.jsx',
   './y/app.jsx',
-  // CDN deps — pinned versions; must match Yearly.html exactly
+  // CDN deps — pinned versions; must match index.html exactly
   'https://unpkg.com/react@18.3.1/umd/react.development.js',
   'https://unpkg.com/react-dom@18.3.1/umd/react-dom.development.js',
   'https://unpkg.com/@babel/standalone@7.29.0/babel.min.js',

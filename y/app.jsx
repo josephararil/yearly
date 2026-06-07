@@ -1,14 +1,7 @@
-// app.jsx — root: nav, routing, year switch, store + tweaks. Mounts the app.
+// app.jsx — root: nav, routing, year switch, store. Mounts the app.
 (function () {
   const { YData, YCalc, YUI, YHome, YAnalysis, YSettings, YAdd } = window;
   const { Sheet, Toast } = YUI;
-  const { useTweaks, TweaksPanel, TweakSection, TweakSelect, TweakRadio, TweakColor } = window;
-
-  const TWEAK_DEFAULTS = /*EDITMODE-BEGIN*/{
-    "heroVariant": "numerals",
-    "accent": "#0071e3",
-    "density": "balanced"
-  }/*EDITMODE-END*/;
 
   function useStore() {
     const [store, setStoreState] = React.useState(() => YData.loadStore());
@@ -56,7 +49,6 @@
 
   function App() {
     const [store, setStore] = useStore();
-    const [t, setTweak] = useTweaks(TWEAK_DEFAULTS);
     const [route, setRoute] = React.useState("home");
     const [viewYear, setViewYear] = React.useState(store.currentYear);
     const [analysisFocus, setAnalysisFocus] = React.useState(null);
@@ -67,7 +59,6 @@
     const [showToast, setShowToast] = React.useState(false);
     const scrollRef = React.useRef(null);
 
-    React.useEffect(() => { document.documentElement.style.setProperty("--accent", t.accent); }, [t.accent]);
     React.useEffect(() => { if (scrollRef.current) scrollRef.current.scrollTop = 0; }, [route]);
 
     const stats = React.useMemo(() => YCalc.computeStats(store, viewYear), [store, viewYear]);
@@ -121,7 +112,7 @@
 
         <div className="scroll" ref={scrollRef}>
           {route === "home" && (
-            <YHome.HomeScreen stats={stats} callouts={callouts} density={t.density} heroVariant={t.heroVariant}
+            <YHome.HomeScreen stats={stats} callouts={callouts} density={store.density || "balanced"}
               onCallout={onCallout} onSeeAllTx={seeAllTx} onEditTx={setEditTx} onGoCategories={goCategories} />
           )}
           {route === "analysis" && (
@@ -138,18 +129,6 @@
         <YAdd.AddSheet open={addOpen} onClose={() => setAddOpen(false)} store={store} onSave={addTx} />
         <YAdd.EditSheet open={!!editTx} txn={editTx} onClose={() => setEditTx(null)} onSave={saveTx} onDelete={delTx} />
         <YearMenu open={yearOpen} onClose={() => setYearOpen(false)} store={store} viewYear={viewYear} setViewYear={setViewYear} />
-
-        <TweaksPanel>
-          <TweakSection label="Hero" />
-          <TweakSelect label="Status treatment" value={t.heroVariant}
-            options={["numerals", "gauge", "bar", "projection"]} onChange={(v) => setTweak("heroVariant", v)} />
-          <TweakSection label="Callouts" />
-          <TweakRadio label="Density on Overview" value={t.density}
-            options={["minimal", "balanced", "all"]} onChange={(v) => setTweak("density", v)} />
-          <TweakSection label="Accent" />
-          <TweakColor label="Accent color" value={t.accent}
-            options={["#0071e3", "#3b82f6", "#5e5ce6", "#e8e8ea"]} onChange={(v) => setTweak("accent", v)} />
-        </TweaksPanel>
       </div>
     );
   }

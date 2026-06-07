@@ -13,12 +13,12 @@
     return callouts.slice(0, 4); // balanced
   }
 
-  function HomeScreen({ stats, callouts, density, heroVariant, onCallout, onSeeAllTx, onEditTx, onGoCategories }) {
+  function HomeScreen({ stats, callouts, density, onCallout, onSeeAllTx, onEditTx, onGoCategories }) {
     const shown = sliceCallouts(callouts, density);
     const recent = stats.txns.slice().reverse().slice(0, 5);
     return (
       <div className="screen stagger">
-        <StatusHero stats={stats} variant={heroVariant} />
+        <StatusHero stats={stats} />
 
         <div>
           <SectionH title={stats.complete ? "The year in review" : "What's happening"} />
