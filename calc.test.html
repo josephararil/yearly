@@ -57,19 +57,120 @@
     const ids = new Set(callouts.map(c => c.id));
 
     // ---- 2026 current-year stats ----
-    section('2026 current-year — computeStats');
+    section('2026 current-year — computeStats basics');
     assert('doy === 158', stats.doy === 158, 'got ' + stats.doy);
-    assert('spent ≈ 10950 (±1)', Math.abs(stats.spent - 10950) <= 1, 'got ' + stats.spent.toFixed(2));
-    assert('status === "watch"', stats.status === 'watch', 'got "' + stats.status + '"');
-    assert('projection ≈ 26308 (±5)', Math.abs(stats.projection - 26308) <= 5, 'got ' + stats.projection.toFixed(0));
     assert('isCurrent === true', stats.isCurrent === true);
     assert('complete === false', stats.complete === false);
     assert('isFuture === false', stats.isFuture === false);
-    assert('target === 25000', stats.target === 25000, 'got ' + stats.target);
+
+    // ceiling and mainTarget
+    assert('ceiling === 25000', stats.ceiling === 25000, 'got ' + stats.ceiling);
+    // funPlanAnnual = 12 * (100 joseph + 200 marti) = 3600
+    assert('funPlanAnnual === 3600', stats.funPlanAnnual === 3600, 'got ' + stats.funPlanAnnual);
+    assert('mainTarget === ceiling − funPlanAnnual (21400)', stats.mainTarget === 21400, 'got ' + stats.mainTarget);
+
+    // Fun exclusion: total spent (main + fun) should still be ~10950
+    const asOfStr = '2026-06-07';
+    const allYearTxns = YCalc.yearTxns(store, 2026);
+    const totalSpentAll = allYearTxns.filter(t => t.date <= asOfStr).reduce((a,t) => a+t.amount_eur, 0);
+    const funTxnsUpTo = allYearTxns.filter(t => t.fun && t.date <= asOfStr);
+    const funSpentDirect = funTxnsUpTo.reduce((a,t) => a+t.amount_eur, 0);
+    assert('total spent (main+fun) ≈ 10950 (±1)', Math.abs(totalSpentAll - 10950) <= 1, 'got ' + totalSpentAll.toFixed(2));
+    assert('fun-tagged tx present in seed (6–10)', funTxnsUpTo.length >= 6 && funTxnsUpTo.length <= 10, 'got ' + funTxnsUpTo.length);
+    assert('stats.spent excludes fun (main only)', Math.abs(stats.spent + funSpentDirect - totalSpentAll) < 0.01,
+      'main=' + stats.spent.toFixed(2) + ' fun=' + funSpentDirect.toFixed(2));
+    assert('stats.spent < totalSpentAll', stats.spent < totalSpentAll);
+
+    // main projection is based on mainTxns only
+    const expectedMainProj = stats.spent / stats.doy * 365 * (1 + stats.buffer);
+    assert('projection based on mainTxns', Math.abs(stats.projection - expectedMainProj) < 1, 'got ' + stats.projection.toFixed(0));
+
+    // status is vs mainTarget (projection > 21400 * 1.08 = 23112 → alert)
+    const expectedStatus = stats.projection > stats.mainTarget * 1.08 ? 'alert' : stats.projection > stats.mainTarget ? 'watch' : 'good';
+    assert('status matches mainTarget thresholds', stats.status === expectedStatus, 'got "' + stats.status + '" expected "' + expectedStatus + '"');
+
+    // combined fields
+    assert('funSpent > 0', stats.funSpent > 0, 'got ' + stats.funSpent.toFixed(2));
+    assert('funProjection > 0', stats.funProjection > 0, 'got ' + stats.funProjection.toFixed(2));
+    assert('combinedProjection === projection + funProjection',
+      Math.abs(stats.combinedProjection - (stats.projection + stats.funProjection)) < 0.01,
+      stats.combinedProjection.toFixed(0) + ' vs ' + (stats.projection + stats.funProjection).toFixed(0));
+    assert('combinedDelta === combinedProjection − ceiling',
+      Math.abs(stats.combinedDelta - (stats.combinedProjection - stats.ceiling)) < 0.01);
+
+    // priorCum still works
     assert('priorCum not null (2025 data present)', stats.priorCum !== null);
 
+    // requiredDailyToHit uses mainTarget
     const req = YCalc.requiredDailyToHit(stats);
-    assert('requiredDailyToHit ≈ 68 (±1)', req !== null && Math.abs(req - 68) <= 1, 'got ' + (req !== null ? req.toFixed(1) : 'null'));
+    assert('requiredDailyToHit non-null when projection > mainTarget', req !== null);
+    assert('requiredDailyToHit positive', req !== null && req > 0);
+
+    // ---- rateForMonth boundaries ----
+    section('rateForMonth');
+    const personA = { id: 'a', name: 'A', startMonth: '2026-03', rates: [{ from: '2026-03', amount: 100 }, { from: '2026-06', amount: 150 }] };
+    assert('before startMonth returns 0', YCalc.rateForMonth(personA, '2026-02') === 0, 'got ' + YCalc.rateForMonth(personA, '2026-02'));
+    assert('at startMonth (first entry) returns 100', YCalc.rateForMonth(personA, '2026-03') === 100, 'got ' + YCalc.rateForMonth(personA, '2026-03'));
+    assert('between entries returns first rate (100)', YCalc.rateForMonth(personA, '2026-05') === 100, 'got ' + YCalc.rateForMonth(personA, '2026-05'));
+    assert('at second entry returns 150', YCalc.rateForMonth(personA, '2026-06') === 150, 'got ' + YCalc.rateForMonth(personA, '2026-06'));
+    assert('after second entry still returns 150', YCalc.rateForMonth(personA, '2027-01') === 150, 'got ' + YCalc.rateForMonth(personA, '2027-01'));
+
+    // ---- computeFun ----
+    section('computeFun — balance and negative case');
+
+    const funFixtureStore = {
+      currentYear: 2026,
+      people: [
+        { id: 'joseph', name: 'Joseph', rates: [{ from: '2026-01', amount: 100 }], startMonth: '2026-01' }
+      ],
+      wishlist: [],
+      transactions: [
+        { id: 'fx1', date: '2026-03-15', description: 'Fun thing', amount_eur: 80, category: 'shopping', fun: true, person: 'joseph', source: 'manual' },
+        { id: 'fx2', date: '2026-05-20', description: 'Big fun thing', amount_eur: 250, category: 'shopping', fun: true, person: 'joseph', source: 'manual' },
+      ],
+      years: { '2026': { ceiling: 25000, buffer: 0.04 } },
+      density: 'balanced',
+      templates: [],
+    };
+    // Balance: Jan–Jun (6 months) × 100 = 600; spent = 80+250=330; balance = 270
+    const funResult = YCalc.computeFun(funFixtureStore, new Date('2026-06-07T00:00:00Z'));
+    assert('computeFun balance = 270', Math.abs(funResult.people[0].balance - 270) < 0.01, 'got ' + funResult.people[0].balance);
+    assert('computeFun monthlyRate = 100', funResult.people[0].monthlyRate === 100, 'got ' + funResult.people[0].monthlyRate);
+    assert('computeFun usedThisMonth = 0 (no Jun tx)', funResult.people[0].usedThisMonth === 0, 'got ' + funResult.people[0].usedThisMonth);
+    assert('computeFun spentAllTime = 330', Math.abs(funResult.people[0].spentAllTime - 330) < 0.01, 'got ' + funResult.people[0].spentAllTime);
+    assert('computeFun funSpentYTD = 330', Math.abs(funResult.funSpentYTD - 330) < 0.01, 'got ' + funResult.funSpentYTD);
+    assert('computeFun funProjection > 0 (current year)', funResult.funProjection > 0, 'got ' + funResult.funProjection);
+
+    // Negative balance: Marti starts June with 200/mo rate but spends 500 in June
+    const negFixtureStore = {
+      currentYear: 2026,
+      people: [
+        { id: 'marti', name: 'Marti', rates: [{ from: '2026-06', amount: 200 }], startMonth: '2026-06' }
+      ],
+      wishlist: [],
+      transactions: [
+        { id: 'fx3', date: '2026-06-01', description: 'Big purchase', amount_eur: 500, category: 'shopping', fun: true, person: 'marti', source: 'manual' },
+      ],
+      years: { '2026': { ceiling: 25000, buffer: 0.04 } },
+      density: 'balanced',
+      templates: [],
+    };
+    // Balance: Jun × 200 = 200; spent = 500; balance = -300
+    const negResult = YCalc.computeFun(negFixtureStore, new Date('2026-06-07T00:00:00Z'));
+    assert('computeFun negative balance = -300', Math.abs(negResult.people[0].balance - (-300)) < 0.01, 'got ' + negResult.people[0].balance);
+
+    // ---- mainTarget = ceiling − funPlanAnnual ----
+    section('mainTarget derivation');
+    assert('stats.mainTarget === stats.ceiling − stats.funPlanAnnual',
+      Math.abs(stats.mainTarget - (stats.ceiling - stats.funPlanAnnual)) < 0.01,
+      stats.mainTarget + ' === ' + stats.ceiling + ' − ' + stats.funPlanAnnual);
+
+    // ---- combinedProjection = projection + funProjection ----
+    section('combined projection');
+    assert('combinedProjection = projection + funProjection',
+      Math.abs(stats.combinedProjection - (stats.projection + stats.funProjection)) < 0.01);
+    assert('combinedDeltaPct ≈ combinedDelta / ceiling',
+      Math.abs(stats.combinedDeltaPct - stats.combinedDelta / stats.ceiling) < 0.0001);
 
     // ---- 2026 callout IDs ----
     section('2026 current-year — buildCallouts');
@@ -78,21 +179,70 @@
     });
     assert('no "future" callout in current year', !ids.has('future'));
 
+    // ceiling callout
+    assert('"ceiling" callout present (current year)', ids.has('ceiling'), '[' + [...ids].join(', ') + ']');
+    assert('"ceiling" callout is first (pinned top)', callouts[0] && callouts[0].id === 'ceiling');
+
     // ---- 2099 future-year ----
     section('2099 future year');
     const store99 = Object.assign({}, store, {
-      years: Object.assign({}, store.years, { '2099': { target: 30000, buffer: 0.04 } }),
+      years: Object.assign({}, store.years, { '2099': { ceiling: 30000, buffer: 0.04 } }),
     });
     const stats99 = YCalc.computeStats(store99, 2099, asOf2026);
     assert('future: spent === 0', stats99.spent === 0, 'got ' + stats99.spent);
     assert('future: projection === 0', stats99.projection === 0, 'got ' + stats99.projection);
     assert('future: status === "good"', stats99.status === 'good', 'got "' + stats99.status + '"');
     assert('future: isFuture === true', stats99.isFuture === true);
+    assert('future: ceiling === 30000', stats99.ceiling === 30000, 'got ' + stats99.ceiling);
 
     const callouts99 = YCalc.buildCallouts(store99, stats99);
     assert('future: exactly 1 callout', callouts99.length === 1, 'got ' + callouts99.length);
     assert('future: id === "future"', callouts99[0] && callouts99[0].id === 'future', 'got "' + (callouts99[0] && callouts99[0].id) + '"');
     assert('future: severity === "good"', callouts99[0] && callouts99[0].severity === 'good');
+
+    // ---- ceiling detector — over ceiling ----
+    section('ceiling detector');
+    // Small ceiling + large rates → combined projection >> ceiling
+    const overCeilingStore = Object.assign({}, store, {
+      people: [{ id: 'joseph', name: 'Joseph', rates: [{ from: '2026-01', amount: 2000 }], startMonth: '2026-01' }],
+      years: Object.assign({}, store.years, { '2026': { ceiling: 1000, buffer: 0.04 } }),
+    });
+    const overStats = YCalc.computeStats(overCeilingStore, 2026, asOf2026);
+    const overCallouts = YCalc.buildCallouts(overCeilingStore, overStats);
+    assert('ceiling detector present when combined > ceiling', overCallouts.some(c => c.id === 'ceiling'));
+    assert('ceiling detector is top callout when over', overCallouts[0] && overCallouts[0].id === 'ceiling');
+    const overCeil = overCallouts.find(c => c.id === 'ceiling');
+    assert('ceiling severity watch/alert when over', overCeil && (overCeil.severity === 'watch' || overCeil.severity === 'alert'));
+    assert('ceiling drill is fun section', overCeil && overCeil.drill && overCeil.drill.section === 'fun');
+
+    // Well under ceiling → good/info
+    const underCeilingStore = Object.assign({}, store, {
+      people: [{ id: 'joseph', name: 'Joseph', rates: [{ from: '2026-01', amount: 1 }], startMonth: '2026-01' }],
+      years: Object.assign({}, store.years, { '2026': { ceiling: 200000, buffer: 0.04 } }),
+    });
+    const underStats = YCalc.computeStats(underCeilingStore, 2026, asOf2026);
+    const underCallouts = YCalc.buildCallouts(underCeilingStore, underStats);
+    assert('ceiling detector present when well under', underCallouts.some(c => c.id === 'ceiling'));
+    const underCeil = underCallouts.find(c => c.id === 'ceiling');
+    assert('ceiling severity good/info when well under', underCeil && (underCeil.severity === 'good' || underCeil.severity === 'info'));
+
+    // ---- migrateStore ----
+    section('migrateStore (idempotent)');
+    const oldBackup = {
+      version: 1, currentYear: 2026, density: 'balanced',
+      years: { '2026': { target: 25000, buffer: 0.04 } },
+      transactions: [{ id: 'x1', date: '2026-01-15', description: 'Test', amount_eur: 100, category: 'groceries', source: 'manual' }],
+      templates: [],
+    };
+    YData.migrateStore(oldBackup);
+    assert('migrateStore: target → ceiling', oldBackup.years['2026'].ceiling === 25000, 'got ' + oldBackup.years['2026'].ceiling);
+    assert('migrateStore: target deleted', oldBackup.years['2026'].target === undefined);
+    assert('migrateStore: people injected', Array.isArray(oldBackup.people) && oldBackup.people.length === 2);
+    assert('migrateStore: wishlist injected', Array.isArray(oldBackup.wishlist));
+    // idempotent — run again
+    YData.migrateStore(oldBackup);
+    assert('migrateStore idempotent: ceiling unchanged', oldBackup.years['2026'].ceiling === 25000);
+    assert('migrateStore idempotent: no duplicate people', oldBackup.people.length === 2);
 
     // ---- Summary ----
     const total = passed + failed;

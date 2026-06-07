@@ -46,13 +46,13 @@
   // Status hero — no card. Serif ink number; over/under carried by a small mono terra/sage
   // figure; a pace rule (terra fill to spent/target, ink marker at day-of-year).
   function StatusHero({ stats }) {
-    const headline = stats.isFuture ? stats.target : stats.complete ? stats.spent : stats.projection;
+    const headline = stats.isFuture ? stats.mainTarget : stats.complete ? stats.spent : stats.projection;
     const eyebrow = stats.complete ? "Final spend · " + stats.year
-      : stats.isFuture ? "Target · " + stats.year
+      : stats.isFuture ? "Main budget · " + stats.year
       : "Projected year-end";
     const over = stats.delta >= 0;
-    const near = Math.abs(stats.delta) < stats.target * 0.005;
-    const fillPct = Math.max(0, Math.min(100, (stats.spent / stats.target) * 100));
+    const near = Math.abs(stats.delta) < stats.mainTarget * 0.005;
+    const fillPct = Math.max(0, Math.min(100, (stats.spent / stats.mainTarget) * 100));
     const markPct = Math.max(0, Math.min(100, (stats.doy / 365) * 100));
     return (
       <div className="hero">
@@ -62,10 +62,10 @@
           {stats.isFuture ? (
             <>Nothing logged yet.</>
           ) : near ? (
-            <>On your <span className="num">{eur0(stats.target)}</span> target.</>
+            <>On your <span className="num">{eur0(stats.mainTarget)}</span> main budget.</>
           ) : (
             <>
-              {over ? "Over" : "Under"} your <span className="num">{eur0(stats.target)}</span> target by{" "}
+              {over ? "Over" : "Under"} your <span className="num">{eur0(stats.mainTarget)}</span> main budget by{" "}
               <span className={"hero-emph " + (over ? "over" : "under")}>{eur0(Math.abs(stats.delta))}</span>.
             </>
           )}
@@ -105,7 +105,7 @@
   function SpendCurve({ stats }) {
     const W = 360, H = 168, padL = 38, padR = 8, padT = 10, padB = 22;
     const x0 = padL, x1 = W - padR, y0 = padT, y1 = H - padB;
-    const maxY = Math.max(stats.target, stats.projection, 1) * 1.08;
+    const maxY = Math.max(stats.mainTarget, stats.projection, 1) * 1.08;
     const sx = (d) => x0 + (d / 365) * (x1 - x0);
     const sy = (v) => y1 - (v / maxY) * (y1 - y0);
     const cum = YCalc.cumulativeByDay(stats.upto);
@@ -118,7 +118,7 @@
     const actLine = actPts.map((p) => p.join(",")).join(" ");
     const areaPts = `${x0},${y1} ${actLine} ${actPts[actPts.length - 1][0]},${y1}`;
 
-    const yTicks = [0, stats.target / 2, stats.target];
+    const yTicks = [0, stats.mainTarget / 2, stats.mainTarget];
     const uid = "sc" + stats.year;
     return (
       <svg viewBox={`0 0 ${W} ${H}`} width="100%" style={{ display: "block", overflow: "visible" }}>
@@ -138,10 +138,10 @@
           <text key={m} x={sx(MONTH_STARTS[m])} y={H - 7} textAnchor="middle" fontSize="10" fill="var(--chart-axis)" fontFamily="var(--mono)">{MONTH_INITIALS[m]}</text>
         ))}
         {/* faint linear pace diagonal */}
-        <line x1={sx(0)} y1={sy(0)} x2={sx(365)} y2={sy(stats.target)} stroke="var(--chart-pace)" strokeWidth="1" strokeDasharray="2 4" opacity="0.6" />
+        <line x1={sx(0)} y1={sy(0)} x2={sx(365)} y2={sy(stats.mainTarget)} stroke="var(--chart-pace)" strokeWidth="1" strokeDasharray="2 4" opacity="0.6" />
         {/* target reference */}
-        <line x1={x0} y1={sy(stats.target)} x2={x1} y2={sy(stats.target)} stroke="var(--chart-target)" strokeWidth="1.2" strokeDasharray="4 4" />
-        <text x={x1} y={sy(stats.target) - 5} textAnchor="end" fontSize="10" fill="var(--chart-target)" fontFamily="var(--mono)">target {eurK(stats.target)}</text>
+        <line x1={x0} y1={sy(stats.mainTarget)} x2={x1} y2={sy(stats.mainTarget)} stroke="var(--chart-target)" strokeWidth="1.2" strokeDasharray="4 4" />
+        <text x={x1} y={sy(stats.mainTarget) - 5} textAnchor="end" fontSize="10" fill="var(--chart-target)" fontFamily="var(--mono)">target {eurK(stats.mainTarget)}</text>
         {/* actual area + line */}
         <polygon points={areaPts} fill={`url(#${uid})`} />
         <polyline points={actLine} fill="none" stroke="var(--chart-actual)" strokeWidth="2.6" strokeLinecap="round" strokeLinejoin="round" />

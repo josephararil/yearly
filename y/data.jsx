@@ -154,6 +154,11 @@
     return txns;
   }
 
+  const DEFAULT_PEOPLE = [
+    { id: "joseph", name: "Joseph", rates: [{ from: "2026-01", amount: 100 }], startMonth: "2026-01" },
+    { id: "marti",  name: "Marti",  rates: [{ from: "2026-01", amount: 200 }], startMonth: "2026-01" },
+  ];
+
   function buildSeed(todayStr) {
     const rng = mulberry32(20260606);
     let t2026 = genYear2026(rng, todayStr);
@@ -165,6 +170,18 @@
     // a couple of imported-looking txns (original currency) for realism
     t2026.slice(0, 2).forEach((t, i) => { t.source = "import"; if (i === 0) { t.original_amount = Math.round(t.amount_eur * 1.96 * 100) / 100; t.original_currency = "BGN"; } });
 
+    // Tag ~8 shopping/entertainment/restaurant tx as fun — spread across Jan–Jun, alternating owners
+    const funCats = ["shopping", "entertainment", "restaurants"];
+    const persons = ["joseph", "marti"];
+    const funCandidates = t2026
+      .filter((t) => funCats.includes(t.category))
+      .sort((a, b) => (a.date < b.date ? -1 : 1));
+    const funCount = Math.min(8, funCandidates.length);
+    for (let i = 0; i < funCount; i++) {
+      funCandidates[i].fun = true;
+      funCandidates[i].person = persons[i % 2];
+    }
+
     const t2025 = genHistory(mulberry32(2025), 2025, 22340);
     const t2024 = genHistory(mulberry32(2024), 2024, 21650);
 
@@ -172,14 +189,47 @@
       version: 1,
       currentYear: 2026,
       density: "balanced",
+      people: DEFAULT_PEOPLE.map((p) => ({ ...p, rates: p.rates.slice() })),
+      wishlist: [
+        { id: "wl_1", owner: "marti",  name: "AirPods Pro",          price: 280, createdMonth: "2026-01" },
+        { id: "wl_2", owner: "joseph", name: "Mechanical keyboard",   price: 150, createdMonth: "2026-01" },
+      ],
       years: {
-        "2024": { target: 21000, buffer: 0.04 },
-        "2025": { target: 23000, buffer: 0.04 },
-        "2026": { target: 25000, buffer: 0.04 },
+        "2024": { ceiling: 21000, buffer: 0.04 },
+        "2025": { ceiling: 23000, buffer: 0.04 },
+        "2026": { ceiling: 25000, buffer: 0.04 },
       },
       templates: DEFAULT_TEMPLATES.slice(),
       transactions: [...t2024, ...t2025, ...t2026],
     };
+  }
+
+  // Idempotent migration — run on every load and on JSON restore.
+  function migrateStore(s) {
+    // ceiling rename
+    if (s.years) {
+      Object.keys(s.years).forEach((y) => {
+        const yr = s.years[y];
+        if (yr.ceiling == null && yr.target != null) {
+          yr.ceiling = yr.target;
+          delete yr.target;
+        }
+      });
+    }
+    // people default
+    if (!s.people) {
+      const earliest = s.years ? Object.keys(s.years).sort()[0] || "2026" : "2026";
+      const from = earliest + "-01";
+      s.people = [
+        { id: "joseph", name: "Joseph", rates: [{ from, amount: 100 }], startMonth: from },
+        { id: "marti",  name: "Marti",  rates: [{ from, amount: 200 }], startMonth: from },
+      ];
+    }
+    // wishlist default
+    if (!s.wishlist) s.wishlist = [];
+    // density default
+    if (!s.density) s.density = "balanced";
+    return s;
   }
 
   function todayISO() { return new Date().toISOString().slice(0, 10); }
@@ -189,8 +239,7 @@
       const raw = localStorage.getItem(STORAGE_KEY);
       if (raw) {
         const s = JSON.parse(raw);
-        if (!s.density) s.density = "balanced";
-        return s;
+        return migrateStore(s);
       }
     } catch (e) {}
     const seed = buildSeed(todayISO());
@@ -202,6 +251,6 @@
 
   window.YData = {
     STORAGE_KEY, CATEGORIES, CAT_BY_ID, cat, DEFAULT_TEMPLATES,
-    loadStore, saveStore, resetStore, buildSeed, todayISO, uid,
+    loadStore, saveStore, resetStore, buildSeed, migrateStore, todayISO, uid,
   };
 })();
