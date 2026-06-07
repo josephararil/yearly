@@ -75,11 +75,25 @@ persistence are untouched.**
   updated to canonical tokens; `.stat*` rewritten as flat grid with hairline separators.
   Recharts engine not adopted — dependency-free SVG chart retained (same as SpendCurve).
   SW cache bumped to `yearly-v7`.
+- **Phase 2c (done):** **Settings** (`y/settings.jsx`) restyled to Broadsheet.
+  **Setting rows** (`.setrow*`): filled grey `.setrow-ic` tile removed — icon floats bare
+  in `--ink-2`; titles sans `--ink`; sub-labels and values mono `--muted`; dividers `--hair`.
+  **Year list** (`.year-row`): dividers `--hair`; "CURRENT" badge mono `--terra`; target /
+  projection figures mono `--ink-2`; delta display switched from background `delta-chip` to
+  bare `DeltaChip` component (mono, colored, no chip). **Range slider** (`.rng`): track is a
+  terra-filled linear gradient driven by `--rng-fill` CSS variable (set inline from `v/15`);
+  thumb is `--paper` with `1.5px --hair-strong` border, no heavy shadow. **Import preview**:
+  `.chk` border `--hair-strong`, checked fill `--terra`; `.dupflag` mono `--amber`. **Category
+  select pill** (`.selpill`): `--paper-tint` background, `--hair` border, `--sans` font, `--ink`
+  text. **Templates**: `CatIcon` replaced with 8px `cat-dot` color dot. **DensitySheet**: active
+  check `--terra`. All inline legacy token names (`--text`, `--text-2`, `--text-3`, `--accent`,
+  `--font`, `--font-mono`, `--surface-sunk`, `--hairline`, `--hairline-strong`, `--watch`)
+  replaced with canonical equivalents. SW cache bumped to `yearly-v8`.
 - **Spend curve note:** the spec §4 calls for Recharts, but this repo is deliberately
   self-contained/offline-first, so `SpendCurve` and `ProjectionChart` are dependency-free
   themed SVGs. Adopting the Recharts engine is an optional future decision.
-- **Phases 2+ (pending):** Settings/Years/Templates/CSV/JSON, and final shared-primitive +
-  consistency sweeps. These still render via the legacy-remap tokens until restyled.
+- **Phases 2+ (pending):** Final shared-primitive + consistency sweeps. Settings is done;
+  remaining screens render via the legacy-remap tokens until restyled.
 
 ## Running it
 

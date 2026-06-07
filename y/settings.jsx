@@ -2,20 +2,20 @@
 (function () {
   const { YData, YCalc, YUI } = window;
   const { eur0, signedPct, computeStats } = YCalc;
-  const { Sheet, CatIcon } = YUI;
+  const { Sheet, DeltaChip } = YUI;
   const DS = window.ApertureDesignSystem_72a4cd || {};
   const Button = DS.Button, SegmentedControl = DS.SegmentedControl;
 
   function Row({ icon, title, sub, value, onClick, danger }) {
     return (
       <button className="setrow" onClick={onClick}>
-        <span className="setrow-ic" style={danger ? { color: "var(--alert)", background: "var(--alert-dim)" } : undefined}><window.Icon name={icon} size={18} /></span>
+        <span className="setrow-ic" style={danger ? { color: "var(--alert)" } : undefined}><window.Icon name={icon} size={18} /></span>
         <span className="setrow-main">
           <div className="setrow-title" style={danger ? { color: "var(--alert)" } : undefined}>{title}</div>
           {sub && <div className="setrow-sub">{sub}</div>}
         </span>
         {value && <span className="setrow-val">{value}</span>}
-        <window.Icon name="chevronRight" size={16} style={{ color: "var(--text-3)" }} />
+        <window.Icon name="chevronRight" size={16} style={{ color: "var(--muted)" }} />
       </button>
     );
   }
@@ -91,7 +91,7 @@
         {!rows ? (
           <div>
             <p className="muted" style={{ fontSize: 13, lineHeight: 1.5, marginTop: 0 }}>
-              Columns: <code style={{ fontFamily: "var(--font-mono)", fontSize: 11.5 }}>date, description, amount_eur, original_amount, original_currency, category</code>
+              Columns: <code style={{ fontFamily: "var(--mono)", fontSize: 11.5 }}>date, description, amount_eur, original_amount, original_currency, category</code>
             </p>
             <input type="file" accept=".csv,text/csv" style={{ display: "none" }} id="csvfile"
               onChange={(e) => { const f = e.target.files[0]; if (f) f.text().then((t) => { setRaw(t); parse(t); }); }} />
@@ -100,7 +100,7 @@
               <Button variant="secondary" onClick={() => { setRaw(SAMPLE_CSV); parse(SAMPLE_CSV); }}>Try sample</Button>
             </div>
             <div className="field"><label>…or paste CSV</label>
-              <textarea className="inp" style={{ minHeight: 110, fontFamily: "var(--font-mono)", fontSize: 12 }} value={raw}
+              <textarea className="inp" style={{ minHeight: 110, fontFamily: "var(--mono)", fontSize: 12 }} value={raw}
                 onChange={(e) => setRaw(e.target.value)} placeholder="date,description,amount_eur,…" />
             </div>
             <Button variant="primary" block disabled={!raw.trim()} onClick={() => parse(raw)}>Preview</Button>
@@ -108,12 +108,12 @@
         ) : (
           <div>
             <div className="muted" style={{ fontSize: 13, marginBottom: 6 }}>
-              {rows.length} rows · <span style={{ color: "var(--text)" }}>{kept} to import</span>{dups ? ` · ${dups} duplicate${dups > 1 ? "s" : ""} skipped` : ""}
+              {rows.length} rows · <span style={{ color: "var(--ink)" }}>{kept} to import</span>{dups ? ` · ${dups} duplicate${dups > 1 ? "s" : ""} skipped` : ""}
             </div>
             <div style={{ maxHeight: "44vh", overflowY: "auto", marginBottom: 12 }}>
               {rows.map((r, i) => (
                 <div key={i} className={"imp-row" + (r.skip ? " skip" : "")}>
-                  <span className="chk" onClick={() => toggleSkip(i)} style={r.skip ? {} : { background: "var(--accent)", borderColor: "var(--accent)" }}>
+                  <span className="chk" onClick={() => toggleSkip(i)} style={r.skip ? {} : { background: "var(--terra)", borderColor: "var(--terra)" }}>
                     {!r.skip && <window.Icon name="check" size={14} />}
                   </span>
                   <span className="imp-main">
@@ -175,7 +175,7 @@
             const c = YData.cat(t.category);
             return (
               <div key={t.id} className="txrow" style={{ cursor: "default" }}>
-                <CatIcon catId={t.category} />
+                <span className="cat-dot" style={{ background: YData.cat(t.category).color }} />
                 <span className="tx-main"><div className="tx-desc">{t.name}</div><div className="tx-meta">{c.label}{t.defaultAmount ? ` · €${t.defaultAmount}` : ""}</div></span>
                 <span style={{ display: "flex", gap: 2 }}>
                   <button className="linklike" onClick={() => move(i, -1)} disabled={i === 0} style={{ opacity: i === 0 ? 0.3 : 1 }}><window.Icon name="chevronUp" size={16} /></button>
@@ -224,16 +224,17 @@
       <Sheet open={open} onClose={onClose} title="Missed-entry buffer">
         <p className="muted" style={{ fontSize: 13, marginTop: 0, lineHeight: 1.5 }}>People forget to log things. This lifts the projection by a flat percentage so it isn't artificially optimistic.</p>
         {isPast ? (
-          <p className="muted" style={{ fontSize: 13, lineHeight: 1.5, color: "var(--text-3)" }}>Buffer is not applicable to completed years — final spend is already known.</p>
+          <p className="muted" style={{ fontSize: 13, lineHeight: 1.5, color: "var(--muted)" }}>Buffer is not applicable to completed years — final spend is already known.</p>
         ) : (
           <>
             <div style={{ textAlign: "center", margin: "8px 0 14px" }}>
               <div className="num" style={{ fontSize: 44, fontWeight: 600 }}>{v}%</div>
-              <div className="muted" style={{ fontSize: 13 }}>projection {eur0(buffStats.projNoBuffer)} → <span style={{ color: "var(--text)" }} className="num">{eur0(preview)}</span></div>
+              <div className="muted" style={{ fontSize: 13 }}>projection {eur0(buffStats.projNoBuffer)} → <span style={{ color: "var(--ink)" }} className="num">{eur0(preview)}</span></div>
             </div>
             <div className="rangewrap" style={{ marginBottom: 20 }}>
               <span className="muted num">0%</span>
-              <input className="rng" type="range" min="0" max="15" step="1" value={v} onChange={(e) => setV(parseInt(e.target.value))} />
+              <input className="rng" type="range" min="0" max="15" step="1" value={v} onChange={(e) => setV(parseInt(e.target.value))}
+                style={{ "--rng-fill": `${Math.round(v / 15 * 100)}%` }} />
               <span className="muted num">15%</span>
             </div>
             <Button variant="primary" block onClick={() => {
@@ -309,19 +310,17 @@
         <div className="panel panel-pad">
           {years.map((y) => {
             const st = computeStats(store, y);
-            const over = st.delta >= 0;
-            const cls = st.status === "good" ? "bg-good" : st.status === "alert" ? "bg-alert" : "bg-watch";
             return (
               <button key={y} className="year-row" onClick={() => setSel({ year: Number(y), editing: null })}
                 style={{ width: "100%", background: "none", border: 0, cursor: "pointer", textAlign: "left", font: "inherit", color: "inherit" }}>
                 <div style={{ flex: 1 }}>
-                  <div style={{ fontSize: 17, fontWeight: 600 }} className="num">{y}{st.isCurrent && <span style={{ fontSize: 11, color: "var(--accent)", fontFamily: "var(--font)", marginLeft: 8, letterSpacing: "0.04em" }}>CURRENT</span>}</div>
+                  <div style={{ fontSize: 17, fontWeight: 600 }} className="num">{y}{st.isCurrent && <span style={{ fontSize: 11, color: "var(--terra)", fontFamily: "var(--mono)", marginLeft: 8, letterSpacing: "0.04em" }}>CURRENT</span>}</div>
                   <div className="muted" style={{ fontSize: 12.5, marginTop: 2 }}>
-                    Target <span className="num" style={{ color: "var(--text-2)" }}>{eur0(st.target)}</span> · {st.complete ? "spent" : "projected"} <span className="num" style={{ color: "var(--text-2)" }}>{eur0(st.projection)}</span>
+                    Target <span className="num" style={{ color: "var(--ink-2)" }}>{eur0(st.target)}</span> · {st.complete ? "spent" : "projected"} <span className="num" style={{ color: "var(--ink-2)" }}>{eur0(st.projection)}</span>
                   </div>
                 </div>
-                <span className={"delta-chip " + cls}><span className="num">{(over ? "+" : "−") + eur0(Math.abs(st.delta))}</span></span>
-                <window.Icon name="chevronRight" size={16} style={{ color: "var(--text-3)", marginLeft: 4 }} />
+                <DeltaChip delta={st.delta} status={st.status} />
+                <window.Icon name="chevronRight" size={16} style={{ color: "var(--muted)", marginLeft: 4 }} />
               </button>
             );
           })}
@@ -346,7 +345,7 @@
                 <div className="setrow-title">{o.label}</div>
                 <div className="setrow-sub">{o.sub}</div>
               </span>
-              {current === o.value && <window.Icon name="check" size={18} style={{ color: "var(--accent)" }} />}
+              {current === o.value && <window.Icon name="check" size={18} style={{ color: "var(--terra)" }} />}
             </button>
           ))}
         </div>
