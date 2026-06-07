@@ -366,6 +366,11 @@
     );
   }
 
+  function backupJSON(store) {
+    const blob = new Blob([JSON.stringify(store, null, 2)], { type: "application/json" });
+    const a = document.createElement("a"); a.href = URL.createObjectURL(blob); a.download = "yearly-backup.json"; a.click();
+  }
+
   function exportCSV(store) {
     const head = ["date", "description", "amount_eur", "original_amount", "original_currency", "category", "note", "source"];
     const esc = (v) => { v = v == null ? "" : String(v); return /[",\n]/.test(v) ? '"' + v.replace(/"/g, '""') + '"' : v; };
@@ -401,6 +406,23 @@
           <Row icon="layers" title="Quick templates" sub={`${store.templates.length} templates`} onClick={() => setSub("templates")} />
           <Row icon="upload" title="Import CSV" sub="with duplicate detection" onClick={() => setSub("import")} />
           <Row icon="download" title="Export all data" sub="CSV of every transaction" onClick={() => exportCSV(store)} />
+          <Row icon="download" title="Back up (JSON)" sub="full backup incl. years & templates" onClick={() => backupJSON(store)} />
+          <input type="file" accept=".json,application/json" style={{ display: "none" }} id="jsonfile"
+            onChange={(e) => {
+              const f = e.target.files[0]; if (!f) return;
+              e.target.value = "";
+              f.text().then((text) => {
+                let parsed;
+                try { parsed = JSON.parse(text); } catch (_) { alert("Invalid JSON file — restore cancelled."); return; }
+                if (!parsed || typeof parsed.years !== "object" || !Array.isArray(parsed.transactions)) {
+                  alert("File doesn't look like a Yearly backup — restore cancelled."); return;
+                }
+                if (!parsed.density) parsed.density = "balanced";
+                if (!confirm("Replace ALL current data with this backup?")) return;
+                setStore(parsed);
+              });
+            }} />
+          <Row icon="upload" title="Restore (JSON)" sub="replace all data from a backup" onClick={() => document.getElementById("jsonfile").click()} />
           <Row icon="activity" title="Restore sample data" sub="reset to the demo dataset" onClick={() => { if (confirm("Replace all data with the sample dataset?")) setStore(YData.resetStore()); }} />
         </div>
 

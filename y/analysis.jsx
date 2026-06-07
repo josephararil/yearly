@@ -274,6 +274,7 @@
     React.useEffect(() => {
       if (focus && focus.section === "categories") setTab("Categories");
       else if (focus && focus.section === "projection") setTab("Projection");
+      else if (focus && focus.section === "activity") setTab("Activity");
     }, [focus]);
     return (
       <div className="screen">
