@@ -116,7 +116,8 @@
               onCallout={onCallout} fun={fun} store={store} onOpenFun={onOpenFun} />
           )}
           {route === "analysis" && (
-            <YAnalysis.AnalysisScreen stats={stats} focus={analysisFocus} onEditTx={setEditTx} />
+            <YAnalysis.AnalysisScreen stats={stats} focus={analysisFocus} onEditTx={setEditTx}
+              fun={fun} store={store} setStore={setStore} addTx={addTx} />
           )}
           {route === "settings" && (
             <YSettings.SettingsScreen store={store} setStore={setStore} stats={stats} />
@@ -127,7 +128,7 @@
         <NavBar route={route} onRoute={setRoute} onAdd={() => setAddOpen(true)} />
 
         <YAdd.AddSheet open={addOpen} onClose={() => setAddOpen(false)} store={store} onSave={addTx} />
-        <YAdd.EditSheet open={!!editTx} txn={editTx} onClose={() => setEditTx(null)} onSave={saveTx} onDelete={delTx} />
+        <YAdd.EditSheet open={!!editTx} txn={editTx} onClose={() => setEditTx(null)} onSave={saveTx} onDelete={delTx} store={store} />
         <YearMenu open={yearOpen} onClose={() => setYearOpen(false)} store={store} viewYear={viewYear} setViewYear={setViewYear} />
       </div>
     );

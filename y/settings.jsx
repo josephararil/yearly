@@ -336,6 +336,53 @@
     );
   }
 
+  // ---------- Fun budget config ----------
+  function FunConfigSheet({ open, onClose, person, store, setStore, stats }) {
+    const currentYM = new Date().toISOString().slice(0, 7);
+    const latestRate = (() => {
+      const rates = (person && person.rates) || [];
+      let best = 0;
+      rates.forEach((r) => { if (r.from <= currentYM) best = r.amount; });
+      return best;
+    })();
+    const [v, setV] = React.useState(String(latestRate));
+    React.useEffect(() => { if (open) setV(String(latestRate)); }, [open]);
+
+    const save = () => {
+      const amount = parseInt(v) || 0;
+      setStore((s) => {
+        const updated = (s.people || []).map((p) => {
+          if (p.id !== person.id) return p;
+          const rates = (p.rates || []).slice();
+          const idx = rates.findIndex((r) => r.from === currentYM);
+          if (idx >= 0) {
+            rates[idx] = { from: currentYM, amount };
+          } else {
+            rates.push({ from: currentYM, amount });
+          }
+          rates.sort((a, b) => (a.from < b.from ? -1 : 1));
+          return { ...p, rates };
+        });
+        return { ...s, people: updated };
+      });
+      onClose();
+    };
+
+    if (!person) return null;
+    return (
+      <Sheet open={open} onClose={onClose} title={person.name + "'s fun budget"}>
+        <p className="muted" style={{ fontSize: 13, marginTop: 0, lineHeight: 1.5 }}>
+          Monthly allowance from {currentYM} onwards — past months keep their old rate.
+        </p>
+        <div className="amount-display"><span className="cur">€</span><span className="num">{v || "0"}</span></div>
+        <input className="inp inp-num" inputMode="numeric" value={v}
+          onChange={(e) => setV(e.target.value.replace(/[^\d]/g, ""))}
+          style={{ textAlign: "center", fontSize: 18, marginBottom: 16 }} />
+        <Button variant="primary" block onClick={save}>Save rate</Button>
+      </Sheet>
+    );
+  }
+
   function DensitySheet({ open, onClose, store, setStore }) {
     const OPTIONS = [
       { value: "minimal", label: "Minimal", sub: "Up to 2 alert/watch callouts" },
@@ -390,9 +437,12 @@
 
   function SettingsScreen({ store, setStore, stats }) {
     const [sub, setSub] = React.useState(null);
+    const [funPersonSub, setFunPersonSub] = React.useState(null); // person id | null
     const cur = store.years[String(store.currentYear)];
     const density = store.density || "balanced";
     const densityLabel = density.charAt(0).toUpperCase() + density.slice(1);
+    const people = store.people || [];
+    const funPersonOpen = people.find((p) => p.id === funPersonSub) || null;
     return (
       <div className="screen">
         <div className="section-h" style={{ marginTop: 0 }}><h2>This year</h2></div>
@@ -400,6 +450,24 @@
           <Row icon="target" title="Household ceiling" sub={`${store.currentYear} ceiling`} value={eur0(cur.ceiling != null ? cur.ceiling : (cur.target || 25000))} onClick={() => setSub("target")} />
           <Row icon="layers" title="Missed-entry buffer" sub="lifts the projection" value={Math.round((cur.buffer || 0) * 100) + "%"} onClick={() => setSub("buffer")} />
           <Row icon="clock" title="Past years" sub="target vs actual history" onClick={() => setSub("years")} />
+        </div>
+
+        <div className="section-h"><h2>Fun budget</h2></div>
+        <div className="panel" style={{ overflow: "hidden" }}>
+          {people.map((p) => {
+            const currentYM = new Date().toISOString().slice(0, 7);
+            const rates = p.rates || [];
+            let rate = 0;
+            rates.forEach((r) => { if (r.from <= currentYM) rate = r.amount; });
+            return (
+              <Row key={p.id} icon="activity" title={p.name} sub="monthly fun allowance" value={eur0(rate) + "/mo"} onClick={() => setFunPersonSub(p.id)} />
+            );
+          })}
+          {stats && (
+            <div style={{ padding: "10px 14px", fontFamily: "var(--mono)", fontSize: 12, color: "var(--muted)", borderTop: people.length ? "1px solid var(--hair)" : "none" }}>
+              {eur0(stats.ceiling)} ceiling = {eur0(stats.mainTarget)} main + {eur0(stats.funPlanAnnual)}/yr fun
+            </div>
+          )}
         </div>
 
         <div className="section-h"><h2>Display</h2></div>
@@ -446,6 +514,7 @@
         <TemplatesSheet open={sub === "templates"} onClose={() => setSub(null)} store={store} setStore={setStore} />
         <ImportSheet open={sub === "import"} onClose={() => setSub(null)} store={store} setStore={setStore} />
         <ClearSheet open={sub === "clear"} onClose={() => setSub(null)} setStore={setStore} />
+        <FunConfigSheet open={!!funPersonOpen} onClose={() => setFunPersonSub(null)} person={funPersonOpen} store={store} setStore={setStore} stats={stats} />
       </div>
     );
   }
