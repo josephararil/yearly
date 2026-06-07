@@ -34,6 +34,15 @@
     return a;
   }
 
+  // Prior year's spend up to the same day-of-year as asOfDate. Returns 0 if no data.
+  function priorYearCumulative(store, year, asOfDate) {
+    const doy = Math.max(1, dayOfYear(asOfDate || new Date()));
+    const txns = yearTxns(store, Number(year) - 1);
+    return txns
+      .filter((t) => dayOfYear(parseDate(t.date)) <= doy)
+      .reduce((a, t) => a + t.amount_eur, 0);
+  }
+
   // ---- computeStats helpers ----
 
   function aggregateByCategory(upto, spent) {
@@ -118,11 +127,16 @@
     const { byMonth, catMonth } = aggregateByMonth(upto);
     const series = buildSeries(upto, doy, target, complete || isFuture);
 
+    // Prior year cumulative curve — null when no prior year data exists.
+    const priorTxns = yearTxns(store, Number(year) - 1);
+    const priorCum = priorTxns.length ? cumulativeByDay(priorTxns) : null;
+    const priorSpent = priorCum ? priorCum[Math.min(365, doy)] : null;
+
     return {
       year: Number(year), target, buffer, isCurrent, complete,
       asOf, asOfStr, doy, spent, dailyRate, projection, projNoBuffer, bufferAmt,
       pace, delta, deltaPct, status, txns, upto, byCat, catList, byMonth, catMonth,
-      series,
+      series, priorCum, priorSpent,
     };
   }
 
@@ -224,6 +238,23 @@
       });
     }
 
+    // 6. year-over-year comparison (current year only, when prior year has data)
+    if (stats.isCurrent) {
+      const priorSpend = priorYearCumulative(store, stats.year, stats.asOf);
+      if (priorSpend > 0) {
+        const diff = stats.spent - priorSpend;
+        const diffPct = diff / priorSpend;
+        const higher = diff > 0;
+        out.push({
+          id: "yoy",
+          severity: higher && diff > stats.target * 0.08 ? "watch" : higher ? "info" : "good",
+          icon: higher ? "trendingUp" : "trendingDown",
+          text: `Spending is ${eur0(Math.abs(diff))} (${signedPct(diffPct)}) ${higher ? "higher" : "lower"} than the same point in ${stats.year - 1}.`,
+          drill: { section: "projection" }, mag: Math.abs(diff) / stats.target * 0.7 + 0.05,
+        });
+      }
+    }
+
     const sev = { alert: 3, watch: 2, info: 1, good: 0 };
     out.sort((a, b) => (sev[b.severity] - sev[a.severity]) || (b.mag - a.mag));
 
@@ -240,6 +271,6 @@
   window.YCalc = {
     MONTHS, MONTHS_LONG, eur0, eur2, eurAuto, signedEur, pct, signedPct,
     dayOfYear, parseDate, fmtDateShort, fmtDateLong, yearTxns,
-    cumulativeByDay, computeStats, projectionAsOf, buildCallouts,
+    cumulativeByDay, priorYearCumulative, computeStats, projectionAsOf, buildCallouts,
   };
 })();

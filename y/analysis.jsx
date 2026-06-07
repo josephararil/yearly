@@ -1,7 +1,7 @@
 // analysis.jsx — the deep surface: projection chart, category diagnostics, activity.
 (function () {
   const { YData, YCalc, YUI } = window;
-  const { eur0, eurAuto, signedPct, pct, MONTHS, fmtDateShort } = YCalc;
+  const { eur0, eurAuto, signedEur, signedPct, pct, MONTHS, fmtDateShort } = YCalc;
   const { CatIcon, TxRow } = YUI;
   const DS = window.ApertureDesignSystem_72a4cd || {};
   const SegmentedControl = DS.SegmentedControl, Input = DS.Input, Chip = DS.Chip;
@@ -13,7 +13,9 @@
   function ProjectionChart({ stats }) {
     const W = 340, H = 212, padL = 40, padR = 14, padT = 12, padB = 24;
     const x0 = padL, x1 = W - padR, y0 = padT, y1 = H - padB;
-    const maxY = Math.max(stats.target, stats.projection) * 1.1;
+    const priorCum = stats.priorCum;
+    const priorMax = priorCum ? priorCum[Math.min(365, stats.doy)] : 0;
+    const maxY = Math.max(stats.target, stats.projection, priorMax) * 1.1;
     const sx = (d) => x0 + (d / 365) * (x1 - x0);
     const sy = (v) => y1 - (v / maxY) * (y1 - y0);
     const cum = YCalc.cumulativeByDay(stats.upto);
@@ -52,6 +54,15 @@
         <text x={x1} y={sy(stats.target) - 5} textAnchor="end" fontSize="9" fill="var(--text-2)">target {eurK(stats.target)}</text>
         {/* linear pace */}
         <line x1={sx(0)} y1={sy(0)} x2={sx(365)} y2={sy(stats.target)} stroke="var(--text-3)" strokeWidth="1.2" strokeDasharray="2 3" opacity="0.7" />
+        {/* prior year */}
+        {priorCum && (() => {
+          const endDay = stats.complete ? 365 : stats.doy;
+          const days = [];
+          for (let d = 0; d <= endDay; d += 7) days.push(d);
+          if (days[days.length - 1] !== endDay) days.push(endDay);
+          const pts = days.map((d) => sx(d) + "," + sy(priorCum[Math.min(365, d)])).join(" ");
+          return <polyline points={pts} fill="none" stroke="var(--text-3)" strokeWidth="1.5" strokeDasharray="3 4" strokeLinecap="round" strokeLinejoin="round" opacity="0.7" />;
+        })()}
         {/* actual area + line */}
         <polygon points={areaPts} fill={`url(#${uid})`} />
         <polyline points={actLine} fill="none" stroke={col} strokeWidth="2.6" strokeLinecap="round" strokeLinejoin="round" />
@@ -79,6 +90,7 @@
         <Item c={col} label="Actual" />
         {!stats.complete && <Item c="var(--watch)" dash="5 4" label="Projected" />}
         <Item c="var(--text-3)" dash="2 3" label="Linear pace" />
+        {stats.priorCum && <Item c="var(--text-3)" dash="3 4" label={`${stats.year - 1}`} />}
       </div>
     );
   }
@@ -144,6 +156,17 @@
             color={stats.status === "good" ? "var(--good)" : stats.status === "alert" ? "var(--alert)" : "var(--watch)"} />
           <StatCard label="vs target" value={(stats.delta >= 0 ? "+" : "−") + eur0(Math.abs(stats.delta))} sub={signedPct(stats.deltaPct)}
             color={stats.status === "good" ? "var(--good)" : stats.status === "alert" ? "var(--alert)" : "var(--watch)"} />
+          {stats.priorSpent > 0 && (() => {
+            const diff = stats.spent - stats.priorSpent;
+            return (
+              <StatCard
+                label={stats.complete ? `vs ${stats.year - 1} final` : `vs ${stats.year - 1} same point`}
+                value={signedEur(diff)}
+                sub={signedPct(diff / stats.priorSpent)}
+                color={diff > 0 ? "var(--watch)" : "var(--good)"}
+              />
+            );
+          })()}
         </div>
       </div>
     );
