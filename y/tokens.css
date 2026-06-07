@@ -1,0 +1,48 @@
+/* tokens.css — vendored Aperture dark-theme design tokens.
+   Defines every CSS custom property consumed by app.css that is not already
+   defined there. app.css owns --good, --watch, --alert, their -dim variants,
+   and --col-w — those are intentionally absent here. */
+
+:root {
+  /* Surfaces */
+  --bg: #000000;
+  --bg-2: #111113;
+  --surface: #1c1c1e;
+  --surface-2: #242427;
+  --surface-sunk: #161618;
+  --topbar-bg: rgba(0, 0, 0, 0.6);
+  --scrim: rgba(0, 0, 0, 0.5);
+
+  /* Text */
+  --text: #f5f5f7;
+  --text-2: #c7c7cc;
+  --text-3: #8e8e93;
+
+  /* Borders */
+  --hairline: rgba(255, 255, 255, 0.10);
+  --hairline-strong: rgba(255, 255, 255, 0.18);
+
+  /* Accent (runtime value set via app.jsx; this is the initial default) */
+  --accent: #0071e3;
+
+  /* Typography */
+  --font: -apple-system, BlinkMacSystemFont, "SF Pro Display", "SF Pro Text",
+          "Segoe UI", system-ui, Roboto, Helvetica, Arial, sans-serif;
+  --font-mono: ui-monospace, "SF Mono", "JetBrains Mono", Menlo, Consolas, monospace;
+
+  /* Radii */
+  --r-card: 24px;
+  --r-pill: 980px;
+
+  /* Spacing */
+  --s-3: 12px;
+
+  /* Motion */
+  --dur: 240ms;
+  --dur-fast: 150ms;
+  --ease: cubic-bezier(0.22, 0.61, 0.36, 1);
+
+  /* Elevation (from README Elevation table) */
+  --shadow-rest: 0 1px 2px rgba(0, 0, 0, 0.5), 0 6px 18px rgba(0, 0, 0, 0.45);
+  --shadow-modal: 0 40px 120px rgba(0, 0, 0, 0.7), 0 8px 24px rgba(0, 0, 0, 0.5);
+}
