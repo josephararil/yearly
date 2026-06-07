@@ -121,6 +121,34 @@ spend, no projection/buffer).
   The `/*EDITMODE-BEGIN*/…/*EDITMODE-END*/` block in `y/app.jsx` is its hook — leave the
   markers intact.
 
+## PWA (offline + install)
+
+The app is a fully installable PWA:
+
+- **`sw.js`** (repo root) — **network-first** service worker. On every fetch it tries the
+  network; on success it writes the response to cache and returns it. On network failure it
+  serves from cache. This means users always get fresh content when online and the app still
+  runs when offline. Precaches the full app shell on install (all `y/*.jsx`, `y/*.css`,
+  `manifest.json`, `Yearly.html`, and the three pinned CDN URLs for React/ReactDOM/Babel).
+  **Cache-versioning rule:** bump `CACHE_NAME` in `sw.js` whenever the shell changes (new
+  file added to the precache list, CDN URL pinned to a new version, etc.). The old cache is
+  deleted on `activate`. `skipWaiting()` + `clients.claim()` ensure the new SW takes over
+  immediately without waiting for old tabs to close.
+- **`manifest.json`** — includes `id`, `scope`, `start_url`, and an `icons` array with
+  192×192, 512×512, and a maskable 512×512 variant (all SVG). SVG icons work in Chrome 91+
+  and modern WebKit/Firefox; for production Android/iOS you would swap in PNGs.
+- **`icons/icon.svg`** — flat accent-blue (#0071e3) tile with white "Y." wordmark and iOS-
+  style rounded corners (rx 115). Used for both 192 and 512 manifest entries.
+- **`icons/icon-maskable.svg`** — same design, full bleed (no rx), content within the inner
+  80% safe zone so the OS mask never clips the wordmark. Used for the `"purpose": "maskable"`
+  manifest entry.
+- **`Yearly.html`** registers the SW at the end of `<body>` with feature detection
+  (`if ('serviceWorker' in navigator) navigator.serviceWorker.register('sw.js')`).
+  Also adds `<link rel="apple-touch-icon" href="icons/icon.svg">` for iOS home-screen icons.
+
+> After any `sw.js` change: hard-refresh and confirm the new SW activated in
+> DevTools → Application → Service Workers before investigating anything else (§7 CLAUDE.md).
+
 ## Conventions
 
 - **Dark theme only.** Every figure renders in the monospace `.num` style; UI text is the

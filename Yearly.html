@@ -9,6 +9,7 @@
   <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
   <meta name="mobile-web-app-capable" content="yes" />
   <link rel="manifest" href="manifest.json" />
+  <link rel="apple-touch-icon" href="icons/icon.svg" />
 
   <!-- Design tokens + app styles -->
   <link rel="stylesheet" href="y/tokens.css" />
@@ -35,5 +36,11 @@
   <script type="text/babel" src="y/analysis.jsx"></script>
   <script type="text/babel" src="y/settings.jsx"></script>
   <script type="text/babel" src="y/app.jsx"></script>
+
+  <script>
+    if ('serviceWorker' in navigator) {
+      navigator.serviceWorker.register('sw.js');
+    }
+  </script>
 </body>
 </html>
