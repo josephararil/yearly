@@ -59,14 +59,17 @@ own export to `window`**. There are no imports/exports. Two consequences:
 ### The brain (port these first to any production target)
 - `y/calc.jsx` (`window.YCalc`) — **all numbers come from here.** `computeStats(store, year, asOfDate?)`
   (linear projection + per-year buffer uplift + status thresholds; `asOfDate` defaults to `new Date()`)
-  and `buildCallouts(store, stats)` (the ranked detector engine — 6 detectors). Pure functions, no UI deps.
+  and `buildCallouts(store, stats)` (the ranked detector engine — 7 detectors). Pure functions, no UI deps.
   Also exports `cumulativeByDay(txns)` → `number[366]` (shared with `analysis.jsx`),
   `priorYearCumulative(store, year, asOfDate)` → number (prior year spend at same day-of-year),
-  `projectionAsOf` (trend detector), and the standard formatters.
+  `projectionAsOf` (trend detector), `requiredDailyToHit(stats)` → number|null (daily cap to finish on
+  target; null when not applicable), and the standard formatters.
   `computeStats` return includes `priorCum` (number[366] | null) and `priorSpent` (number | null)
   for the prior year — consumed by `analysis.jsx` without needing store.
   Future-year guard: `Number(year) > currentYear` → spent 0, projection 0, status "good".
   Detector #6 (yoy): current year only — compares spent to prior year at same doy; watch/info/good.
+  Detector #7 (reqpace): current year only, when projection > target — surfaces required daily spend cap;
+  severity watch (alert status) or info (watch status).
 - `y/data.jsx` (`window.YData`) — the persisted store shape, the fixed 18-category list
   (`CATEGORIES`, id→icon→color), default templates, deterministic seed generator, and
   `loadStore`/`saveStore`/`resetStore`.
@@ -78,8 +81,13 @@ detector. **If you change the math or detectors, update the README spec in the s
 `App` is the single stateful root. `store` (persisted via a `setStore` that writes the whole
 object to localStorage on every mutation) and `tweaks` (`heroVariant`, `accent`, `density`)
 are the durable state; `route` / `viewYear` / `analysisFocus` / `addOpen` / `editTx` /
-`yearOpen` are ephemeral UI state. Two memoized derivations drive everything visible:
-`stats = YCalc.computeStats(store, viewYear)` and `callouts = YCalc.buildCallouts(store, stats)`.
+`yearOpen` / `deletedTx` / `showToast` are ephemeral UI state. Two memoized derivations drive
+everything visible: `stats = YCalc.computeStats(store, viewYear)` and
+`callouts = YCalc.buildCallouts(store, stats)`.
+
+Undo-on-delete: `delTx(id)` stashes the removed transaction in `deletedTx` and raises
+`showToast`. The `Toast` primitive (from `YUI`) auto-dismisses after 5 s; the "Undo" action
+re-inserts `deletedTx` into the store.
 
 Navigation is in-memory route state (`home` | `analysis` | `settings`), not URL routing.
 Tapping a callout sets `analysisFocus = { section, category? }` and switches to Analysis,
@@ -89,8 +97,10 @@ spend, no projection/buffer).
 
 ### UI layers
 - `y/ui.jsx` (`window.YUI`) — shared primitives: `StatusHero` (+ gauge/bar/spark variants),
-  `CalloutCard`, `TxRow`, `CatIcon`, `DeltaChip`, `PaceBar`, `Sheet`, `SectionH`, and `rich`
-  (renders numbers inside text in the mono `.num` style).
+  `CalloutCard`, `TxRow`, `CatIcon`, `DeltaChip`, `PaceBar`, `Sheet`, `SectionH`, `Toast`,
+  and `rich` (renders numbers inside text in the mono `.num` style).
+  `Toast({ open, message, actionLabel, onAction, onDismiss })` — transient bottom-anchored
+  banner (above nav, z-index 30), auto-dismisses after 5 s via `onDismiss`, optional action button.
 - Screens: `y/home.jsx` (Overview), `y/analysis.jsx` (Projection/Categories/Activity tabs;
   charts are hand-built SVG that double as the Recharts spec), `y/settings.jsx`
   (target/buffer/years/templates/CSV import-export/clear), `y/addflow.jsx` (Quick keypad +

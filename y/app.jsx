@@ -1,7 +1,7 @@
 // app.jsx — root: nav, routing, year switch, store + tweaks. Mounts the app.
 (function () {
   const { YData, YCalc, YUI, YHome, YAnalysis, YSettings, YAdd } = window;
-  const { Sheet } = YUI;
+  const { Sheet, Toast } = YUI;
   const { useTweaks, TweaksPanel, TweakSection, TweakSelect, TweakRadio, TweakColor } = window;
 
   const TWEAK_DEFAULTS = /*EDITMODE-BEGIN*/{
@@ -63,6 +63,8 @@
     const [addOpen, setAddOpen] = React.useState(false);
     const [editTx, setEditTx] = React.useState(null);
     const [yearOpen, setYearOpen] = React.useState(false);
+    const [deletedTx, setDeletedTx] = React.useState(null);
+    const [showToast, setShowToast] = React.useState(false);
     const scrollRef = React.useRef(null);
 
     React.useEffect(() => { document.documentElement.style.setProperty("--accent", t.accent); }, [t.accent]);
@@ -77,7 +79,16 @@
 
     const addTx = (tx) => setStore((s) => ({ ...s, transactions: [...s.transactions, tx] }));
     const saveTx = (tx) => setStore((s) => ({ ...s, transactions: s.transactions.map((x) => (x.id === tx.id ? tx : x)) }));
-    const delTx = (id) => setStore((s) => ({ ...s, transactions: s.transactions.filter((x) => x.id !== id) }));
+    const delTx = (id) => {
+      const tx = store.transactions.find((x) => x.id === id);
+      setStore((s) => ({ ...s, transactions: s.transactions.filter((x) => x.id !== id) }));
+      setDeletedTx(tx);
+      setShowToast(true);
+    };
+    const undoDelete = () => {
+      if (deletedTx) setStore((s) => ({ ...s, transactions: [...s.transactions, deletedTx] }));
+      setShowToast(false);
+    };
 
     const inSettings = route === "settings";
 
@@ -121,6 +132,7 @@
           )}
         </div>
 
+        <Toast open={showToast} message="Deleted" actionLabel="Undo" onAction={undoDelete} onDismiss={() => setShowToast(false)} />
         <NavBar route={route} onRoute={setRoute} onAdd={() => setAddOpen(true)} />
 
         <YAdd.AddSheet open={addOpen} onClose={() => setAddOpen(false)} store={store} onSave={addTx} />
