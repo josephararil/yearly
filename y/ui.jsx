@@ -33,14 +33,12 @@
     return out;
   }
 
-  function DeltaChip({ delta, status, label }) {
-    const cls = status === "good" ? "bg-good" : status === "alert" ? "bg-alert" : status === "watch" ? "bg-watch" : "bg-info";
-    const over = delta >= 0;
+  // DeltaChip: restyled to a bare mono terra/sage figure for future reuse — no background chip.
+  function DeltaChip({ delta, status }) {
+    const color = status === "good" ? "var(--sage)" : status === "alert" ? "var(--terra)" : status === "watch" ? "var(--amber)" : "var(--ink-2)";
     return (
-      <span className={"delta-chip " + cls}>
-        <Icon name={over ? "arrowUpRight" : "arrowDownRight"} size={14} />
-        <span className="num">{signedEur(delta)}</span>
-        <span style={{ opacity: 0.8, fontWeight: 500 }}>{label || (over ? "over" : "under")}</span>
+      <span className="num" style={{ fontWeight: 700, fontSize: "13px", color, letterSpacing: 0 }}>
+        {signedEur(delta)}
       </span>
     );
   }
@@ -231,7 +229,5 @@
     );
   }
 
-  // NOTE: DeltaChip is retained as a shared primitive but is no longer used by the
-  // Broadsheet StatusHero (over/under is now a small mono terra/sage figure inline).
   window.YUI = { CatIcon, DeltaChip, StatusHero, CalloutCard, TxRow, SpendCurve, Sheet, SectionH, Toast, rich, tint };
 })();

@@ -35,7 +35,7 @@
     return (
       <div className="ds-input">
         {icon && (
-          <span style={{ color: "var(--text-3)", display: "flex", alignItems: "center", flexShrink: 0 }}>
+          <span style={{ color: "var(--muted)", display: "flex", alignItems: "center", flexShrink: 0 }}>
             {icon}
           </span>
         )}
