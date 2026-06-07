@@ -15,6 +15,39 @@ the README as the source of truth for *intended* behavior; treat the code below 
 > production stack (Vite/Next + Recharts + a real component library). The files here are a
 > working prototype, not the production app.
 
+## Visual layer: the "Broadsheet" restyle (in progress)
+
+The app is being reskinned from the old Aperture **dark** theme to **Broadsheet** — an
+editorial light look (warm paper, hairline rules, three fonts, one terracotta accent). The
+authoritative spec is `design/BROADSHEET_DESIGN_SPEC.md` with a runnable reference in
+`design/reference/` (`broadsheet.html` + `lb-a.jsx` + `lb-data.jsx`). **This is a
+visual-layer-only change — logic, data, projection math, the callout engine, routing, and
+persistence are untouched.**
+
+- **Phase 0 (done):** `y/tokens.css` now defines the Broadsheet token set (`--paper`,
+  `--ink`, `--ink-2`, `--muted`, `--hair`/`--hair-strong`, `--terra`/`--amber`/`--sage`,
+  the `--chart-*` palette, and `--serif`/`--sans`/`--mono`). A **legacy-remap block** at the
+  bottom points the old Aperture names (`--bg`, `--surface`, `--text*`, `--hairline*`,
+  `--accent`, `--font*`) at their Broadsheet equivalents, so screens not yet migrated still
+  render on paper. The three fonts (Newsreader / Hanken Grotesk / JetBrains Mono) are wired
+  via a Google Fonts `<link>` in `index.html`.
+- **Phase 1 (done):** **Overview** is restyled pixel-for-pixel to the reference:
+  hero (no card, serif-`ink` number, over/under as a small mono `terra`/`sage` figure, a
+  3px pace rule), "What's happening" callouts as hairline list rows with severity dots
+  (terra/amber/sage) + faded serif "→", and a themed **Spend curve** (`SpendCurve` in
+  `y/ui.jsx`). The Overview's old **Recent** transaction list was removed in favour of the
+  Spend curve (matching the reference); transactions are still reachable on Analysis →
+  Activity. Bottom nav is editorial text (mono labels, terra underline on active, an outline
+  "+" circle). `DeltaChip` is retained in `y/ui.jsx` but is no longer used by `StatusHero`.
+- **Spend curve note:** the spec §4 calls for Recharts, but this repo is deliberately
+  self-contained/offline-first, so `SpendCurve` is a dependency-free themed SVG (same
+  approach as the existing Analysis `ProjectionChart`). Adopting the Recharts engine is an
+  optional Phase-2b decision, not a requirement.
+- **Phases 2+ (pending):** Add/Edit + keypad + category picker, Analysis (chart theming +
+  category list/donut + activity), Settings/Years/Templates/CSV/JSON, and final shared-
+  primitive + consistency sweeps. These still render via the legacy-remap tokens until
+  restyled.
+
 ## Running it
 
 There is **no build, no package manager, no tests, no linter**. The app is a single static
@@ -34,9 +67,10 @@ browser.
 The app is fully self-contained — **no `_ds/` directory is needed**. The original Aperture
 design system dependency has been replaced by two local files:
 
-- **`y/tokens.css`** — defines all ~25 CSS custom properties consumed by `y/app.css`
-  (`--bg`, `--surface`, `--text`, `--accent`, `--r-card`, `--shadow-rest`, etc.).
-  Loaded in `index.html` before `y/app.css`.
+- **`y/tokens.css`** — defines the Broadsheet token set plus a legacy-remap block for the
+  old Aperture names (`--bg`, `--surface`, `--text`, `--accent`, `--r-card`, `--shadow-rest`,
+  etc.) still consumed by `y/app.css`. Loaded in `index.html` before `y/app.css`. See the
+  "Visual layer" section above.
 - **`y/ds.jsx`** — an IIFE that sets `window.ApertureDesignSystem_72a4cd = { Button,
   SegmentedControl, Input, Chip }`, matching exactly the props the app passes to each.
   Loaded after `y/icons.jsx` and before `y/ui.jsx` / screens.
@@ -146,8 +180,9 @@ The app is a fully installable PWA:
   **Cache-versioning rule:** bump `CACHE_NAME` in `sw.js` whenever the shell changes (new
   file added to the precache list, CDN URL pinned to a new version, etc.). The old cache is
   deleted on `activate`. `skipWaiting()` + `clients.claim()` ensure the new SW takes over
-  immediately without waiting for old tabs to close. Current version: `yearly-v3` (bumped
-  Session 8 after `y/analysis.jsx`, `y/calc.jsx`, `y/settings.jsx` changed).
+  immediately without waiting for old tabs to close. Current version: `yearly-v4` (bumped
+  for the Broadsheet Phase 0+1 shell change: `index.html`, `y/tokens.css`, `y/app.css`,
+  `y/ui.jsx`, `y/home.jsx`, `y/app.jsx`).
 - **`manifest.json`** — includes `id`, `scope`, `start_url`, and an `icons` array with
   192×192, 512×512, and a maskable 512×512 variant (all SVG). SVG icons work in Chrome 91+
   and modern WebKit/Firefox; for production Android/iOS you would swap in PNGs.
@@ -165,9 +200,11 @@ The app is a fully installable PWA:
 
 ## Conventions
 
-- **Dark theme only.** Every figure renders in the monospace `.num` style; UI text is the
-  system sans. No emoji, no verdict adjectives, no monthly-budget framing — the year is the
-  unit. (Full token table and voice rules in the README.)
+- **Broadsheet light theme** (mid-migration; some screens still light-remapped from the old
+  Aperture dark tokens — see "Visual layer" above). Figures render in the monospace `.num`
+  (JetBrains Mono) style; the hero display number is serif; UI/body text is the sans. No
+  emoji, no verdict adjectives, no monthly-budget framing — the year is the unit. (Full token
+  table and voice rules in the README + `design/BROADSHEET_DESIGN_SPEC.md`.)
 - Amounts are positive EUR, stored rounded to cents; year is derived from `date.slice(0,4)`;
   actuals are always computed from transactions, never stored as aggregates.
 - Match the surrounding inline-style + className idiom already in each file; there is no CSS

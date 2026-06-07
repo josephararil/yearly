@@ -1,48 +1,75 @@
-/* tokens.css — vendored Aperture dark-theme design tokens.
-   Defines every CSS custom property consumed by app.css that is not already
-   defined there. app.css owns --good, --watch, --alert, their -dim variants,
-   and --col-w — those are intentionally absent here. */
+/* tokens.css — "Broadsheet" design tokens for Yearly.
+   The canonical Broadsheet variables are defined first (see BROADSHEET_DESIGN_SPEC.md §1).
+   The "legacy remaps" block below points the old Aperture dark-theme names at their
+   Broadsheet equivalents, so screens not yet migrated still render on warm paper. Each
+   Phase-2 session should replace its screen's legacy-name usages with the canonical ones. */
 
 :root {
-  /* Surfaces */
-  --bg: #000000;
-  --bg-2: #111113;
-  --surface: #1c1c1e;
-  --surface-2: #242427;
-  --surface-sunk: #161618;
-  --topbar-bg: rgba(0, 0, 0, 0.6);
-  --scrim: rgba(0, 0, 0, 0.5);
+  /* ---- Broadsheet surfaces ---- */
+  --paper:       #F4F1E8;   /* page background — warm paper, NEVER pure white */
+  --paper-tint:  #EFEBE0;   /* very subtly sunk areas (rare; prefer hairlines over fills) */
+  --ink:         #221F19;   /* primary text / display numbers — near-black, NEVER #000 */
+  --ink-2:       #5B5547;   /* secondary text (hero subline, body emphasis) */
+  --muted:       #8D846F;   /* tertiary: eyebrows, meta, axis labels */
+  --hair:        rgba(34, 28, 18, 0.13);   /* hairline rules, dividers, light borders */
+  --hair-strong: rgba(34, 28, 18, 0.28);   /* the 1.5px rule under section headers */
 
-  /* Text */
-  --text: #f5f5f7;
-  --text-2: #c7c7cc;
-  --text-3: #8e8e93;
+  /* ---- Accent + state (used SPARINGLY) ---- */
+  --terra: #BE4A30;   /* the single accent: links, active nav, alert/mover dots, key numbers */
+  --amber: #C0852B;   /* "watch" severity */
+  --sage:  #5E7C54;   /* "good" / under-target severity */
 
-  /* Borders */
-  --hairline: rgba(255, 255, 255, 0.10);
-  --hairline-strong: rgba(255, 255, 255, 0.18);
+  /* ---- Chart palette ---- */
+  --chart-actual:   #BE4A30;   /* cumulative actual line + area stroke */
+  --chart-proj:     #B98E6A;   /* dashed projection line (muted terracotta) */
+  --chart-target:   #8D846F;   /* dashed target reference line */
+  --chart-pace:     #B6AD95;   /* faint linear-pace diagonal */
+  --chart-grid:     rgba(34, 28, 18, 0.10);
+  --chart-axis:     #9A9176;   /* axis tick labels (mono) */
+  --chart-fill-top: 0.22;      /* opacity of the area gradient's top stop */
 
-  /* Accent (runtime value set via app.jsx; this is the initial default) */
-  --accent: #0071e3;
+  /* ---- Type (three families, strict roles) ---- */
+  --serif: 'Newsreader', Georgia, 'Times New Roman', serif;        /* display numbers + section headers */
+  --sans:  'Hanken Grotesk', system-ui, -apple-system, sans-serif; /* UI + body prose */
+  --mono:  'JetBrains Mono', ui-monospace, 'SF Mono', monospace;   /* ALL figures, labels, eyebrows, ticks */
 
-  /* Typography */
-  --font: -apple-system, BlinkMacSystemFont, "SF Pro Display", "SF Pro Text",
-          "Segoe UI", system-ui, Roboto, Helvetica, Arial, sans-serif;
-  --font-mono: ui-monospace, "SF Mono", "JetBrains Mono", Menlo, Consolas, monospace;
-
-  /* Radii */
-  --r-card: 24px;
-  --r-pill: 980px;
-
-  /* Spacing */
+  /* ---- Radii / spacing ---- */
+  --r-card: 18px;
+  --r-pill: 999px;
+  --screen-pad: 26px;   /* horizontal padding of every screen */
   --s-3: 12px;
 
-  /* Motion */
+  /* ---- Motion ---- */
   --dur: 240ms;
   --dur-fast: 150ms;
   --ease: cubic-bezier(0.22, 0.61, 0.36, 1);
 
-  /* Elevation (from README Elevation table) */
-  --shadow-rest: 0 1px 2px rgba(0, 0, 0, 0.5), 0 6px 18px rgba(0, 0, 0, 0.45);
-  --shadow-modal: 0 40px 120px rgba(0, 0, 0, 0.7), 0 8px 24px rgba(0, 0, 0, 0.5);
+  /* ---- Elevation (softened for paper — no heavy drop shadows) ---- */
+  --shadow-rest:  0 1px 2px rgba(60, 52, 38, 0.06);
+  --shadow-modal: 0 30px 80px rgba(60, 52, 38, 0.22), 0 6px 18px rgba(60, 52, 38, 0.12);
+
+  /* ============================================================
+     Legacy Aperture names → Broadsheet remaps.
+     Keep un-migrated screens (Analysis / Settings / Add) on paper
+     until their Phase-2 session restyles them to the names above.
+     ============================================================ */
+  --bg:           var(--paper);
+  --bg-2:         var(--paper-tint);
+  --surface:      var(--paper);
+  --surface-2:    var(--paper);
+  --surface-sunk: var(--paper-tint);
+  --topbar-bg:    rgba(244, 241, 232, 0.82);
+  --scrim:        rgba(34, 28, 18, 0.35);
+
+  --text:   var(--ink);
+  --text-2: var(--ink-2);
+  --text-3: var(--muted);
+
+  --hairline:        var(--hair);
+  --hairline-strong: var(--hair-strong);
+
+  --accent: var(--terra);
+
+  --font:      var(--sans);
+  --font-mono: var(--mono);
 }

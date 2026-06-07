@@ -1,0 +1,42 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Broadsheet — reference</title>
+  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Newsreader:ital,opsz,wght@0,6..72,300;0,6..72,400;0,6..72,500;0,6..72,600;1,6..72,300;1,6..72,400&family=Hanken+Grotesk:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;500;700&display=swap" />
+  <style>
+    * { box-sizing: border-box; }
+    html, body { margin: 0; }
+    body {
+      background: #E7E2D6;
+      background-image: radial-gradient(120% 90% at 50% 0%, #efeadf 0%, #e3ddcf 70%);
+      min-height: 100vh; display: flex; align-items: flex-start; justify-content: center;
+      padding: 40px 16px 80px; font-family: 'Hanken Grotesk', system-ui, sans-serif;
+    }
+    .phone { width: 420px; max-width: 100%; border-radius: 48px; padding: 12px; background: #2a2722;
+      box-shadow: 0 40px 90px rgba(60,52,38,0.28), 0 8px 24px rgba(60,52,38,0.16); }
+    .phone-screen { border-radius: 38px; overflow: hidden; position: relative; height: 880px; }
+    .note { max-width: 420px; margin: 0 auto 22px; text-align: center; color: #6f6857; font-size: 13.5px; line-height: 1.6; }
+    .note b { color: #2a2722; }
+  </style>
+  <script>window.process = { env: { NODE_ENV: "production" } }; window.global = window;</script>
+  <script src="https://unpkg.com/react@18.3.1/umd/react.production.min.js"></script>
+  <script src="https://unpkg.com/react-dom@18.3.1/umd/react-dom.production.min.js"></script>
+  <script src="https://unpkg.com/prop-types@15.8.1/prop-types.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/recharts@2.12.7/umd/Recharts.js"></script>
+</head>
+<body>
+  <div>
+    <p class="note">Broadsheet — the canonical <b>Overview</b> reference. Match values against
+      <b>BROADSHEET_DESIGN_SPEC.md</b>. Source: <b>reference/lb-a.jsx</b> + <b>reference/lb-data.jsx</b>.</p>
+    <div class="phone"><div class="phone-screen" id="screen"></div></div>
+  </div>
+  <!-- Plain JS (already React.createElement — no Babel needed) -->
+  <script src="lb-data.jsx"></script>
+  <script src="lb-a.jsx"></script>
+  <script>
+    ReactDOM.createRoot(document.getElementById("screen")).render(React.createElement(window.ScreenA));
+  </script>
+</body>
+</html>

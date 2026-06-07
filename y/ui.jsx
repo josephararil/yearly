@@ -6,6 +6,11 @@
   // tint a hex color with alpha (e.g. "#32d74b" -> "#32d74b26")
   const tint = (hex, aa) => hex + aa;
 
+  // first-of-month day-of-year offsets; month initials for the spend curve axis
+  const MONTH_STARTS = [0, 31, 59, 90, 120, 151, 181, 212, 243, 273, 304, 334];
+  const MONTH_INITIALS = ["J", "F", "M", "A", "M", "J", "J", "A", "S", "O", "N", "D"];
+  const eurK = (v) => (Math.abs(v) >= 1000 ? "€" + (v / 1000).toFixed(v % 1000 === 0 ? 0 : 1) + "k" : "€" + Math.round(v));
+
   function CatIcon({ catId, size = 40, radius = 12, iconSize }) {
     const c = YData.cat(catId);
     return (
@@ -40,40 +45,113 @@
     );
   }
 
+  // Status hero — no card. Serif ink number; over/under carried by a small mono terra/sage
+  // figure; a pace rule (terra fill to spent/target, ink marker at day-of-year).
   function StatusHero({ stats }) {
-    const statusCls = "status-" + stats.status;
-    const headline = stats.complete ? stats.spent : stats.projection;
-    const eyebrow = stats.complete ? "Final spend · " + stats.year : "Projected year-end";
+    const headline = stats.isFuture ? stats.target : stats.complete ? stats.spent : stats.projection;
+    const eyebrow = stats.complete ? "Final spend · " + stats.year
+      : stats.isFuture ? "Target · " + stats.year
+      : "Projected year-end";
+    const over = stats.delta >= 0;
+    const near = Math.abs(stats.delta) < stats.target * 0.005;
+    const fillPct = Math.max(0, Math.min(100, (stats.spent / stats.target) * 100));
+    const markPct = Math.max(0, Math.min(100, (stats.doy / 365) * 100));
     return (
-      <div className="panel hero">
+      <div className="hero">
         <div className="eyebrow">{eyebrow}</div>
-        <div className={"hero-num num " + statusCls}>{eur0(headline)}</div>
+        <div className="hero-num">{eur0(headline)}</div>
         <div className="hero-sub">
-          <span className="hero-target">vs <span className="num">{eur0(stats.target)}</span> target</span>
-          <DeltaChip delta={stats.delta} status={stats.status} />
+          {stats.isFuture ? (
+            <>Nothing logged yet.</>
+          ) : near ? (
+            <>On your <span className="num">{eur0(stats.target)}</span> target.</>
+          ) : (
+            <>
+              {over ? "Over" : "Under"} your <span className="num">{eur0(stats.target)}</span> target by{" "}
+              <span className={"hero-emph " + (over ? "over" : "under")}>{eur0(Math.abs(stats.delta))}</span>.
+            </>
+          )}
         </div>
-        <div className="hero-foot">
-          <span className="num">{eur0(stats.spent)}</span> spent{stats.complete ? "" : <> · day <span className="num">{stats.doy}</span> of <span className="num">365</span></>}
-        </div>
+        {!stats.isFuture && (
+          <>
+            <div className="pace-rule">
+              <div className="pace-fill" style={{ width: fillPct + "%" }} />
+              {!stats.complete && <div className="pace-mark" style={{ left: markPct + "%" }} />}
+            </div>
+            <div className="pace-legend">
+              <span>{eur0(stats.spent)} spent</span>
+              <span>{stats.complete ? "year complete" : "day " + stats.doy + " / 365"}</span>
+            </div>
+          </>
+        )}
       </div>
     );
   }
 
+  // Callout — hairline list row: severity dot + sentence + faded serif arrow. No card, no icon chip.
   function CalloutCard({ c, onClick }) {
-    const sevCls = c.severity === "alert" ? "bg-alert" : c.severity === "watch" ? "bg-watch" : c.severity === "good" ? "bg-good" : "bg-info";
-    const icStyle = c.accent ? { background: tint(c.accent, "22"), color: c.accent } : undefined;
-    const showTag = c.severity === "alert" || c.severity === "watch";
+    const dotColor = c.severity === "alert" ? "var(--terra)" : c.severity === "watch" ? "var(--amber)" : "var(--sage)";
     return (
       <button className="callout" onClick={onClick}>
-        <span className={"callout-ic " + (c.accent ? "" : sevCls)} style={icStyle}>
-          <Icon name={c.icon} size={19} />
-        </span>
+        <span className="callout-dot" style={{ background: dotColor }} />
         <span className="callout-body">
-          {showTag && <div className={"callout-tag " + (c.severity === "alert" ? "status-alert" : "status-watch")}>{c.severity === "alert" ? "Worth a look" : "Watch"}</div>}
-          <div className="callout-text">{rich(c.text)}</div>
+          <span className="callout-text">{rich(c.text)}</span>
         </span>
-        <span className="callout-chev"><Icon name="chevronRight" size={16} /></span>
+        <span className="callout-arrow">{"→"}</span>
       </button>
+    );
+  }
+
+  // Broadsheet spend curve — themed SVG (dependency-free, mirrors the reference SpendChart):
+  // terra actual area + line, muted-terra dashed projection, dashed target reference, faint pace.
+  function SpendCurve({ stats }) {
+    const W = 360, H = 168, padL = 38, padR = 8, padT = 10, padB = 22;
+    const x0 = padL, x1 = W - padR, y0 = padT, y1 = H - padB;
+    const maxY = Math.max(stats.target, stats.projection, 1) * 1.08;
+    const sx = (d) => x0 + (d / 365) * (x1 - x0);
+    const sy = (v) => y1 - (v / maxY) * (y1 - y0);
+    const cum = YCalc.cumulativeByDay(stats.upto);
+    const endDay = stats.complete ? 365 : Math.max(1, stats.doy);
+
+    const days = [];
+    for (let d = 0; d <= endDay; d += 7) days.push(d);
+    if (days[days.length - 1] !== endDay) days.push(endDay);
+    const actPts = days.map((d) => [sx(d), sy(cum[Math.min(365, d)])]);
+    const actLine = actPts.map((p) => p.join(",")).join(" ");
+    const areaPts = `${x0},${y1} ${actLine} ${actPts[actPts.length - 1][0]},${y1}`;
+
+    const yTicks = [0, stats.target / 2, stats.target];
+    const uid = "sc" + stats.year;
+    return (
+      <svg viewBox={`0 0 ${W} ${H}`} width="100%" style={{ display: "block", overflow: "visible" }}>
+        <defs>
+          <linearGradient id={uid} x1="0" y1="0" x2="0" y2="1">
+            <stop offset="0%" stopColor="var(--chart-actual)" stopOpacity="0.22" />
+            <stop offset="100%" stopColor="var(--chart-actual)" stopOpacity="0" />
+          </linearGradient>
+        </defs>
+        {yTicks.map((v, i) => (
+          <g key={i}>
+            <line x1={x0} y1={sy(v)} x2={x1} y2={sy(v)} stroke="var(--chart-grid)" strokeWidth="1" />
+            <text x={x0 - 6} y={sy(v) + 3} textAnchor="end" fontSize="10" fill="var(--chart-axis)" fontFamily="var(--mono)">{eurK(v)}</text>
+          </g>
+        ))}
+        {[0, 2, 4, 6, 8, 10].map((m) => (
+          <text key={m} x={sx(MONTH_STARTS[m])} y={H - 7} textAnchor="middle" fontSize="10" fill="var(--chart-axis)" fontFamily="var(--mono)">{MONTH_INITIALS[m]}</text>
+        ))}
+        {/* faint linear pace diagonal */}
+        <line x1={sx(0)} y1={sy(0)} x2={sx(365)} y2={sy(stats.target)} stroke="var(--chart-pace)" strokeWidth="1" strokeDasharray="2 4" opacity="0.6" />
+        {/* target reference */}
+        <line x1={x0} y1={sy(stats.target)} x2={x1} y2={sy(stats.target)} stroke="var(--chart-target)" strokeWidth="1.2" strokeDasharray="4 4" />
+        <text x={x1} y={sy(stats.target) - 5} textAnchor="end" fontSize="10" fill="var(--chart-target)" fontFamily="var(--mono)">target {eurK(stats.target)}</text>
+        {/* actual area + line */}
+        <polygon points={areaPts} fill={`url(#${uid})`} />
+        <polyline points={actLine} fill="none" stroke="var(--chart-actual)" strokeWidth="2.6" strokeLinecap="round" strokeLinejoin="round" />
+        {/* projection */}
+        {!stats.complete && !stats.isFuture && (
+          <line x1={sx(stats.doy)} y1={sy(stats.spent)} x2={sx(365)} y2={sy(stats.projection)} stroke="var(--chart-proj)" strokeWidth="2.2" strokeDasharray="6 5" strokeLinecap="round" />
+        )}
+      </svg>
     );
   }
 
@@ -142,15 +220,18 @@
     );
   }
 
-  function SectionH({ title, action, onAction }) {
+  function SectionH({ title, action, onAction, meta }) {
     return (
       <div className="section-h">
         <h2>{title}</h2>
         <span className="spacer" />
+        {meta && <span className="sec-meta">{meta}</span>}
         {action && <button className="linklike" onClick={onAction}>{action}<Icon name="chevronRight" size={14} /></button>}
       </div>
     );
   }
 
-  window.YUI = { CatIcon, DeltaChip, StatusHero, CalloutCard, TxRow, Sheet, SectionH, Toast, rich, tint };
+  // NOTE: DeltaChip is retained as a shared primitive but is no longer used by the
+  // Broadsheet StatusHero (over/under is now a small mono terra/sage figure inline).
+  window.YUI = { CatIcon, DeltaChip, StatusHero, CalloutCard, TxRow, SpendCurve, Sheet, SectionH, Toast, rich, tint };
 })();
