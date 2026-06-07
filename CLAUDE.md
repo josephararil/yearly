@@ -38,7 +38,18 @@ persistence are untouched.**
   `y/ui.jsx`). The Overview's old **Recent** transaction list was removed in favour of the
   Spend curve (matching the reference); transactions are still reachable on Analysis →
   Activity. Bottom nav is editorial text (mono labels, terra underline on active, an outline
-  "+" circle). `DeltaChip` is retained in `y/ui.jsx` but is no longer used by `StatusHero`.
+  "+" circle).
+- **Phase 1.5 (done):** **Shared primitives** restyled to Broadsheet (`y/ds.jsx` +
+  `.ds-*` classes in `y/app.css`; `Sheet` + `Toast` in `y/ui.jsx`; form classes `.field` /
+  `.inp` / `.inp-num`). All legacy token names replaced with canonical ones in touched rules.
+  Button: terra fill / paper text / sans 600 (primary), transparent / hair border / ink
+  (secondary). Chips: hair border; active = ink fill + paper text inversion. SegmentedControl:
+  paper-tint track, paper active item, warm shadow. Inputs: transparent, hair border, terra
+  focus ring, mono labels mono 11px uppercase muted, amount fields in mono. Sheet: paper
+  surface, hair border, hair-strong grabber, warm scrim, `prefers-reduced-motion` guard.
+  Toast: paper surface, hair-strong border, ink text, terra action. `DeltaChip` restyled to a
+  bare mono terra/sage/amber inline figure (no background chip) for future reuse.
+  SW cache bumped to `yearly-v5`.
 - **Spend curve note:** the spec §4 calls for Recharts, but this repo is deliberately
   self-contained/offline-first, so `SpendCurve` is a dependency-free themed SVG (same
   approach as the existing Analysis `ProjectionChart`). Adopting the Recharts engine is an
