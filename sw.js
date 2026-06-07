@@ -1,5 +1,5 @@
 // Bump this version whenever the app shell changes to invalidate the old cache.
-const CACHE_NAME = 'yearly-v5';
+const CACHE_NAME = 'yearly-v6';
 
 const PRECACHE = [
   './',
