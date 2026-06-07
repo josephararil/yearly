@@ -191,11 +191,120 @@
     );
   }
 
+  // ---------- simple value sheets ----------
+  function TargetSheet({ open, onClose, store, setStore, year }) {
+    const yr = year != null ? Number(year) : Number(store.currentYear);
+    const getTarget = (s) => (s.years[String(yr)] || { target: 25000 }).target;
+    const [v, setV] = React.useState(String(getTarget(store)));
+    React.useEffect(() => { if (open) setV(String(getTarget(store))); }, [open, yr]);
+    return (
+      <Sheet open={open} onClose={onClose} title={`${yr} target`}>
+        <p className="muted" style={{ fontSize: 13, marginTop: 0, lineHeight: 1.5 }}>Your annual spending goal — the number everything is measured against.</p>
+        <div className="amount-display"><span className="cur">€</span><span className="num">{v || "0"}</span></div>
+        <input className="inp inp-num" inputMode="numeric" value={v} onChange={(e) => setV(e.target.value.replace(/[^\d]/g, ""))} style={{ textAlign: "center", fontSize: 18, marginBottom: 16 }} />
+        <Button variant="primary" block disabled={!(parseInt(v) > 0)} onClick={() => {
+          setStore((s) => ({ ...s, years: { ...s.years, [String(yr)]: { ...s.years[String(yr)], target: parseInt(v) } } }));
+          onClose();
+        }}>Save target</Button>
+      </Sheet>
+    );
+  }
+
+  function BufferSheet({ open, onClose, store, setStore, year }) {
+    const yr = year != null ? Number(year) : Number(store.currentYear);
+    const isPast = yr < Number(store.currentYear);
+    const cur = store.years[String(yr)] || { target: 25000, buffer: 0.04 };
+    const [v, setV] = React.useState(Math.round((cur.buffer || 0) * 100));
+    React.useEffect(() => {
+      if (open) setV(Math.round(((store.years[String(yr)] || { buffer: 0 }).buffer || 0) * 100));
+    }, [open, yr]);
+    const buffStats = YCalc.computeStats(store, yr);
+    const preview = buffStats.projNoBuffer * (1 + v / 100);
+    return (
+      <Sheet open={open} onClose={onClose} title="Missed-entry buffer">
+        <p className="muted" style={{ fontSize: 13, marginTop: 0, lineHeight: 1.5 }}>People forget to log things. This lifts the projection by a flat percentage so it isn't artificially optimistic.</p>
+        {isPast ? (
+          <p className="muted" style={{ fontSize: 13, lineHeight: 1.5, color: "var(--text-3)" }}>Buffer is not applicable to completed years — final spend is already known.</p>
+        ) : (
+          <>
+            <div style={{ textAlign: "center", margin: "8px 0 14px" }}>
+              <div className="num" style={{ fontSize: 44, fontWeight: 600 }}>{v}%</div>
+              <div className="muted" style={{ fontSize: 13 }}>projection {eur0(buffStats.projNoBuffer)} → <span style={{ color: "var(--text)" }} className="num">{eur0(preview)}</span></div>
+            </div>
+            <div className="rangewrap" style={{ marginBottom: 20 }}>
+              <span className="muted num">0%</span>
+              <input className="rng" type="range" min="0" max="15" step="1" value={v} onChange={(e) => setV(parseInt(e.target.value))} />
+              <span className="muted num">15%</span>
+            </div>
+            <Button variant="primary" block onClick={() => {
+              setStore((s) => ({ ...s, years: { ...s.years, [String(yr)]: { ...s.years[String(yr)], buffer: v / 100 } } }));
+              onClose();
+            }}>Save buffer</Button>
+          </>
+        )}
+      </Sheet>
+    );
+  }
+
   // ---------- Years ----------
   function YearsSheet({ open, onClose, store, setStore }) {
+    const [sel, setSel] = React.useState(null); // null | { year: Number, editing: null|"target"|"buffer" }
+    React.useEffect(() => { if (!open) setSel(null); }, [open]);
+
+    const currentYear = Number(store.currentYear);
     const years = Object.keys(store.years).sort((a, b) => b - a);
+
+    const addYear = () => {
+      const maxY = Math.max(...Object.keys(store.years).map(Number));
+      const newY = maxY + 1;
+      if (store.years[String(newY)]) return;
+      const src = store.years[String(maxY)] || { target: 25000, buffer: 0.04 };
+      setStore((s) => ({ ...s, years: { ...s.years, [String(newY)]: { target: src.target, buffer: src.buffer || 0 } } }));
+    };
+
+    const delYear = (y) => {
+      const hasTxns = store.transactions.some((t) => t.date.slice(0, 4) === String(y));
+      if (hasTxns) return;
+      setSel(null);
+      setStore((s) => { const yrs = { ...s.years }; delete yrs[String(y)]; return { ...s, years: yrs }; });
+    };
+
+    // Nested: editing target for a year
+    if (sel && sel.editing === "target") {
+      return <TargetSheet open={open} onClose={() => setSel({ year: sel.year, editing: null })} store={store} setStore={setStore} year={sel.year} />;
+    }
+
+    // Nested: editing buffer for a year
+    if (sel && sel.editing === "buffer") {
+      return <BufferSheet open={open} onClose={() => setSel({ year: sel.year, editing: null })} store={store} setStore={setStore} year={sel.year} />;
+    }
+
+    // Year detail view
+    if (sel) {
+      const y = sel.year;
+      const past = y < currentYear;
+      const future = y > currentYear;
+      const yd = store.years[String(y)] || { target: 25000, buffer: 0.04 };
+      const hasTxns = store.transactions.some((t) => t.date.slice(0, 4) === String(y));
+      return (
+        <Sheet open={open} onClose={() => setSel(null)} title={`${y}${y === currentYear ? " · current" : ""}`}>
+          <div className="panel" style={{ overflow: "hidden" }}>
+            <Row icon="target" title="Annual target" value={eur0(yd.target)} onClick={() => setSel({ year: y, editing: "target" })} />
+            {!past && <Row icon="layers" title="Missed-entry buffer" value={Math.round((yd.buffer || 0) * 100) + "%"} onClick={() => setSel({ year: y, editing: "buffer" })} />}
+          </div>
+          {future && !hasTxns && (
+            <div style={{ marginTop: 16 }}>
+              <Button variant="secondary" block onClick={() => delYear(y)}>Remove {y}</Button>
+            </div>
+          )}
+        </Sheet>
+      );
+    }
+
+    // Main year list
     return (
-      <Sheet open={open} onClose={onClose} title="Years">
+      <Sheet open={open} onClose={onClose} title="Years"
+        headRight={<button className="linklike" onClick={addYear}><window.Icon name="plus" size={15} />Add year</button>}>
         <p className="muted" style={{ fontSize: 13, marginTop: 0, lineHeight: 1.5 }}>Targets are set per year — your history of the sacred number.</p>
         <div className="panel panel-pad">
           {years.map((y) => {
@@ -203,7 +312,8 @@
             const over = st.delta >= 0;
             const cls = st.status === "good" ? "bg-good" : st.status === "alert" ? "bg-alert" : "bg-watch";
             return (
-              <div key={y} className="year-row">
+              <button key={y} className="year-row" onClick={() => setSel({ year: Number(y), editing: null })}
+                style={{ width: "100%", background: "none", border: 0, cursor: "pointer", textAlign: "left", font: "inherit", color: "inherit" }}>
                 <div style={{ flex: 1 }}>
                   <div style={{ fontSize: 17, fontWeight: 600 }} className="num">{y}{st.isCurrent && <span style={{ fontSize: 11, color: "var(--accent)", fontFamily: "var(--font)", marginLeft: 8, letterSpacing: "0.04em" }}>CURRENT</span>}</div>
                   <div className="muted" style={{ fontSize: 12.5, marginTop: 2 }}>
@@ -211,47 +321,11 @@
                   </div>
                 </div>
                 <span className={"delta-chip " + cls}><span className="num">{(over ? "+" : "−") + eur0(Math.abs(st.delta))}</span></span>
-              </div>
+                <window.Icon name="chevronRight" size={16} style={{ color: "var(--text-3)", marginLeft: 4 }} />
+              </button>
             );
           })}
         </div>
-      </Sheet>
-    );
-  }
-
-  // ---------- simple value sheets ----------
-  function TargetSheet({ open, onClose, store, setStore }) {
-    const cur = store.years[String(store.currentYear)];
-    const [v, setV] = React.useState(String(cur.target));
-    React.useEffect(() => { if (open) setV(String(cur.target)); }, [open]);
-    return (
-      <Sheet open={open} onClose={onClose} title={`${store.currentYear} target`}>
-        <p className="muted" style={{ fontSize: 13, marginTop: 0, lineHeight: 1.5 }}>Your annual spending goal — the number everything is measured against.</p>
-        <div className="amount-display"><span className="cur">€</span><span className="num">{v || "0"}</span></div>
-        <input className="inp inp-num" inputMode="numeric" value={v} onChange={(e) => setV(e.target.value.replace(/[^\d]/g, ""))} style={{ textAlign: "center", fontSize: 18, marginBottom: 16 }} />
-        <Button variant="primary" block disabled={!(parseInt(v) > 0)} onClick={() => { setStore((s) => ({ ...s, years: { ...s.years, [s.currentYear]: { ...s.years[s.currentYear], target: parseInt(v) } } })); onClose(); }}>Save target</Button>
-      </Sheet>
-    );
-  }
-
-  function BufferSheet({ open, onClose, store, setStore, stats }) {
-    const cur = store.years[String(store.currentYear)];
-    const [v, setV] = React.useState(Math.round((cur.buffer || 0) * 100));
-    React.useEffect(() => { if (open) setV(Math.round((cur.buffer || 0) * 100)); }, [open]);
-    const preview = stats.projNoBuffer * (1 + v / 100);
-    return (
-      <Sheet open={open} onClose={onClose} title="Missed-entry buffer">
-        <p className="muted" style={{ fontSize: 13, marginTop: 0, lineHeight: 1.5 }}>People forget to log things. This lifts the projection by a flat percentage so it isn't artificially optimistic.</p>
-        <div style={{ textAlign: "center", margin: "8px 0 14px" }}>
-          <div className="num" style={{ fontSize: 44, fontWeight: 600 }}>{v}%</div>
-          <div className="muted" style={{ fontSize: 13 }}>projection {eur0(stats.projNoBuffer)} → <span style={{ color: "var(--text)" }} className="num">{eur0(preview)}</span></div>
-        </div>
-        <div className="rangewrap" style={{ marginBottom: 20 }}>
-          <span className="muted num">0%</span>
-          <input className="rng" type="range" min="0" max="15" step="1" value={v} onChange={(e) => setV(parseInt(e.target.value))} />
-          <span className="muted num">15%</span>
-        </div>
-        <Button variant="primary" block onClick={() => { setStore((s) => ({ ...s, years: { ...s.years, [s.currentYear]: { ...s.years[s.currentYear], buffer: v / 100 } } })); onClose(); }}>Save buffer</Button>
       </Sheet>
     );
   }
@@ -307,7 +381,7 @@
         <div className="muted" style={{ textAlign: "center", fontSize: 11.5, marginTop: 6 }}>Yearly · all data stays on this device</div>
 
         <TargetSheet open={sub === "target"} onClose={() => setSub(null)} store={store} setStore={setStore} />
-        <BufferSheet open={sub === "buffer"} onClose={() => setSub(null)} store={store} setStore={setStore} stats={stats} />
+        <BufferSheet open={sub === "buffer"} onClose={() => setSub(null)} store={store} setStore={setStore} />
         <YearsSheet open={sub === "years"} onClose={() => setSub(null)} store={store} setStore={setStore} />
         <TemplatesSheet open={sub === "templates"} onClose={() => setSub(null)} store={store} setStore={setStore} />
         <ImportSheet open={sub === "import"} onClose={() => setSub(null)} store={store} setStore={setStore} />
