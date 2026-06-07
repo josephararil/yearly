@@ -197,9 +197,10 @@ object to localStorage on every mutation) is the only durable state; `route` / `
 UI state. Three memoized derivations drive everything visible:
 `stats = YCalc.computeStats(store, viewYear)`, `callouts = YCalc.buildCallouts(store, stats)`,
 and `fun = YCalc.computeFun(store)` (all-time per-person fun ledger, recomputed on any store
-change). `onOpenFun` sets `analysisFocus = { section:"fun" }` and routes to Analysis (Fun tab
-arrives in Session 3; until then it lands on Analysis with a placeholder). `fun`, `store`, and
-`onOpenFun` are passed into `HomeScreen` for the FunStrip.
+change). `onOpenFun` sets `analysisFocus = { section:"fun" }` and routes to Analysis → Fun tab.
+`fun`, `store`, `setStore`, and `addTx` are passed to `AnalysisScreen` (for `FunTab`); `fun`,
+`store`, and `onOpenFun` are passed to `HomeScreen` (for `FunStrip`). `store` is also passed to
+`EditSheet` so it can read `store.people` for the fun toggle owner picker.
 
 `density` (minimal/balanced/all) is persisted in `store.density` and controls how many callouts
 the Overview shows. It is editable in Settings → Display → Overview density.
@@ -226,28 +227,47 @@ spend, no projection/buffer).
   `Toast({ open, message, actionLabel, onAction, onDismiss })` — transient bottom-anchored
   banner (above nav, z-index 30), auto-dismisses after 5 s via `onDismiss`, optional action button.
   `GaugeHero`, `PaceBar`, and `ProjSpark` have been removed (dead since hero is fixed to numerals).
-- `y/fun.jsx` (`window.YFun`) — fun budget UI module. Currently exports:
+- `y/fun.jsx` (`window.YFun`) — fun budget UI module. Exports:
   `FunStrip({ fun, store, onOpen })` — compact Overview strip: one hairline row per person
   (name, all-time balance in sage/terra, nearest wishlist goal name+pct+thin bar). Whole strip
   tappable → `onOpen()`. "no goals yet" if no wishlist items. Broadsheet tokens only, no cards.
-  `FunTab` — placeholder (full workshop added in Session 3).
+  `FunTab({ fun, store, setStore, addTx })` — the Analysis workshop:
+  - Per-person cards: name, monthly rate, balance (large, sage/terra coloured), this-month used
+    with over/under indicator, all-time fun spent.
+  - Wishlist per person: item name, price, progress bar (clamped 0–100%, clamps negative balance
+    to 0 for display), months-to-afford ETA (`max(0, ceil((price−balance)/rate))`; "ready now"
+    if balance ≥ price; "—" if rate 0). "Bought it" button logs a fun-tagged shopping tx via
+    `addTx` and removes the item from `store.wishlist`. Remove (✕) deletes without buying.
+    "Add" button opens `WishlistAddSheet` (name, price, owner Chip picker) pre-set to that person.
+  - Fun category breakdown: catbar-* rows fed from `fun.funCatList` (non-interactive).
+  Internal: `WishlistAddSheet` (name + price + owner Chip picker), `PersonCard` (stats + wishlist).
 - Screens: `y/home.jsx` (Overview — hero + callouts + FunStrip + spend curve),
-  `y/analysis.jsx` (Projection/Categories/Activity tabs; charts are hand-built SVG that
+  `y/analysis.jsx` (Projection/Categories/Activity/Fun tabs; charts are hand-built SVG that
   double as the Recharts spec), `y/settings.jsx`
-  (target/buffer/years/density/templates/CSV import-export/JSON backup-restore/clear),
-  `y/addflow.jsx` (Quick keypad + Manual add, Edit sheet, category picker).
+  (target/buffer/years/fun-budget/density/templates/CSV import-export/JSON backup-restore/clear),
+  `y/addflow.jsx` (Quick keypad + Manual add, Edit sheet, category picker, fun toggle).
+  `analysis.jsx` — `AnalysisScreen` receives `fun`, `store`, `setStore`, `addTx` in addition to
+  `stats`/`focus`/`onEditTx`; renders `<YFun.FunTab>` on the "Fun" segment; focus effect handles
+  `focus.section === "fun"` → `setTab("Fun")`.
+  `addflow.jsx` — both `AddSheet` and `EditSheet` expose a **Fun budget toggle** (pill switch, off by
+  default). When on, a Chip owner picker (Joseph/Marti) appears. `commit()`/`save()` write `fun:true`
+  + `person` when the toggle is on; EditSheet pre-populates toggle state from `txn.fun`/`txn.person`.
+  `EditSheet` now accepts a `store` prop for reading `store.people`.
   `settings.jsx` — `TargetSheet` (now labelled "Household ceiling") and `BufferSheet` accept a `year`
   prop (defaults to `store.currentYear`); `TargetSheet` reads/writes `years[y].ceiling`. `BufferSheet`
   computes its own stats internally (unchanged). `YearsSheet` has tappable year rows that drill into a
   year detail view (ceiling + buffer rows), plus an "Add year" button that clones the most recent year's
   ceiling/buffer into `year+1`. Future years with no transactions can be deleted from the detail view.
   Year list rows show `st.ceiling` + `st.combinedProjection` + `DeltaChip(combinedDelta, combinedStatus)`.
+  **"Fun budget" section** — one `Row` per person opens `FunConfigSheet`, which sets the person's monthly
+  rate for the current YYYY-MM (forward-only: appends/updates a `rates[]` entry, never modifies past
+  entries, keeps `rates` sorted). The derived split is shown inline: `ceiling = main + fun/yr`.
   `DensitySheet` — a picker for Overview density (minimal/balanced/all); writes to `store.density`.
   **JSON backup/restore**: "Restore (JSON)" calls `YData.migrateStore(parsed)` before `setStore` so
   old backups (with `target`, no `people`/`wishlist`) migrate cleanly. Hidden `#jsonfile` input mirrors
   the CSV `#csvfile` pattern.
-  **"All activity" routing fix** (Session 8): `AnalysisScreen` focus useEffect now handles
-  `focus.section === "activity"` → `setTab("Activity")`.
+  Focus routing: `AnalysisScreen` focus useEffect handles `"categories"` → Categories, `"projection"` →
+  Projection, `"activity"` → Activity, `"fun"` → Fun.
 - `y/icons.jsx` — inline-SVG Lucide-style icon set via `<Icon name=… />`.
 - `y/tokens.css` — CSS custom property definitions (all ~25 tokens `app.css` consumes).
 - `y/ds.jsx` (`window.ApertureDesignSystem_72a4cd`) — local `Button`, `SegmentedControl`,

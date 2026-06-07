@@ -1,6 +1,6 @@
-// analysis.jsx — the deep surface: projection chart, category diagnostics, activity.
+// analysis.jsx — the deep surface: projection chart, category diagnostics, activity, fun.
 (function () {
-  const { YData, YCalc, YUI } = window;
+  const { YData, YCalc, YUI, YFun } = window;
   const { eur0, eurAuto, signedEur, signedPct, pct, MONTHS, fmtDateShort } = YCalc;
   const { TxRow } = YUI;
   const DS = window.ApertureDesignSystem_72a4cd || {};
@@ -267,21 +267,23 @@
     );
   }
 
-  function AnalysisScreen({ stats, focus, onEditTx }) {
+  function AnalysisScreen({ stats, focus, onEditTx, fun, store, setStore, addTx }) {
     const [tab, setTab] = React.useState("Projection");
     React.useEffect(() => {
       if (focus && focus.section === "categories") setTab("Categories");
       else if (focus && focus.section === "projection") setTab("Projection");
       else if (focus && focus.section === "activity") setTab("Activity");
+      else if (focus && focus.section === "fun") setTab("Fun");
     }, [focus]);
     return (
       <div className="screen">
         <div style={{ position: "sticky", top: 0, zIndex: 5, paddingBottom: 4 }}>
-          <SegmentedControl options={["Projection", "Categories", "Activity"]} value={tab} fill onChange={setTab} />
+          <SegmentedControl options={["Projection", "Categories", "Activity", "Fun"]} value={tab} fill onChange={setTab} />
         </div>
         {tab === "Projection" && <ProjectionTab stats={stats} />}
         {tab === "Categories" && <CategoriesTab stats={stats} focusCategory={focus && focus.category} />}
         {tab === "Activity" && <ActivityTab stats={stats} onEditTx={onEditTx} />}
+        {tab === "Fun" && <YFun.FunTab fun={fun} store={store} setStore={setStore} addTx={addTx} />}
       </div>
     );
   }

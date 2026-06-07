@@ -3,7 +3,7 @@
   const { YData, YCalc, YUI } = window;
   const { Sheet } = YUI;
   const DS = window.ApertureDesignSystem_72a4cd || {};
-  const Button = DS.Button, SegmentedControl = DS.SegmentedControl;
+  const Button = DS.Button, SegmentedControl = DS.SegmentedControl, Chip = DS.Chip;
 
   function NumPad({ value, onChange }) {
     const press = (k) => {
@@ -49,6 +49,40 @@
     );
   }
 
+  // Fun budget toggle + owner picker, used in both AddSheet and EditSheet.
+  function FunFields({ funOn, setFunOn, funPerson, setFunPerson, store }) {
+    const people = (store && store.people) || [];
+    return (
+      <div className="field">
+        <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: funOn ? 8 : 0 }}>
+          <label style={{ margin: 0 }}>Fun budget</label>
+          <button
+            onClick={() => setFunOn((v) => !v)}
+            style={{
+              width: 40, height: 22, borderRadius: 11, border: "none", cursor: "pointer",
+              background: funOn ? "var(--terra)" : "var(--hair)",
+              position: "relative", flexShrink: 0, transition: "background 0.15s",
+            }}
+            aria-checked={funOn} role="switch">
+            <span style={{
+              position: "absolute", top: 2, left: funOn ? 20 : 2,
+              width: 18, height: 18, borderRadius: "50%",
+              background: "var(--paper)", transition: "left 0.15s",
+              boxShadow: "0 1px 3px rgba(0,0,0,0.18)",
+            }} />
+          </button>
+        </div>
+        {funOn && people.length > 0 && (
+          <div style={{ display: "flex", gap: 7, marginTop: 0 }}>
+            {people.map((p) => (
+              <Chip key={p.id} pressed={funPerson === p.id} onClick={() => setFunPerson(p.id)}>{p.name}</Chip>
+            ))}
+          </div>
+        )}
+      </div>
+    );
+  }
+
   // Manual / edit form
   function TxForm({ draft, set, showDescription = true }) {
     return (
@@ -90,17 +124,22 @@
     const blank = () => ({ description: "", amount: "", category: "general", date: YData.todayISO(), note: "" });
     const [draft, setDraft] = React.useState(blank());
     const set = (patch) => setDraft((d) => ({ ...d, ...patch }));
+    const defaultPerson = () => (store.people && store.people[0] && store.people[0].id) || "marti";
+    const [funOn, setFunOn] = React.useState(false);
+    const [funPerson, setFunPerson] = React.useState(defaultPerson());
 
     React.useEffect(() => {
-      if (open) { setMode("Quick"); setStep("grid"); setTpl(null); setAmount(""); setDraft(blank()); }
+      if (open) { setMode("Quick"); setStep("grid"); setTpl(null); setAmount(""); setDraft(blank()); setFunOn(false); setFunPerson(defaultPerson()); }
     }, [open]);
 
     const commit = (t) => {
-      onSave({
+      const tx = {
         id: YData.uid(), date: t.date, description: t.description || YData.cat(t.category).label,
         amount_eur: Math.round(parseFloat(t.amount) * 100) / 100, category: t.category,
         note: t.note || undefined, source: "manual",
-      });
+      };
+      if (funOn) { tx.fun = true; tx.person = funPerson; }
+      onSave(tx);
       onClose();
     };
 
@@ -149,6 +188,7 @@
           </div>
           <input className="inp" style={{ marginTop: 10 }} value={draft.note || ""} placeholder="Note (optional)"
             onChange={(e) => set({ note: e.target.value })} />
+          <FunFields funOn={funOn} setFunOn={setFunOn} funPerson={funPerson} setFunPerson={setFunPerson} store={store} />
           <div style={{ marginTop: 16 }}>
             <Button variant="primary" block disabled={!valid}
               onClick={() => commit({ ...draft, amount, description: tpl.name, category: tpl.category })}>
@@ -163,6 +203,7 @@
       body = (
         <div>
           <TxForm draft={draft} set={set} />
+          <FunFields funOn={funOn} setFunOn={setFunOn} funPerson={funPerson} setFunPerson={setFunPerson} store={store} />
           <Button variant="primary" block disabled={!valid} onClick={() => commit(draft)}>
             Add expense
           </Button>
@@ -179,10 +220,17 @@
     );
   }
 
-  function EditSheet({ open, txn, onClose, onSave, onDelete }) {
+  function EditSheet({ open, txn, onClose, onSave, onDelete, store }) {
     const [draft, setDraft] = React.useState(null);
+    const defaultPerson = () => (store && store.people && store.people[0] && store.people[0].id) || "marti";
+    const [funOn, setFunOn] = React.useState(false);
+    const [funPerson, setFunPerson] = React.useState(defaultPerson());
     React.useEffect(() => {
-      if (txn) setDraft({ description: txn.description, amount: String(txn.amount_eur), category: txn.category, date: txn.date, note: txn.note || "" });
+      if (txn) {
+        setDraft({ description: txn.description, amount: String(txn.amount_eur), category: txn.category, date: txn.date, note: txn.note || "" });
+        setFunOn(!!txn.fun);
+        setFunPerson(txn.person || defaultPerson());
+      }
     }, [txn]);
     const set = (patch) => setDraft((d) => ({ ...d, ...patch }));
     if (!draft) return <Sheet open={open} onClose={onClose} title="Edit" />;
@@ -190,11 +238,16 @@
     return (
       <Sheet open={open} onClose={onClose} title="Edit expense">
         <TxForm draft={draft} set={set} />
+        <FunFields funOn={funOn} setFunOn={setFunOn} funPerson={funPerson} setFunPerson={setFunPerson} store={store || {}} />
         <div style={{ display: "flex", gap: 10 }}>
           <Button variant="secondary" onClick={() => { onDelete(txn.id); onClose(); }} icon={<window.Icon name="trash" size={16} />}>Delete</Button>
           <div style={{ flex: 1 }}>
             <Button variant="primary" block disabled={!valid}
-              onClick={() => { onSave({ ...txn, description: draft.description, amount_eur: Math.round(parseFloat(draft.amount) * 100) / 100, category: draft.category, date: draft.date, note: draft.note || undefined }); onClose(); }}>
+              onClick={() => {
+                const updated = { ...txn, description: draft.description, amount_eur: Math.round(parseFloat(draft.amount) * 100) / 100, category: draft.category, date: draft.date, note: draft.note || undefined };
+                if (funOn) { updated.fun = true; updated.person = funPerson; } else { delete updated.fun; delete updated.person; }
+                onSave(updated); onClose();
+              }}>
               Save changes
             </Button>
           </div>
