@@ -1,7 +1,8 @@
-// home.jsx — calm overview: status hero + callouts + recent peek.
+// home.jsx — calm overview: status hero + callouts + fun strip + spend curve.
 (function () {
-  const { YUI, YCalc } = window;
+  const { YUI, YFun } = window;
   const { StatusHero, CalloutCard, SpendCurve, SectionH } = YUI;
+  const { FunStrip } = YFun;
 
   function sliceCallouts(callouts, density) {
     const sev = { alert: 3, watch: 2, info: 1, good: 0 };
@@ -13,7 +14,7 @@
     return callouts.slice(0, 4); // balanced
   }
 
-  function HomeScreen({ stats, callouts, density, onCallout }) {
+  function HomeScreen({ stats, callouts, density, onCallout, fun, store, onOpenFun }) {
     const shown = sliceCallouts(callouts, density);
     const noteCount = shown.length;
     return (
@@ -30,6 +31,11 @@
               <CalloutCard key={c.id} c={c} onClick={() => onCallout(c)} />
             ))}
           </div>
+        </div>
+
+        <div>
+          <SectionH title="Fun budget" />
+          <FunStrip fun={fun} store={store} onOpen={onOpenFun} />
         </div>
 
         <div>

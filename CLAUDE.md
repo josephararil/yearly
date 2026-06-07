@@ -135,8 +135,8 @@ own export to `window`**. There are no imports/exports. Two consequences:
    root). If you add a module, add its `<script type="text/babel">` tag there in dependency
    order.
 2. Cross-module calls go through the global namespace: `window.YData`, `window.YCalc`,
-   `window.YUI`, `window.YHome`, `window.YAnalysis`, `window.YSettings`, `window.YAdd`,
-   `window.YHome`, plus `window.Icon`/`window.YIcons`. Aperture components come from
+   `window.YUI`, `window.YFun`, `window.YHome`, `window.YAnalysis`, `window.YSettings`,
+   `window.YAdd`, plus `window.Icon`/`window.YIcons`. Aperture components come from
    `window.ApertureDesignSystem_72a4cd`.
 
 ### The brain (port these first to any production target)
@@ -194,8 +194,12 @@ detector. **If you change the math or detectors, update the README spec in the s
 `App` is the single stateful root. `store` (persisted via a `setStore` that writes the whole
 object to localStorage on every mutation) is the only durable state; `route` / `viewYear` /
 `analysisFocus` / `addOpen` / `editTx` / `yearOpen` / `deletedTx` / `showToast` are ephemeral
-UI state. Two memoized derivations drive everything visible:
-`stats = YCalc.computeStats(store, viewYear)` and `callouts = YCalc.buildCallouts(store, stats)`.
+UI state. Three memoized derivations drive everything visible:
+`stats = YCalc.computeStats(store, viewYear)`, `callouts = YCalc.buildCallouts(store, stats)`,
+and `fun = YCalc.computeFun(store)` (all-time per-person fun ledger, recomputed on any store
+change). `onOpenFun` sets `analysisFocus = { section:"fun" }` and routes to Analysis (Fun tab
+arrives in Session 3; until then it lands on Analysis with a placeholder). `fun`, `store`, and
+`onOpenFun` are passed into `HomeScreen` for the FunStrip.
 
 `density` (minimal/balanced/all) is persisted in `store.density` and controls how many callouts
 the Overview shows. It is editable in Settings → Display → Overview density.
@@ -211,14 +215,25 @@ which jumps to that tab and pre-expands the focused category. `viewYear` is inde
 spend, no projection/buffer).
 
 ### UI layers
-- `y/ui.jsx` (`window.YUI`) — shared primitives: `StatusHero` (numerals design, fixed —
-  no variant prop), `CalloutCard`, `TxRow`, `CatIcon`, `DeltaChip`, `Sheet`, `SectionH`,
+- `y/ui.jsx` (`window.YUI`) — shared primitives: `StatusHero` (combined-vs-ceiling numerals
+  hero — see below), `CalloutCard`, `TxRow`, `CatIcon`, `DeltaChip`, `Sheet`, `SectionH`,
   `Toast`, and `rich` (renders numbers inside text in the mono `.num` style).
+  **`StatusHero`** leads with the sacred combined household number: headline =
+  `combinedProjection` (current/complete) or `ceiling` (future); sub-line = over/under
+  ceiling by €N (coloured by `combinedStatus`); pace rule fills to `combinedProjection/ceiling`
+  with a day-of-year marker; a decomposition line shows `main €A / €mainTarget` (coloured by
+  `stats.status`) and `fun €B` (ink-2). For complete years all projections equal spent.
   `Toast({ open, message, actionLabel, onAction, onDismiss })` — transient bottom-anchored
   banner (above nav, z-index 30), auto-dismisses after 5 s via `onDismiss`, optional action button.
   `GaugeHero`, `PaceBar`, and `ProjSpark` have been removed (dead since hero is fixed to numerals).
-- Screens: `y/home.jsx` (Overview), `y/analysis.jsx` (Projection/Categories/Activity tabs;
-  charts are hand-built SVG that double as the Recharts spec), `y/settings.jsx`
+- `y/fun.jsx` (`window.YFun`) — fun budget UI module. Currently exports:
+  `FunStrip({ fun, store, onOpen })` — compact Overview strip: one hairline row per person
+  (name, all-time balance in sage/terra, nearest wishlist goal name+pct+thin bar). Whole strip
+  tappable → `onOpen()`. "no goals yet" if no wishlist items. Broadsheet tokens only, no cards.
+  `FunTab` — placeholder (full workshop added in Session 3).
+- Screens: `y/home.jsx` (Overview — hero + callouts + FunStrip + spend curve),
+  `y/analysis.jsx` (Projection/Categories/Activity tabs; charts are hand-built SVG that
+  double as the Recharts spec), `y/settings.jsx`
   (target/buffer/years/density/templates/CSV import-export/JSON backup-restore/clear),
   `y/addflow.jsx` (Quick keypad + Manual add, Edit sheet, category picker).
   `settings.jsx` — `TargetSheet` (now labelled "Household ceiling") and `BufferSheet` accept a `year`
@@ -255,8 +270,9 @@ The app is a fully installable PWA:
   **Cache-versioning rule:** bump `CACHE_NAME` in `sw.js` whenever the shell changes (new
   file added to the precache list, CDN URL pinned to a new version, etc.). The old cache is
   deleted on `activate`. `skipWaiting()` + `clients.claim()` ensure the new SW takes over
-  immediately without waiting for old tabs to close. Current version: `yearly-v9` (Phase 3
-  consistency sweep: `y/tokens.css`, `y/app.css`, `y/app.jsx`, `sw.js`).
+  immediately without waiting for old tabs to close. Current version: `yearly-v10` (fun
+  budget Session 2: `y/fun.jsx` added to precache, `y/ui.jsx` StatusHero reworked,
+  `y/home.jsx` FunStrip wired, `y/app.jsx` `computeFun` memo + `onOpenFun`).
 - **`manifest.json`** — includes `id`, `scope`, `start_url`, and an `icons` array with
   192×192, 512×512, and a maskable 512×512 variant (all SVG). SVG icons work in Chrome 91+
   and modern WebKit/Firefox; for production Android/iOS you would swap in PNGs.
