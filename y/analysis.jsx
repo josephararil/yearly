@@ -9,13 +9,6 @@
   const MONTH_STARTS = [0, 31, 59, 90, 120, 151, 181, 212, 243, 273, 304, 334];
   const eurK = (v) => (Math.abs(v) >= 1000 ? "€" + (v / 1000).toFixed(v % 1000 === 0 ? 0 : 1) + "k" : "€" + Math.round(v));
 
-  function cumArray(upto) {
-    const a = Array(366).fill(0);
-    upto.forEach((t) => { a[Math.min(365, YCalc.dayOfYear(YCalc.parseDate(t.date)))] += t.amount_eur; });
-    for (let i = 1; i <= 365; i++) a[i] += a[i - 1];
-    return a;
-  }
-
   // Hand-built SVG projection chart — DS-styled, dependency-free.
   function ProjectionChart({ stats }) {
     const W = 340, H = 212, padL = 40, padR = 14, padT = 12, padB = 24;
@@ -23,7 +16,7 @@
     const maxY = Math.max(stats.target, stats.projection) * 1.1;
     const sx = (d) => x0 + (d / 365) * (x1 - x0);
     const sy = (v) => y1 - (v / maxY) * (y1 - y0);
-    const cum = cumArray(stats.upto);
+    const cum = YCalc.cumulativeByDay(stats.upto);
     const col = stats.status === "good" ? "var(--good)" : stats.status === "alert" ? "var(--alert)" : "var(--watch)";
 
     const actDays = [];
