@@ -40,94 +40,21 @@
     );
   }
 
-  function PaceBar({ stats }) {
-    const fillPct = Math.min(100, (stats.spent / stats.target) * 100);
-    const markPct = Math.min(100, (stats.doy / 365) * 100);
-    const projPct = Math.min(112, (stats.projection / stats.target) * 100);
-    const col = stats.status === "good" ? "var(--good)" : stats.status === "alert" ? "var(--alert)" : stats.status === "watch" ? "var(--watch)" : "var(--accent)";
-    return (
-      <div>
-        <div className="pacebar">
-          {!stats.complete && (
-            <div className="pacebar-fill" style={{ width: projPct + "%", background: "var(--surface-sunk)", opacity: 1, outline: "1px dashed var(--hairline-strong)" }} />
-          )}
-          <div className="pacebar-fill" style={{ width: fillPct + "%", background: col }} />
-          {!stats.complete && <div className="pacebar-mark" data-label="on-pace" style={{ left: markPct + "%" }} />}
-        </div>
-        <div className="pacebar-legend">
-          <span className="num">€0</span>
-          <span><span className="num">{eur0(stats.target)}</span> target</span>
-        </div>
-      </div>
-    );
-  }
-
-  function GaugeHero({ stats }) {
-    const ratio = stats.complete ? stats.spent / stats.target : stats.projection / stats.target;
-    const shown = Math.min(1.18, ratio);
-    const R = 78, C = Math.PI * R; // semicircle
-    const dash = C * Math.min(1, shown);
-    const col = stats.status === "good" ? "var(--good)" : stats.status === "alert" ? "var(--alert)" : "var(--watch)";
-    return (
-      <div className="gauge-wrap">
-        <svg width="200" height="118" viewBox="0 0 200 118">
-          <path d="M14 104 A86 86 0 0 1 186 104" fill="none" stroke="var(--surface-sunk)" strokeWidth="13" strokeLinecap="round" />
-          <path d="M14 104 A86 86 0 0 1 186 104" fill="none" stroke={col} strokeWidth="13" strokeLinecap="round"
-            strokeDasharray={`${(Math.PI * 86) * Math.min(1, shown)} 999`} />
-          {/* target tick at 100% */}
-          <line x1="100" y1="12" x2="100" y2="26" stroke="var(--text-2)" strokeWidth="2" />
-          <text x="100" y="74" textAnchor="middle" className="gauge-num num" fill="currentColor">{Math.round(ratio * 100)}%</text>
-          <text x="100" y="92" textAnchor="middle" className="gauge-label" fill="var(--text-3)">of target</text>
-        </svg>
-      </div>
-    );
-  }
-
-  function ProjSpark({ stats }) {
-    const w = 300, h = 84, pad = 6;
-    const maxY = Math.max(stats.target, stats.projection) * 1.05;
-    const sx = (x) => pad + (x / 365) * (w - pad * 2);
-    const sy = (v) => h - pad - (v / maxY) * (h - pad * 2);
-    const actualPts = stats.series.filter((p) => p.actual != null).map((p) => `${sx(p.x)},${sy(p.actual)}`).join(" ");
-    const targetY = sy(stats.target);
-    return (
-      <svg width="100%" viewBox={`0 0 ${w} ${h}`} style={{ display: "block" }} preserveAspectRatio="none">
-        <line x1={pad} y1={targetY} x2={w - pad} y2={targetY} stroke="var(--text-3)" strokeWidth="1" strokeDasharray="4 4" />
-        {!stats.complete && (
-          <line x1={sx(stats.doy)} y1={sy(stats.spent)} x2={sx(365)} y2={sy(stats.projection)}
-            stroke="var(--watch)" strokeWidth="2" strokeDasharray="5 4" strokeLinecap="round" />
-        )}
-        <polyline points={actualPts} fill="none" stroke="var(--accent)" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round" />
-        {!stats.complete && <circle cx={sx(stats.doy)} cy={sy(stats.spent)} r="3.4" fill="var(--accent)" />}
-      </svg>
-    );
-  }
-
-  function StatusHero({ stats, variant }) {
+  function StatusHero({ stats }) {
     const statusCls = "status-" + stats.status;
     const headline = stats.complete ? stats.spent : stats.projection;
     const eyebrow = stats.complete ? "Final spend · " + stats.year : "Projected year-end";
     return (
       <div className="panel hero">
         <div className="eyebrow">{eyebrow}</div>
-        {variant === "gauge" && <GaugeHero stats={stats} />}
         <div className={"hero-num num " + statusCls}>{eur0(headline)}</div>
         <div className="hero-sub">
           <span className="hero-target">vs <span className="num">{eur0(stats.target)}</span> target</span>
           <DeltaChip delta={stats.delta} status={stats.status} />
         </div>
-        {variant === "bar" && <PaceBar stats={stats} />}
-        {variant === "projection" && <div style={{ marginTop: 16 }}><ProjSpark stats={stats} /></div>}
-        {variant !== "bar" && (
-          <div className="hero-foot">
-            <span className="num">{eur0(stats.spent)}</span> spent{stats.complete ? "" : <> · day <span className="num">{stats.doy}</span> of <span className="num">365</span></>}
-          </div>
-        )}
-        {variant === "bar" && (
-          <div className="hero-foot" style={{ marginTop: 30 }}>
-            <span className="num">{eur0(stats.spent)}</span> spent · pace expects <span className="num">{eur0(stats.pace)}</span> by today
-          </div>
-        )}
+        <div className="hero-foot">
+          <span className="num">{eur0(stats.spent)}</span> spent{stats.complete ? "" : <> · day <span className="num">{stats.doy}</span> of <span className="num">365</span></>}
+        </div>
       </div>
     );
   }
@@ -225,5 +152,5 @@
     );
   }
 
-  window.YUI = { CatIcon, DeltaChip, PaceBar, StatusHero, CalloutCard, TxRow, Sheet, SectionH, Toast, rich, tint };
+  window.YUI = { CatIcon, DeltaChip, StatusHero, CalloutCard, TxRow, Sheet, SectionH, Toast, rich, tint };
 })();

@@ -330,6 +330,30 @@
     );
   }
 
+  function DensitySheet({ open, onClose, store, setStore }) {
+    const OPTIONS = [
+      { value: "minimal", label: "Minimal", sub: "Up to 2 alert/watch callouts" },
+      { value: "balanced", label: "Balanced", sub: "Up to 4 callouts" },
+      { value: "all", label: "All", sub: "Show every callout" },
+    ];
+    const current = store.density || "balanced";
+    return (
+      <Sheet open={open} onClose={onClose} title="Overview density">
+        <div className="panel" style={{ overflow: "hidden" }}>
+          {OPTIONS.map((o) => (
+            <button key={o.value} className="setrow" onClick={() => { setStore((s) => ({ ...s, density: o.value })); onClose(); }}>
+              <span className="setrow-main">
+                <div className="setrow-title">{o.label}</div>
+                <div className="setrow-sub">{o.sub}</div>
+              </span>
+              {current === o.value && <window.Icon name="check" size={18} style={{ color: "var(--accent)" }} />}
+            </button>
+          ))}
+        </div>
+      </Sheet>
+    );
+  }
+
   function ClearSheet({ open, onClose, setStore }) {
     const [v, setV] = React.useState("");
     React.useEffect(() => { if (open) setV(""); }, [open]);
@@ -356,6 +380,8 @@
   function SettingsScreen({ store, setStore, stats }) {
     const [sub, setSub] = React.useState(null);
     const cur = store.years[String(store.currentYear)];
+    const density = store.density || "balanced";
+    const densityLabel = density.charAt(0).toUpperCase() + density.slice(1);
     return (
       <div className="screen">
         <div className="section-h" style={{ marginTop: 0 }}><h2>This year</h2></div>
@@ -363,6 +389,11 @@
           <Row icon="target" title="Annual target" sub={`${store.currentYear} goal`} value={eur0(cur.target)} onClick={() => setSub("target")} />
           <Row icon="layers" title="Missed-entry buffer" sub="lifts the projection" value={Math.round((cur.buffer || 0) * 100) + "%"} onClick={() => setSub("buffer")} />
           <Row icon="clock" title="Past years" sub="target vs actual history" onClick={() => setSub("years")} />
+        </div>
+
+        <div className="section-h"><h2>Display</h2></div>
+        <div className="panel" style={{ overflow: "hidden" }}>
+          <Row icon="activity" title="Overview density" sub="callouts shown on Overview" value={densityLabel} onClick={() => setSub("density")} />
         </div>
 
         <div className="section-h"><h2>Data</h2></div>
@@ -383,6 +414,7 @@
         <TargetSheet open={sub === "target"} onClose={() => setSub(null)} store={store} setStore={setStore} />
         <BufferSheet open={sub === "buffer"} onClose={() => setSub(null)} store={store} setStore={setStore} />
         <YearsSheet open={sub === "years"} onClose={() => setSub(null)} store={store} setStore={setStore} />
+        <DensitySheet open={sub === "density"} onClose={() => setSub(null)} store={store} setStore={setStore} />
         <TemplatesSheet open={sub === "templates"} onClose={() => setSub(null)} store={store} setStore={setStore} />
         <ImportSheet open={sub === "import"} onClose={() => setSub(null)} store={store} setStore={setStore} />
         <ClearSheet open={sub === "clear"} onClose={() => setSub(null)} setStore={setStore} />

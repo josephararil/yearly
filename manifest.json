@@ -1,5 +1,5 @@
 {
-  "id": "/Yearly.html",
+  "id": "/",
   "scope": "/",
   "name": "Yearly — annual budgeting",
   "short_name": "Yearly",
@@ -7,7 +7,7 @@
   "orientation": "portrait",
   "background_color": "#000000",
   "theme_color": "#000000",
-  "start_url": "./Yearly.html",
+  "start_url": "./",
   "icons": [
     {
       "src": "icons/icon.svg",

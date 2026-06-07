@@ -171,6 +171,7 @@
     return {
       version: 1,
       currentYear: 2026,
+      density: "balanced",
       years: {
         "2024": { target: 21000, buffer: 0.04 },
         "2025": { target: 23000, buffer: 0.04 },
@@ -186,7 +187,11 @@
   function loadStore() {
     try {
       const raw = localStorage.getItem(STORAGE_KEY);
-      if (raw) return JSON.parse(raw);
+      if (raw) {
+        const s = JSON.parse(raw);
+        if (!s.density) s.density = "balanced";
+        return s;
+      }
     } catch (e) {}
     const seed = buildSeed(todayISO());
     try { localStorage.setItem(STORAGE_KEY, JSON.stringify(seed)); } catch (e) {}
