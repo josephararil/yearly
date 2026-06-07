@@ -142,23 +142,50 @@ own export to `window`**. There are no imports/exports. Two consequences:
 ### The brain (port these first to any production target)
 - `y/calc.jsx` (`window.YCalc`) — **all numbers come from here.** `computeStats(store, year, asOfDate?)`
   (linear projection + per-year buffer uplift + status thresholds; `asOfDate` defaults to `new Date()`)
-  and `buildCallouts(store, stats)` (the ranked detector engine — 7 detectors). Pure functions, no UI deps.
+  and `buildCallouts(store, stats)` (the ranked detector engine — 8 detectors). Pure functions, no UI deps.
   Also exports `cumulativeByDay(txns)` → `number[366]` (shared with `analysis.jsx`),
   `priorYearCumulative(store, year, asOfDate)` → number (prior year spend at same day-of-year),
+  `rateForMonth(person, ym)` → number (latest applicable rate for a person in a "YYYY-MM"; 0 before startMonth),
+  `computeFun(store, asOfDate?)` → per-person fun ledger (see below),
   `projectionAsOf` (trend detector), `requiredDailyToHit(stats)` → number|null (daily cap to finish on
-  target; null when not applicable), and the standard formatters.
-  `computeStats` return includes `priorCum` (number[366] | null) and `priorSpent` (number | null)
-  for the prior year — consumed by `analysis.jsx` without needing store.
-  Future-year guard: `Number(year) > currentYear` → spent 0, projection 0, status "good"; `isFuture`
-  is included in the returned stats object. `buildCallouts` returns a single `{ id: "future", severity:
-  "good", icon: "clock" }` callout immediately after the `complete` early-return for future years.
-  Detector #6 (yoy): current year only — compares spent to prior year at same doy; watch/info/good.
-  Detector #7 (reqpace): current year only, when projection > target — surfaces required daily spend cap;
-  severity watch (alert status) or info (watch status).
+  mainTarget; null when not applicable), and the standard formatters.
+  **Vocabulary** (canonical names — never use `target` for the stored ceiling):
+  - `ceiling` — `years[y].ceiling`, stored, user-set, sacred. Renamed from `target`.
+  - `funPlanAnnual` — Σ people × 12 months × rateForMonth; derived.
+  - `mainTarget` — `ceiling − funPlanAnnual`; derived, never stored. Non-discretionary budget.
+  - `spent` / `projection` in stats — main (non-fun) only. Fun tx excluded from all main math.
+  - `funSpent` / `funProjection` — fun YTD and linear projection (approximate, lumpy).
+  - `combinedProjection` = `projection + funProjection`; `combinedDelta` / `combinedStatus` vs `ceiling`.
+  `computeStats` returns: `ceiling`, `mainTarget`, `funPlanAnnual`, `funSpent`, `funProjection`,
+  `combinedProjection`, `combinedDelta`, `combinedDeltaPct`, `combinedStatus` plus all existing fields
+  (`spent`, `projection`, `delta`, `status`, etc. — all main-budget). `stats.txns` contains main-only
+  tx (fun tx excluded); `stats.upto` is likewise main-only.
+  `priorCum` (number[366] | null) and `priorSpent` (number | null) — prior year, main tx only.
+  Future-year guard: spent 0, projection 0, status "good"; `isFuture` in returned stats.
+  `buildCallouts` returns a single `{id:"future"}` callout for future years; `{id:"final"}` for
+  complete years. For current year, detectors #1–7 describe the main budget; detector #8 (ceiling)
+  is the sacred combined verdict, always prepended at the top:
+  - over ceiling → watch/alert "trim fun ~€Y/mo"; drill {section:"fun"}.
+  - comfortably under (< ceiling×0.94) → good/info "room to raise fun ~€Y/mo"; drill {section:"fun"}.
+  When the ceiling callout is present it replaces the "calm" fallback.
+  Detector #6 (yoy): current year only — compares main spent to prior year at same doy; watch/info/good.
+  Detector #7 (reqpace): current year only, when projection > mainTarget — surfaces required daily spend cap.
+  `computeFun(store, asOfDate?)` — exported, uses `store.currentYear` for YTD figures. Returns:
+  `people[]` (per-person: `id`, `name`, `balance` all-time = accrued − spent, `monthlyRate`, `usedThisMonth`,
+  `spentAllTime`), `funSpentYTD`, `funProjection` (linear, approximate), `funCatList` (category breakdown).
 - `y/data.jsx` (`window.YData`) — the persisted store shape, the fixed 18-category list
   (`CATEGORIES`, id→icon→color), default templates, deterministic seed generator, and
-  `loadStore`/`saveStore`/`resetStore`. The store includes `density` ("minimal" | "balanced" | "all");
-  `loadStore` migrates older stores by defaulting missing `density` to `"balanced"`.
+  `loadStore`/`saveStore`/`resetStore`/`migrateStore`.
+  **Store shape additions (fun-budget model):**
+  - `store.people`: `[{id, name, rates:[{from:"YYYY-MM", amount}], startMonth:"YYYY-MM"}]` — forward-only
+    dated rate schedule per person. Sorted ascending by `from`. Default: Joseph €100/mo, Marti €200/mo.
+  - `store.wishlist`: `[{id, owner, name, price, note?, createdMonth}]` — per-person wishlist items.
+  - Transaction fields: optional `fun:true` and `person:"joseph"|"marti"` (only on fun tx).
+  - `years[y].ceiling` — renamed from `years[y].target` (sacred household ceiling, never derived).
+  `migrateStore(s)` (exported, idempotent): `years[y].target` → `ceiling`; injects `people` and
+  `wishlist` defaults if missing; sets `density` default. Called by `loadStore` and by JSON restore.
+  The seed (`buildSeed`) tags ~8 shopping/entertainment/restaurant tx in 2026 with `fun:true` +
+  alternating person, includes `people`, `wishlist` (2 sample items), and uses `ceiling` (not `target`).
 
 The README documents the exact projection formula, status thresholds, and each callout
 detector. **If you change the math or detectors, update the README spec in the same change.**
@@ -194,15 +221,15 @@ spend, no projection/buffer).
   charts are hand-built SVG that double as the Recharts spec), `y/settings.jsx`
   (target/buffer/years/density/templates/CSV import-export/JSON backup-restore/clear),
   `y/addflow.jsx` (Quick keypad + Manual add, Edit sheet, category picker).
-  `settings.jsx` — `TargetSheet` and `BufferSheet` accept a `year` prop (defaults to
-  `store.currentYear`); `BufferSheet` computes its own stats internally. `YearsSheet` has
-  tappable year rows that drill into a year detail view (target + buffer rows), plus an
-  "Add year" button that clones the most recent year's target/buffer into `year+1`.
-  Future years with no transactions can be deleted from the detail view.
+  `settings.jsx` — `TargetSheet` (now labelled "Household ceiling") and `BufferSheet` accept a `year`
+  prop (defaults to `store.currentYear`); `TargetSheet` reads/writes `years[y].ceiling`. `BufferSheet`
+  computes its own stats internally (unchanged). `YearsSheet` has tappable year rows that drill into a
+  year detail view (ceiling + buffer rows), plus an "Add year" button that clones the most recent year's
+  ceiling/buffer into `year+1`. Future years with no transactions can be deleted from the detail view.
+  Year list rows show `st.ceiling` + `st.combinedProjection` + `DeltaChip(combinedDelta, combinedStatus)`.
   `DensitySheet` — a picker for Overview density (minimal/balanced/all); writes to `store.density`.
-  **JSON backup/restore** (Session 8): "Back up (JSON)" downloads the full store as
-  `yearly-backup.json`; "Restore (JSON)" reads a `.json` file, validates it has `years` +
-  `transactions`, confirms, and calls `setStore(parsed)`. Hidden `#jsonfile` input mirrors
+  **JSON backup/restore**: "Restore (JSON)" calls `YData.migrateStore(parsed)` before `setStore` so
+  old backups (with `target`, no `people`/`wishlist`) migrate cleanly. Hidden `#jsonfile` input mirrors
   the CSV `#csvfile` pattern.
   **"All activity" routing fix** (Session 8): `AnalysisScreen` focus useEffect now handles
   `focus.section === "activity"` → `setTab("Activity")`.

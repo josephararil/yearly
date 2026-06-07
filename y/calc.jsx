@@ -65,11 +65,23 @@
     return { byMonth, catMonth };
   }
 
+  // Rate for a person in a given "YYYY-MM". Returns 0 before startMonth.
+  // Picks the latest rates[] entry with from <= ym (rates must be sorted ascending).
+  function rateForMonth(person, ym) {
+    if (ym < person.startMonth) return 0;
+    let rate = 0;
+    for (const r of person.rates) {
+      if (r.from <= ym) rate = r.amount;
+    }
+    return rate;
+  }
+
 function computeStats(store, year, asOfDate) {
     const real = asOfDate || new Date();
     const currentYear = Number(store.currentYear);
-    const y = store.years[String(year)] || { target: 25000, buffer: 0.04 };
-    const target = y.target, buffer = y.buffer || 0;
+    const y = store.years[String(year)] || { ceiling: 25000, buffer: 0.04 };
+    const ceiling = y.ceiling != null ? y.ceiling : (y.target || 25000);
+    const buffer = y.buffer || 0;
     const txns = yearTxns(store, year);
     const isCurrent = Number(year) === currentYear;
     const complete = !isCurrent && Number(year) < currentYear;
@@ -89,34 +101,62 @@ function computeStats(store, year, asOfDate) {
     }
     const asOfStr = asOf.toISOString().slice(0, 10);
 
-    const upto = isFuture ? [] : txns.filter((t) => t.date <= asOfStr);
+    // Split main (non-fun) vs fun transactions for this year
+    const mainTxns = txns.filter((t) => !t.fun);
+    const upto = isFuture ? [] : mainTxns.filter((t) => t.date <= asOfStr);
     const spent = isFuture ? 0 : upto.reduce((a, t) => a + t.amount_eur, 0);
     const dailyRate = isFuture ? 0 : spent / doy;
     const projNoBuffer = (complete || isFuture) ? spent : dailyRate * 365;
     const projection = (complete || isFuture) ? spent : projNoBuffer * (1 + buffer);
     const bufferAmt = projection - projNoBuffer;
-    const pace = (doy / 365) * target;
-    const delta = projection - target;
-    const deltaPct = delta / target;
+
+    // Derived main target: ceiling minus the planned annual fun allocation
+    const people = store.people || [];
+    let funPlanAnnual = 0;
+    for (const p of people) {
+      for (let m = 1; m <= 12; m++) {
+        const ym = String(year) + "-" + String(m).padStart(2, "0");
+        funPlanAnnual += rateForMonth(p, ym);
+      }
+    }
+    const mainTarget = ceiling - funPlanAnnual;
+
+    const pace = (doy / 365) * mainTarget;
+    const delta = projection - mainTarget;
+    const deltaPct = mainTarget > 0 ? delta / mainTarget : 0;
 
     let status;
     if (isFuture) status = "good";
-    else if (complete) status = spent <= target ? "good" : spent <= target * 1.03 ? "watch" : "alert";
-    else status = projection <= target ? "good" : projection <= target * 1.08 ? "watch" : "alert";
+    else if (complete) status = projection <= mainTarget ? "good" : projection <= mainTarget * 1.03 ? "watch" : "alert";
+    else status = projection <= mainTarget ? "good" : projection <= mainTarget * 1.08 ? "watch" : "alert";
 
     const { byCat, catList } = aggregateByCategory(upto, spent);
     const { byMonth, catMonth } = aggregateByMonth(upto);
 
+    // Fun figures for the combined (ceiling-level) verdict
+    const funUpto = isFuture ? [] : txns.filter((t) => t.fun && t.date <= asOfStr);
+    const funSpent = funUpto.reduce((a, t) => a + t.amount_eur, 0);
+    // Linear fun projection is approximate — fun spend is lumpy
+    const funProjection = isFuture ? 0 : complete ? funSpent : (doy > 0 ? funSpent / doy * 365 : 0);
+    const combinedProjection = projection + funProjection;
+    const combinedDelta = combinedProjection - ceiling;
+    const combinedDeltaPct = ceiling > 0 ? combinedDelta / ceiling : 0;
+    let combinedStatus;
+    if (isFuture) combinedStatus = "good";
+    else if (complete) combinedStatus = combinedProjection <= ceiling ? "good" : combinedProjection <= ceiling * 1.03 ? "watch" : "alert";
+    else combinedStatus = combinedProjection <= ceiling ? "good" : combinedProjection <= ceiling * 1.08 ? "watch" : "alert";
+
     // Prior year cumulative curve — null when no prior year data exists.
-    const priorTxns = yearTxns(store, Number(year) - 1);
+    const priorTxns = yearTxns(store, Number(year) - 1).filter((t) => !t.fun);
     const priorCum = priorTxns.length ? cumulativeByDay(priorTxns) : null;
     const priorSpent = priorCum ? priorCum[Math.min(365, doy)] : null;
 
     return {
-      year: Number(year), target, buffer, isCurrent, complete, isFuture,
+      year: Number(year), ceiling, mainTarget, funPlanAnnual, buffer, isCurrent, complete, isFuture,
       asOf, asOfStr, doy, spent, dailyRate, projection, projNoBuffer, bufferAmt,
-      pace, delta, deltaPct, status, txns, upto, byCat, catList, byMonth, catMonth,
+      pace, delta, deltaPct, status, txns: mainTxns, upto, byCat, catList, byMonth, catMonth,
       priorCum, priorSpent,
+      funSpent, funProjection, combinedProjection, combinedDelta, combinedDeltaPct, combinedStatus,
     };
   }
 
@@ -129,43 +169,87 @@ function computeStats(store, year, asOfDate) {
     return spent / doy * 365 * (1 + stats.buffer);
   }
 
-  // Required daily rate to stay on target. Returns null when not applicable.
+  // Required daily rate to stay on mainTarget. Returns null when not applicable.
   function requiredDailyToHit(stats) {
     if (!stats.isCurrent) return null;
-    if (stats.projection <= stats.target) return null;
+    if (stats.projection <= stats.mainTarget) return null;
     const daysLeft = 365 - stats.doy;
     if (daysLeft <= 0) return null;
-    return Math.max(0, (stats.target - stats.spent) / daysLeft);
+    return Math.max(0, (stats.mainTarget - stats.spent) / daysLeft);
+  }
+
+  // computeFun — rich per-person fun ledger for the UI (uses store.currentYear for YTD figures).
+  // asOfDate defaults to new Date(). Balance is all-time (from each person's startMonth to asOf).
+  function computeFun(store, asOfDate) {
+    const asOf = asOfDate || new Date();
+    const asOfStr = asOf.toISOString().slice(0, 10);
+    const currentYM = asOfStr.slice(0, 7);
+    const year = Number(store.currentYear);
+    const doy = Math.max(1, dayOfYear(asOf));
+
+    const personData = (store.people || []).map((p) => {
+      // Accrue monthly rate from startMonth to currentYM inclusive
+      let accrued = 0;
+      let ym = p.startMonth;
+      while (ym <= currentYM) {
+        accrued += rateForMonth(p, ym);
+        const [y, m] = ym.split("-").map(Number);
+        ym = m === 12 ? (y + 1) + "-01" : y + "-" + String(m + 1).padStart(2, "0");
+      }
+      const allFunTxns = (store.transactions || []).filter((t) => t.fun && t.person === p.id && t.date <= asOfStr);
+      const spentAllTime = allFunTxns.reduce((a, t) => a + t.amount_eur, 0);
+      const balance = accrued - spentAllTime;
+      const monthlyRate = rateForMonth(p, currentYM);
+      const usedThisMonth = allFunTxns
+        .filter((t) => t.date.slice(0, 7) === currentYM)
+        .reduce((a, t) => a + t.amount_eur, 0);
+      return { id: p.id, name: p.name, balance, monthlyRate, usedThisMonth, spentAllTime };
+    });
+
+    // Fun figures for the current year
+    const yearStr = String(year);
+    const funYearTxns = (store.transactions || []).filter((t) => t.fun && t.date.slice(0, 4) === yearStr && t.date <= asOfStr);
+    const funSpentYTD = funYearTxns.reduce((a, t) => a + t.amount_eur, 0);
+    const realYear = new Date().getFullYear();
+    const isCurrent = year === realYear;
+    const complete = year < realYear;
+    const isFuture = year > realYear;
+    // Linear fun projection is approximate — fun spend is lumpy
+    const funProjection = isFuture ? 0 : complete ? funSpentYTD : (doy > 0 ? funSpentYTD / doy * 365 : 0);
+
+    const { catList: funCatList } = aggregateByCategory(funYearTxns, funSpentYTD);
+
+    return { people: personData, funSpentYTD, funProjection, funCatList };
   }
 
   // ---- Callout engine ----
   function buildCallouts(store, stats) {
     if (stats.complete) {
-      const over = stats.spent > stats.target;
+      const over = stats.spent > stats.mainTarget;
       return [{
         id: "final", severity: over ? "watch" : "good", icon: over ? "trendingUp" : "checkCircle",
-        text: `Finished ${over ? "over" : "under"} target by ${eur0(Math.abs(stats.delta))} — ${eur0(stats.spent)} against a ${eur0(stats.target)} target.`,
+        text: `Finished ${over ? "over" : "under"} main budget by ${eur0(Math.abs(stats.delta))} — ${eur0(stats.spent)} against a ${eur0(stats.mainTarget)} main budget.`,
         drill: { section: "projection" }, mag: Math.abs(stats.deltaPct),
       }];
     }
     if (stats.isFuture) return [{
       id: "future", severity: "good", icon: "clock",
-      text: `${stats.year} hasn't started yet — target ${eur0(stats.target)}.`,
+      text: `${stats.year} hasn't started yet — main budget ${eur0(stats.mainTarget)}.`,
       drill: { section: "projection" }, mag: 0,
     }];
     const out = [];
-    const linDaily = stats.target / 365;
+    const linDaily = stats.mainTarget / 365;
 
     // 1. projection trend (vs 4 weeks ago)
     const proj4 = projectionAsOf(stats, 28);
     const trendD = stats.projection - proj4;
-    if (Math.abs(trendD) > stats.target * 0.012) {
+    if (Math.abs(trendD) > stats.mainTarget * 0.012) {
       const worse = trendD > 0;
       out.push({
-        id: "trend", severity: worse ? (Math.abs(trendD) > stats.target * 0.04 ? "alert" : "watch") : "good",
+        id: "trend", severity: worse ? (Math.abs(trendD) > stats.mainTarget * 0.04 ? "alert" : "watch") : "good",
         icon: worse ? "trendingUp" : "trendingDown",
         text: `Year-end projection has moved ${worse ? "up" : "down"} ${eur0(Math.abs(trendD))} over the last 4 weeks, now ${eur0(stats.projection)}.`,
-        drill: { section: "projection" }, mag: Math.abs(trendD) / stats.target + 0.2,
+        drill: { section: "projection" }, mag: Math.abs(trendD) / stats.mainTarget + 0.2,
       });
     }
 
@@ -224,7 +308,7 @@ function computeStats(store, year, asOfDate) {
     }
 
     // 5. buffer explanation (why projection > raw pace)
-    if (stats.bufferAmt > stats.target * 0.01) {
+    if (stats.bufferAmt > stats.mainTarget * 0.01) {
       out.push({
         id: "buffer", severity: "info", icon: "layers",
         text: `Logged spend alone projects to ${eur0(stats.projNoBuffer)}; the ${Math.round(stats.buffer * 100)}% missed-entry buffer lifts that to ${eur0(stats.projection)}.`,
@@ -241,22 +325,22 @@ function computeStats(store, year, asOfDate) {
         const higher = diff > 0;
         out.push({
           id: "yoy",
-          severity: higher && diff > stats.target * 0.08 ? "watch" : higher ? "info" : "good",
+          severity: higher && diff > stats.mainTarget * 0.08 ? "watch" : higher ? "info" : "good",
           icon: higher ? "trendingUp" : "trendingDown",
           text: `Spending is ${eur0(Math.abs(diff))} (${signedPct(diffPct)}) ${higher ? "higher" : "lower"} than the same point in ${stats.year - 1}.`,
-          drill: { section: "projection" }, mag: Math.abs(diff) / stats.target * 0.7 + 0.05,
+          drill: { section: "projection" }, mag: Math.abs(diff) / stats.mainTarget * 0.7 + 0.05,
         });
       }
     }
 
-    // 7. required daily pace (current year, projection over target)
+    // 7. required daily pace (current year, projection over mainTarget)
     const reqDaily = requiredDailyToHit(stats);
     if (reqDaily !== null) {
       out.push({
         id: "reqpace",
         severity: stats.status === "alert" ? "watch" : "info",
         icon: "activity",
-        text: `Spend ≤ ${eur0(reqDaily)}/day from here to finish on target.`,
+        text: `Spend ≤ ${eur0(reqDaily)}/day from here to finish on main budget target.`,
         drill: { section: "projection" },
         mag: stats.deltaPct * 0.5 + 0.1,
       });
@@ -265,10 +349,37 @@ function computeStats(store, year, asOfDate) {
     const sev = { alert: 3, watch: 2, info: 1, good: 0 };
     out.sort((a, b) => (sev[b.severity] - sev[a.severity]) || (b.mag - a.mag));
 
-    if (!out.some((c) => sev[c.severity] >= 2)) {
+    // 8. ceiling detector (current year only) — sacred combined verdict, always top
+    let ceilingCallout = null;
+    if (stats.isCurrent) {
+      if (stats.combinedProjection > stats.ceiling) {
+        const monthsLeft = Math.max(1, (365 - stats.doy) / 30.4);
+        const overBy = stats.combinedProjection - stats.ceiling;
+        const trimPer = overBy / monthsLeft;
+        const severity = overBy > stats.ceiling * 0.08 ? "alert" : "watch";
+        ceilingCallout = {
+          id: "ceiling", severity, icon: "trendingUp",
+          text: `Household projects to ${eur0(stats.combinedProjection)} against your ${eur0(stats.ceiling)} ceiling — trim fun spending by ~${eur0(trimPer)}/mo to stay within it.`,
+          drill: { section: "fun" }, mag: 1.0,
+        };
+      } else if (stats.combinedProjection < stats.ceiling * 0.94) {
+        const gap = stats.ceiling - stats.combinedProjection;
+        const monthsLeft = Math.max(1, (365 - stats.doy) / 30.4);
+        const raisePer = gap / monthsLeft;
+        ceilingCallout = {
+          id: "ceiling", severity: "good", icon: "checkCircle",
+          text: `You're tracking ${eur0(gap)} under your ${eur0(stats.ceiling)} ceiling — room to raise the fun budget by ~${eur0(raisePer)}/mo if you want.`,
+          drill: { section: "fun" }, mag: 0.5,
+        };
+      }
+    }
+
+    if (ceilingCallout) {
+      out.unshift(ceilingCallout);
+    } else if (!out.some((c) => sev[c.severity] >= 2)) {
       out.unshift({
         id: "calm", severity: "good", icon: "checkCircle",
-        text: `Projection steady at ${eur0(stats.projection)} against your ${eur0(stats.target)} target — nothing notable in the data.`,
+        text: `Projection steady at ${eur0(stats.projection)} against your ${eur0(stats.mainTarget)} main budget — nothing notable in the data.`,
         drill: { section: "projection" }, mag: 0,
       });
     }
@@ -278,7 +389,8 @@ function computeStats(store, year, asOfDate) {
   window.YCalc = {
     MONTHS, MONTHS_LONG, eur0, eur2, eurAuto, signedEur, pct, signedPct,
     dayOfYear, parseDate, fmtDateShort, fmtDateLong, yearTxns,
-    cumulativeByDay, priorYearCumulative, computeStats, projectionAsOf, buildCallouts,
+    cumulativeByDay, priorYearCumulative, aggregateByCategory,
+    rateForMonth, computeStats, computeFun, projectionAsOf, buildCallouts,
     requiredDailyToHit,
   };
 })();

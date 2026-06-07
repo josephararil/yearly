@@ -194,18 +194,23 @@
   // ---------- simple value sheets ----------
   function TargetSheet({ open, onClose, store, setStore, year }) {
     const yr = year != null ? Number(year) : Number(store.currentYear);
-    const getTarget = (s) => (s.years[String(yr)] || { target: 25000 }).target;
-    const [v, setV] = React.useState(String(getTarget(store)));
-    React.useEffect(() => { if (open) setV(String(getTarget(store))); }, [open, yr]);
+    const getCeiling = (s) => { const y = s.years[String(yr)] || {}; return y.ceiling != null ? y.ceiling : (y.target || 25000); };
+    const [v, setV] = React.useState(String(getCeiling(store)));
+    React.useEffect(() => { if (open) setV(String(getCeiling(store))); }, [open, yr]);
     return (
-      <Sheet open={open} onClose={onClose} title={`${yr} target`}>
-        <p className="muted" style={{ fontSize: 13, marginTop: 0, lineHeight: 1.5 }}>Your annual spending goal — the number everything is measured against.</p>
+      <Sheet open={open} onClose={onClose} title={`${yr} household ceiling`}>
+        <p className="muted" style={{ fontSize: 13, marginTop: 0, lineHeight: 1.5 }}>Your total annual outflow ceiling — the sacred number everything is measured against.</p>
         <div className="amount-display"><span className="cur">€</span><span className="num">{v || "0"}</span></div>
         <input className="inp inp-num" inputMode="numeric" value={v} onChange={(e) => setV(e.target.value.replace(/[^\d]/g, ""))} style={{ textAlign: "center", fontSize: 18, marginBottom: 16 }} />
         <Button variant="primary" block disabled={!(parseInt(v) > 0)} onClick={() => {
-          setStore((s) => ({ ...s, years: { ...s.years, [String(yr)]: { ...s.years[String(yr)], target: parseInt(v) } } }));
+          setStore((s) => {
+            const yr_ = s.years[String(yr)] || {};
+            const updated = { ...yr_, ceiling: parseInt(v) };
+            delete updated.target;
+            return { ...s, years: { ...s.years, [String(yr)]: updated } };
+          });
           onClose();
-        }}>Save target</Button>
+        }}>Save ceiling</Button>
       </Sheet>
     );
   }
@@ -259,8 +264,9 @@
       const maxY = Math.max(...Object.keys(store.years).map(Number));
       const newY = maxY + 1;
       if (store.years[String(newY)]) return;
-      const src = store.years[String(maxY)] || { target: 25000, buffer: 0.04 };
-      setStore((s) => ({ ...s, years: { ...s.years, [String(newY)]: { target: src.target, buffer: src.buffer || 0 } } }));
+      const src = store.years[String(maxY)] || { ceiling: 25000, buffer: 0.04 };
+      const srcCeiling = src.ceiling != null ? src.ceiling : (src.target || 25000);
+      setStore((s) => ({ ...s, years: { ...s.years, [String(newY)]: { ceiling: srcCeiling, buffer: src.buffer || 0 } } }));
     };
 
     const delYear = (y) => {
@@ -285,12 +291,13 @@
       const y = sel.year;
       const past = y < currentYear;
       const future = y > currentYear;
-      const yd = store.years[String(y)] || { target: 25000, buffer: 0.04 };
+      const yd = store.years[String(y)] || { ceiling: 25000, buffer: 0.04 };
+      const ydCeiling = yd.ceiling != null ? yd.ceiling : (yd.target || 25000);
       const hasTxns = store.transactions.some((t) => t.date.slice(0, 4) === String(y));
       return (
         <Sheet open={open} onClose={() => setSel(null)} title={`${y}${y === currentYear ? " · current" : ""}`}>
           <div className="panel" style={{ overflow: "hidden" }}>
-            <Row icon="target" title="Annual target" value={eur0(yd.target)} onClick={() => setSel({ year: y, editing: "target" })} />
+            <Row icon="target" title="Household ceiling" value={eur0(ydCeiling)} onClick={() => setSel({ year: y, editing: "target" })} />
             {!past && <Row icon="layers" title="Missed-entry buffer" value={Math.round((yd.buffer || 0) * 100) + "%"} onClick={() => setSel({ year: y, editing: "buffer" })} />}
           </div>
           {future && !hasTxns && (
@@ -316,10 +323,10 @@
                 <div style={{ flex: 1 }}>
                   <div style={{ fontSize: 17, fontWeight: 600 }} className="num">{y}{st.isCurrent && <span style={{ fontSize: 11, color: "var(--terra)", fontFamily: "var(--mono)", marginLeft: 8, letterSpacing: "0.04em" }}>CURRENT</span>}</div>
                   <div className="muted" style={{ fontSize: 12.5, marginTop: 2 }}>
-                    Target <span className="num" style={{ color: "var(--ink-2)" }}>{eur0(st.target)}</span> · {st.complete ? "spent" : "projected"} <span className="num" style={{ color: "var(--ink-2)" }}>{eur0(st.projection)}</span>
+                    Ceiling <span className="num" style={{ color: "var(--ink-2)" }}>{eur0(st.ceiling)}</span> · {st.complete ? "combined" : "proj"} <span className="num" style={{ color: "var(--ink-2)" }}>{eur0(st.combinedProjection)}</span>
                   </div>
                 </div>
-                <DeltaChip delta={st.delta} status={st.status} />
+                <DeltaChip delta={st.combinedDelta} status={st.combinedStatus} />
                 <window.Icon name="chevronRight" size={16} style={{ color: "var(--muted)", marginLeft: 4 }} />
               </button>
             );
@@ -390,7 +397,7 @@
       <div className="screen">
         <div className="section-h" style={{ marginTop: 0 }}><h2>This year</h2></div>
         <div className="panel" style={{ overflow: "hidden" }}>
-          <Row icon="target" title="Annual target" sub={`${store.currentYear} goal`} value={eur0(cur.target)} onClick={() => setSub("target")} />
+          <Row icon="target" title="Household ceiling" sub={`${store.currentYear} ceiling`} value={eur0(cur.ceiling != null ? cur.ceiling : (cur.target || 25000))} onClick={() => setSub("target")} />
           <Row icon="layers" title="Missed-entry buffer" sub="lifts the projection" value={Math.round((cur.buffer || 0) * 100) + "%"} onClick={() => setSub("buffer")} />
           <Row icon="clock" title="Past years" sub="target vs actual history" onClick={() => setSub("years")} />
         </div>
@@ -416,7 +423,7 @@
                 if (!parsed || typeof parsed.years !== "object" || !Array.isArray(parsed.transactions)) {
                   alert("File doesn't look like a Yearly backup — restore cancelled."); return;
                 }
-                if (!parsed.density) parsed.density = "balanced";
+                YData.migrateStore(parsed);
                 if (!confirm("Replace ALL current data with this backup?")) return;
                 setStore(parsed);
               });

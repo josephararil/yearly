@@ -15,7 +15,7 @@
     const x0 = padL, x1 = W - padR, y0 = padT, y1 = H - padB;
     const priorCum = stats.priorCum;
     const priorMax = priorCum ? priorCum[Math.min(365, stats.doy)] : 0;
-    const maxY = Math.max(stats.target, stats.projection, priorMax) * 1.1;
+    const maxY = Math.max(stats.mainTarget, stats.projection, priorMax) * 1.1;
     const sx = (d) => x0 + (d / 365) * (x1 - x0);
     const sy = (v) => y1 - (v / maxY) * (y1 - y0);
     const cum = YCalc.cumulativeByDay(stats.upto);
@@ -49,10 +49,10 @@
           <text key={m} x={sx(MONTH_STARTS[m])} y={H - 8} textAnchor="middle" fontSize="9" fill="var(--chart-axis)" fontFamily="var(--mono)">{MONTHS[m]}</text>
         ))}
         {/* target reference */}
-        <line x1={x0} y1={sy(stats.target)} x2={x1} y2={sy(stats.target)} stroke="var(--chart-target)" strokeWidth="1.2" strokeDasharray="4 4" />
-        <text x={x1} y={sy(stats.target) - 5} textAnchor="end" fontSize="9" fill="var(--chart-target)" fontFamily="var(--mono)">target {eurK(stats.target)}</text>
+        <line x1={x0} y1={sy(stats.mainTarget)} x2={x1} y2={sy(stats.mainTarget)} stroke="var(--chart-target)" strokeWidth="1.2" strokeDasharray="4 4" />
+        <text x={x1} y={sy(stats.mainTarget) - 5} textAnchor="end" fontSize="9" fill="var(--chart-target)" fontFamily="var(--mono)">target {eurK(stats.mainTarget)}</text>
         {/* linear pace */}
-        <line x1={sx(0)} y1={sy(0)} x2={sx(365)} y2={sy(stats.target)} stroke="var(--chart-pace)" strokeWidth="1" strokeDasharray="2 4" opacity="0.6" />
+        <line x1={sx(0)} y1={sy(0)} x2={sx(365)} y2={sy(stats.mainTarget)} stroke="var(--chart-pace)" strokeWidth="1" strokeDasharray="2 4" opacity="0.6" />
         {/* prior year */}
         {priorCum && (() => {
           const endDay = stats.complete ? 365 : stats.doy;
@@ -148,7 +148,7 @@
         <div className="statgrid">
           <StatCard label="Spent year-to-date" value={eur0(stats.spent)} sub={`${stats.upto.length} entries`} />
           <StatCard label={stats.complete ? "Days" : "On-pace by today"} value={stats.complete ? "365" : eur0(stats.pace)} sub={stats.complete ? "complete" : `day ${stats.doy} of 365`} />
-          <StatCard label="Daily rate" value={eur0(stats.dailyRate) + "/d"} sub={`linear pace ${eur0(stats.target / 365)}/d`} />
+          <StatCard label="Daily rate" value={eur0(stats.dailyRate) + "/d"} sub={`linear pace ${eur0(stats.mainTarget / 365)}/d`} />
           {!stats.complete && <StatCard label="Buffer adds" value={"+" + eur0(stats.bufferAmt)} sub={`${Math.round(stats.buffer * 100)}% missed-entry`} />}
           <StatCard label={stats.complete ? "Final spend" : "Projected finish"} value={eur0(stats.projection)}
             color={stats.status === "good" ? "var(--good)" : stats.status === "alert" ? "var(--alert)" : "var(--watch)"} />
