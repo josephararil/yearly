@@ -1,0 +1,111 @@
+# CLAUDE.md
+
+This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
+
+## What this repo is
+
+**Yearly** is a mobile-first annual budgeting PWA: it tracks joint household spend in EUR
+against a single per-year target and produces ranked, plain-language **callouts** that
+explain whether you're on track and why. See `README.md` — it is the authoritative product +
+design spec (data model, projection math, callout detectors, screens, design tokens). Treat
+the README as the source of truth for *intended* behavior; treat the code below as the
+*current* implementation.
+
+> The README frames this bundle as a **design reference / prototype** to be recreated in a
+> production stack (Vite/Next + Recharts + a real component library). The files here are a
+> working prototype, not the production app.
+
+## Running it
+
+There is **no build, no package manager, no tests, no linter**. The app is a single static
+HTML file that loads React + Babel from CDN and transpiles the `y/*.jsx` modules in the
+browser.
+
+- Serve the directory over HTTP and open `Yearly.html` (e.g. `python -m http.server` then
+  visit `/Yearly.html`). It will **not** work over `file://` — the `type="text/babel" src=`
+  scripts require HTTP.
+- State persists to `localStorage` under `yearly:store:v1`; on first load a deterministic
+  seed dataset is generated (`y/data.jsx → buildSeed`). To reset, clear that key or use
+  Settings › Restore sample data.
+
+### Self-contained (no external dependencies)
+The app is fully self-contained — **no `_ds/` directory is needed**. The original Aperture
+design system dependency has been replaced by two local files:
+
+- **`y/tokens.css`** — defines all ~25 CSS custom properties consumed by `y/app.css`
+  (`--bg`, `--surface`, `--text`, `--accent`, `--r-card`, `--shadow-rest`, etc.).
+  Loaded in `Yearly.html` before `y/app.css`.
+- **`y/ds.jsx`** — an IIFE that sets `window.ApertureDesignSystem_72a4cd = { Button,
+  SegmentedControl, Input, Chip }`, matching exactly the props the app passes to each.
+  Loaded after `y/icons.jsx` and before `y/ui.jsx` / screens.
+
+If adding new DS component usages, update `y/ds.jsx` to match the props passed.
+
+## Architecture
+
+### Module system (no bundler)
+Every `y/*.jsx` file is an IIFE that **reads its dependencies off `window` and attaches its
+own export to `window`**. There are no imports/exports. Two consequences:
+
+1. **Load order is significant** and is fixed in `Yearly.html` (primitives → screens →
+   root). If you add a module, add its `<script type="text/babel">` tag there in dependency
+   order.
+2. Cross-module calls go through the global namespace: `window.YData`, `window.YCalc`,
+   `window.YUI`, `window.YHome`, `window.YAnalysis`, `window.YSettings`, `window.YAdd`,
+   `window.YHome`, plus `window.Icon`/`window.YIcons` and the tweak-panel helpers
+   (`useTweaks`, `TweaksPanel`, `Tweak*`). Aperture components come from
+   `window.ApertureDesignSystem_72a4cd`.
+
+### The brain (port these first to any production target)
+- `y/calc.jsx` (`window.YCalc`) — **all numbers come from here.** `computeStats(store, year)`
+  (linear projection + per-year buffer uplift + status thresholds) and
+  `buildCallouts(store, stats)` (the ranked detector engine). Pure functions, no UI deps.
+  Also holds the currency/date formatters and `projectionAsOf` (used for the trend detector).
+- `y/data.jsx` (`window.YData`) — the persisted store shape, the fixed 18-category list
+  (`CATEGORIES`, id→icon→color), default templates, deterministic seed generator, and
+  `loadStore`/`saveStore`/`resetStore`.
+
+The README documents the exact projection formula, status thresholds, and each callout
+detector. **If you change the math or detectors, update the README spec in the same change.**
+
+### State flow (`y/app.jsx`)
+`App` is the single stateful root. `store` (persisted via a `setStore` that writes the whole
+object to localStorage on every mutation) and `tweaks` (`heroVariant`, `accent`, `density`)
+are the durable state; `route` / `viewYear` / `analysisFocus` / `addOpen` / `editTx` /
+`yearOpen` are ephemeral UI state. Two memoized derivations drive everything visible:
+`stats = YCalc.computeStats(store, viewYear)` and `callouts = YCalc.buildCallouts(store, stats)`.
+
+Navigation is in-memory route state (`home` | `analysis` | `settings`), not URL routing.
+Tapping a callout sets `analysisFocus = { section, category? }` and switches to Analysis,
+which jumps to that tab and pre-expands the focused category. `viewYear` is independent of
+`store.currentYear`; selecting a past year flips the app into "completed year" mode (final
+spend, no projection/buffer).
+
+### UI layers
+- `y/ui.jsx` (`window.YUI`) — shared primitives: `StatusHero` (+ gauge/bar/spark variants),
+  `CalloutCard`, `TxRow`, `CatIcon`, `DeltaChip`, `PaceBar`, `Sheet`, `SectionH`, and `rich`
+  (renders numbers inside text in the mono `.num` style).
+- Screens: `y/home.jsx` (Overview), `y/analysis.jsx` (Projection/Categories/Activity tabs;
+  charts are hand-built SVG that double as the Recharts spec), `y/settings.jsx`
+  (target/buffer/years/templates/CSV import-export/clear), `y/addflow.jsx` (Quick keypad +
+  Manual add, Edit sheet, category picker).
+- `y/icons.jsx` — inline-SVG Lucide-style icon set via `<Icon name=… />`.
+- `y/tokens.css` — CSS custom property definitions (all ~25 tokens `app.css` consumes).
+- `y/ds.jsx` (`window.ApertureDesignSystem_72a4cd`) — local `Button`, `SegmentedControl`,
+  `Input`, `Chip` primitives styled with the tokens.
+- `y/app.css` — **the styling source of truth** (layout, the mobile device column, the
+  visual system), built on Aperture dark tokens. The `.ds-btn`, `.ds-seg`, `.ds-input`,
+  `.ds-chip` classes at the bottom style the DS primitives from `y/ds.jsx`.
+- `y/tweaks-panel.jsx` — prototype-only design-tweak scaffold; **not part of the product.**
+  The `/*EDITMODE-BEGIN*/…/*EDITMODE-END*/` block in `y/app.jsx` is its hook — leave the
+  markers intact.
+
+## Conventions
+
+- **Dark theme only.** Every figure renders in the monospace `.num` style; UI text is the
+  system sans. No emoji, no verdict adjectives, no monthly-budget framing — the year is the
+  unit. (Full token table and voice rules in the README.)
+- Amounts are positive EUR, stored rounded to cents; year is derived from `date.slice(0,4)`;
+  actuals are always computed from transactions, never stored as aggregates.
+- Match the surrounding inline-style + className idiom already in each file; there is no CSS
+  framework or class generator beyond `app.css` and the Aperture tokens.

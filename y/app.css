@@ -289,3 +289,53 @@ input[type="range"].rng::-moz-range-thumb { width: 22px; height: 22px; border: 0
 
 /* entrance */
 /* entrance: kept minimal & safe — no hidden start state (preview freezes anims at t=0) */
+
+/* ---- DS primitives (Button, SegmentedControl, Input, Chip from y/ds.jsx) ---- */
+.ds-btn {
+  display: inline-flex; align-items: center; justify-content: center; gap: 7px;
+  height: 46px; padding: 0 22px; border-radius: var(--r-pill);
+  font: 500 15px var(--font); cursor: pointer; border: 0; text-align: center;
+  transition: transform var(--dur-fast) var(--ease), opacity var(--dur-fast) var(--ease);
+  white-space: nowrap;
+}
+.ds-btn:disabled { opacity: 0.35; cursor: not-allowed; }
+.ds-btn:not(:disabled):hover { transform: translateY(-1px); }
+.ds-btn:not(:disabled):active { transform: translateY(0); }
+.ds-btn-primary { background: var(--accent); color: #fff; }
+.ds-btn-secondary { background: var(--surface); color: var(--text); border: 1px solid var(--hairline-strong); }
+.ds-btn-block { width: 100%; }
+
+.ds-seg {
+  display: inline-flex; background: var(--surface-sunk); border-radius: var(--r-pill);
+  padding: 3px;
+}
+.ds-seg-fill { display: flex; width: 100%; }
+.ds-seg-item {
+  flex: 1; height: 32px; padding: 0 14px; border-radius: var(--r-pill);
+  font: 500 13.5px var(--font); cursor: pointer; border: 0; background: transparent;
+  color: var(--text-3); transition: background var(--dur-fast) var(--ease), color var(--dur-fast) var(--ease);
+  white-space: nowrap;
+}
+.ds-seg-item.active { background: var(--surface-2); color: var(--text); box-shadow: 0 1px 4px rgba(0,0,0,.4); }
+
+.ds-input {
+  display: flex; align-items: center; gap: 9px;
+  height: 46px; padding: 0 15px; border-radius: 13px;
+  background: var(--surface); border: 1px solid var(--hairline);
+  transition: border-color var(--dur-fast) var(--ease);
+}
+.ds-input:focus-within { border-color: var(--accent); }
+.ds-input-field {
+  flex: 1; background: none; border: 0; outline: none;
+  color: var(--text); font: 15px var(--font);
+}
+.ds-input-field::placeholder { color: var(--text-3); }
+
+.ds-chip {
+  height: 32px; padding: 0 14px; border-radius: var(--r-pill);
+  font: 500 13px var(--font); cursor: pointer;
+  border: 1px solid var(--hairline); background: var(--surface); color: var(--text-2);
+  transition: background var(--dur-fast) var(--ease), border-color var(--dur-fast) var(--ease), color var(--dur-fast) var(--ease);
+  white-space: nowrap;
+}
+.ds-chip.pressed { background: color-mix(in srgb, var(--accent) 15%, transparent); border-color: var(--accent); color: var(--text); }
