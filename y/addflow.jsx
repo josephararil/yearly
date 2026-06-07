@@ -1,7 +1,7 @@
 // addflow.jsx — frictionless logging (Quick templates + Manual) and edit/delete.
 (function () {
   const { YData, YCalc, YUI } = window;
-  const { Sheet, CatIcon } = YUI;
+  const { Sheet } = YUI;
   const DS = window.ApertureDesignSystem_72a4cd || {};
   const Button = DS.Button, SegmentedControl = DS.SegmentedControl;
 
@@ -18,9 +18,9 @@
       <div style={{ display: "grid", gridTemplateColumns: "repeat(3,1fr)", gap: 8, marginTop: 6 }}>
         {keys.map((k) => (
           <button key={k} onClick={() => press(k)} style={{
-            height: 56, borderRadius: 14, border: "1px solid var(--hairline)",
-            background: k === "del" ? "transparent" : "var(--surface)", color: "var(--text)",
-            font: "500 24px var(--font-mono)", cursor: "pointer",
+            height: 56, borderRadius: 14, border: "1px solid var(--hair)",
+            background: "var(--paper)", color: "var(--ink)",
+            font: "500 24px var(--mono)", cursor: "pointer",
           }}>
             {k === "del" ? <window.Icon name="chevronLeft" size={20} /> : k}
           </button>
@@ -32,7 +32,7 @@
   function DateField({ value, onChange }) {
     return (
       <input className="inp" type="date" value={value} max={YData.todayISO()}
-        onChange={(e) => onChange(e.target.value)} style={{ colorScheme: "dark" }} />
+        onChange={(e) => onChange(e.target.value)} style={{ colorScheme: "light" }} />
     );
   }
 
@@ -41,7 +41,7 @@
       <div className="catpick">
         {YData.CATEGORIES.map((c) => (
           <button key={c.id} className={"catpick-item" + (value === c.id ? " sel" : "")} onClick={() => onChange(c.id)}>
-            <CatIcon catId={c.id} size={26} radius={8} iconSize={15} />
+            <span className="cat-dot" style={{ background: c.color }} />
             <span style={{ whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{c.label}</span>
           </button>
         ))}
@@ -117,9 +117,7 @@
               const c = YData.cat(t.category);
               return (
                 <button key={t.id} className="tpl" onClick={() => pickTemplate(t)}>
-                  <span className="tpl-ic" style={{ background: YUI.tint(c.color, "22"), color: c.color }}>
-                    <window.Icon name={t.icon || c.icon} size={22} />
-                  </span>
+                  <span className="tpl-dot" style={{ background: c.color }} />
                   <span className="tpl-name">{t.name}</span>
                 </button>
               );
@@ -139,9 +137,7 @@
             <window.Icon name="chevronLeft" size={15} />Templates
           </button>
           <div style={{ display: "flex", alignItems: "center", gap: 11, justifyContent: "center", marginTop: 4 }}>
-            <span className="tpl-ic" style={{ width: 34, height: 34, borderRadius: 10, background: YUI.tint(c.color, "22"), color: c.color }}>
-              <window.Icon name={tpl.icon || c.icon} size={18} />
-            </span>
+            <span style={{ width: 10, height: 10, borderRadius: "50%", background: c.color, flex: "0 0 auto" }} />
             <div style={{ fontSize: 17, fontWeight: 600 }}>{tpl.name}</div>
           </div>
           <div className="amount-display">

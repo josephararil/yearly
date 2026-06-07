@@ -50,14 +50,21 @@ persistence are untouched.**
   Toast: paper surface, hair-strong border, ink text, terra action. `DeltaChip` restyled to a
   bare mono terra/sage/amber inline figure (no background chip) for future reuse.
   SW cache bumped to `yearly-v5`.
+- **Phase 2a (done):** **Add/Edit flow** (`y/addflow.jsx`) restyled to Broadsheet.
+  Template tiles: multicolor filled icon chips replaced with calm 10px category color dots +
+  label. Category picker: filled CatIcon squares replaced with 8px color dots. NumPad keys:
+  canonical tokens (`--paper`, `--hair`, `--ink`, `--mono`), no shadows. DateField:
+  `colorScheme` set to `"light"`. CSS: `.tpl`, `.tpl-dot`, `.tpl-name`, `.catpick-item`,
+  `.catpick-item.sel`, `.cat-dot`, `.amount-display .cur` all updated to canonical tokens
+  (`--paper`, `--hair`, `--hair-strong`, `--ink`, `--ink-2`, `--muted`, `--terra`); legacy
+  `.tpl-ic` and `.catpick-item .cat-ic` removed. SW cache bumped to `yearly-v6`.
 - **Spend curve note:** the spec §4 calls for Recharts, but this repo is deliberately
   self-contained/offline-first, so `SpendCurve` is a dependency-free themed SVG (same
   approach as the existing Analysis `ProjectionChart`). Adopting the Recharts engine is an
   optional Phase-2b decision, not a requirement.
-- **Phases 2+ (pending):** Add/Edit + keypad + category picker, Analysis (chart theming +
-  category list/donut + activity), Settings/Years/Templates/CSV/JSON, and final shared-
-  primitive + consistency sweeps. These still render via the legacy-remap tokens until
-  restyled.
+- **Phases 2+ (pending):** Analysis (chart theming + category list/donut + activity),
+  Settings/Years/Templates/CSV/JSON, and final shared-primitive + consistency sweeps. These
+  still render via the legacy-remap tokens until restyled.
 
 ## Running it
 
