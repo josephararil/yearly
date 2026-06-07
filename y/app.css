@@ -129,15 +129,15 @@ body {
 .txlist { display: flex; flex-direction: column; }
 .txrow {
   display: flex; align-items: center; gap: 13px; padding: 11px 4px; cursor: pointer; width: 100%; text-align: left; background: none; border: 0;
-  border-bottom: 1px solid var(--hairline);
+  border-bottom: 1px solid var(--hair);
 }
 .txrow:last-child { border-bottom: 0; }
-.txrow:hover { background: color-mix(in srgb, var(--text) 4%, transparent); border-radius: 12px; }
+.txrow:hover { background: color-mix(in srgb, var(--ink) 4%, transparent); border-radius: 6px; }
 .cat-ic { flex: 0 0 auto; width: 40px; height: 40px; border-radius: 12px; display: grid; place-items: center; }
 .tx-main { flex: 1; min-width: 0; }
-.tx-desc { font-size: 15px; font-weight: 500; color: var(--text); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-.tx-meta { font-size: 12.5px; color: var(--text-3); margin-top: 1px; }
-.tx-amt { font-size: 15px; font-weight: 600; color: var(--text); }
+.tx-desc { font-size: 15px; font-weight: 500; color: var(--ink); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.tx-meta { font-family: var(--mono); font-size: 12px; color: var(--muted); margin-top: 1px; }
+.tx-amt { font-size: 14px; font-weight: 500; color: var(--ink); }
 
 /* ---- bottom nav — editorial, not a FAB blob ---- */
 .nav {
@@ -233,23 +233,24 @@ textarea.inp { height: auto; padding: 12px 15px; resize: vertical; min-height: 6
 .cat-dot { width: 8px; height: 8px; border-radius: 99px; flex: 0 0 auto; }
 
 /* category bars (analysis) */
-.catbar-row { display: flex; align-items: center; gap: 12px; padding: 10px 4px; cursor: pointer; width: 100%; background: none; border: 0; text-align: left; border-bottom: 1px solid var(--hairline); }
+.catbar-row { display: flex; align-items: center; gap: 12px; padding: 10px 4px; cursor: pointer; width: 100%; background: none; border: 0; text-align: left; border-bottom: 1px solid var(--hair); }
 .catbar-row:last-child { border-bottom: 0; }
 .catbar-main { flex: 1; min-width: 0; }
 .catbar-top { display: flex; justify-content: space-between; align-items: baseline; gap: 8px; margin-bottom: 6px; }
-.catbar-name { font-size: 14px; font-weight: 500; color: var(--text); }
-.catbar-amt { font-size: 13.5px; font-weight: 600; color: var(--text); }
-.catbar-track { height: 7px; border-radius: 5px; background: var(--surface-sunk); overflow: hidden; }
-.catbar-fill { height: 100%; border-radius: 5px; }
-.catbar-sub { font-size: 11.5px; color: var(--text-3); margin-top: 5px; display: flex; gap: 10px; }
+.catbar-name { font-size: 14px; font-weight: 500; color: var(--ink); }
+.catbar-amt { font-size: 13px; font-weight: 500; color: var(--ink); }
+.catbar-track { height: 3px; border-radius: 2px; background: var(--hair); overflow: hidden; }
+.catbar-fill { height: 100%; border-radius: 2px; }
+.catbar-sub { font-family: var(--mono); font-size: 11px; color: var(--muted); margin-top: 5px; display: flex; gap: 10px; }
 
-/* stat grid */
-.statgrid { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
-.stat { background: var(--surface); border: 1px solid var(--hairline); border-radius: 16px; padding: 14px; }
-.stat-label { font-size: 11.5px; color: var(--text-3); margin-bottom: 6px; }
-.stat-val { font-size: 22px; font-weight: 600; letter-spacing: -0.02em; }
-.stat-val.num { font-family: var(--font-mono); }
-.stat-sub { font-size: 11.5px; color: var(--text-3); margin-top: 3px; }
+/* stat grid — flat hairline-separated figures, no filled cards */
+.statgrid { display: grid; grid-template-columns: 1fr 1fr; gap: 0; }
+.stat { padding: 14px 4px; border-bottom: 1px solid var(--hair); }
+.stat:nth-child(even) { padding-left: 18px; border-left: 1px solid var(--hair); }
+.stat-label { font-family: var(--mono); font-size: 10px; letter-spacing: 0.1em; text-transform: uppercase; color: var(--muted); margin-bottom: 6px; }
+.stat-val { font-size: 20px; font-weight: 500; letter-spacing: -0.02em; color: var(--ink); }
+.stat-val.num { font-family: var(--mono); }
+.stat-sub { font-family: var(--mono); font-size: 11px; color: var(--muted); margin-top: 3px; }
 
 /* settings rows */
 .setrow { display: flex; align-items: center; gap: 13px; padding: 14px 16px; border-bottom: 1px solid var(--hairline); cursor: pointer; width: 100%; background: none; border-left: 0; border-right: 0; border-top: 0; text-align: left; color: var(--text); }

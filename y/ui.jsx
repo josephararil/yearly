@@ -157,7 +157,7 @@
     const c = YData.cat(t.category);
     return (
       <button className="txrow" onClick={onClick}>
-        <CatIcon catId={t.category} />
+        <span className="cat-dot" style={{ background: c.color }} />
         <span className="tx-main">
           <div className="tx-desc">{t.description}</div>
           <div className="tx-meta">{fmtDateShort(t.date)} · {c.label}{t.source === "import" ? " · imported" : ""}</div>

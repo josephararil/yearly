@@ -58,13 +58,28 @@ persistence are untouched.**
   `.catpick-item.sel`, `.cat-dot`, `.amount-display .cur` all updated to canonical tokens
   (`--paper`, `--hair`, `--hair-strong`, `--ink`, `--ink-2`, `--muted`, `--terra`); legacy
   `.tpl-ic` and `.catpick-item .cat-ic` removed. SW cache bumped to `yearly-v6`.
+- **Phase 2b (done):** **Analysis** (`y/analysis.jsx`) restyled to Broadsheet.
+  **ProjectionChart**: actual line/area locked to `--chart-actual` (terra) regardless of
+  status — the "no red hero line" fix; projection → `--chart-proj` dashed "6 5" 2.2px;
+  target → `--chart-target` dashed "4 4"; pace → `--chart-pace` dashed "2 4"; prior-year →
+  `--chart-target` dashed; axis ticks mono `--chart-axis`; grid → `--chart-grid`.
+  **ChartLegend**: all swatch colors updated to `--chart-*` palette; mono muted labels.
+  **StatCards** (`.stat*`): filled grey cards dropped → flat hairline-separated figures;
+  labels mono 10px uppercase muted, values mono ink, no card borders or radii.
+  **CategoriesTab**: `CatIcon` chip replaced with 8px `cat-dot` color dot per category;
+  catbar track height 3px in category color over `--hair` background; numbers mono; MoM
+  delta uses canonical `--amber`/`--sage`. **TxRow** (shared in `y/ui.jsx`): `CatIcon`
+  replaced with `cat-dot` color dot; `tx-meta` now mono `--muted`. All `.panel.panel-pad`
+  wrappers removed from Projection, Categories, and Activity tabs — content sits directly
+  on paper separated by `section-h` hairline rules. CSS: `.catbar-*`, `.txrow`, `.tx-*`
+  updated to canonical tokens; `.stat*` rewritten as flat grid with hairline separators.
+  Recharts engine not adopted — dependency-free SVG chart retained (same as SpendCurve).
+  SW cache bumped to `yearly-v7`.
 - **Spend curve note:** the spec §4 calls for Recharts, but this repo is deliberately
-  self-contained/offline-first, so `SpendCurve` is a dependency-free themed SVG (same
-  approach as the existing Analysis `ProjectionChart`). Adopting the Recharts engine is an
-  optional Phase-2b decision, not a requirement.
-- **Phases 2+ (pending):** Analysis (chart theming + category list/donut + activity),
-  Settings/Years/Templates/CSV/JSON, and final shared-primitive + consistency sweeps. These
-  still render via the legacy-remap tokens until restyled.
+  self-contained/offline-first, so `SpendCurve` and `ProjectionChart` are dependency-free
+  themed SVGs. Adopting the Recharts engine is an optional future decision.
+- **Phases 2+ (pending):** Settings/Years/Templates/CSV/JSON, and final shared-primitive +
+  consistency sweeps. These still render via the legacy-remap tokens until restyled.
 
 ## Running it
 
