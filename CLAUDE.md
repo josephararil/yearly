@@ -57,10 +57,12 @@ own export to `window`**. There are no imports/exports. Two consequences:
    `window.ApertureDesignSystem_72a4cd`.
 
 ### The brain (port these first to any production target)
-- `y/calc.jsx` (`window.YCalc`) — **all numbers come from here.** `computeStats(store, year)`
-  (linear projection + per-year buffer uplift + status thresholds) and
-  `buildCallouts(store, stats)` (the ranked detector engine). Pure functions, no UI deps.
-  Also holds the currency/date formatters and `projectionAsOf` (used for the trend detector).
+- `y/calc.jsx` (`window.YCalc`) — **all numbers come from here.** `computeStats(store, year, asOfDate?)`
+  (linear projection + per-year buffer uplift + status thresholds; `asOfDate` defaults to `new Date()`)
+  and `buildCallouts(store, stats)` (the ranked detector engine). Pure functions, no UI deps.
+  Also exports `cumulativeByDay(txns)` → `number[366]` (shared with `analysis.jsx`),
+  `projectionAsOf` (trend detector), and the standard formatters.
+  Future-year guard: `Number(year) > currentYear` → spent 0, projection 0, status "good".
 - `y/data.jsx` (`window.YData`) — the persisted store shape, the fixed 18-category list
   (`CATEGORIES`, id→icon→color), default templates, deterministic seed generator, and
   `loadStore`/`saveStore`/`resetStore`.

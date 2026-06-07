@@ -26,40 +26,26 @@
       .sort((a, b) => (a.date < b.date ? -1 : a.date > b.date ? 1 : 0));
   }
 
-  function computeStats(store, year) {
-    const y = store.years[String(year)] || { target: 25000, buffer: 0.04 };
-    const target = y.target, buffer = y.buffer || 0;
-    const txns = yearTxns(store, year);
-    const real = new Date();
-    const isCurrent = Number(year) === Number(store.currentYear);
-    const complete = !isCurrent && Number(year) < Number(store.currentYear);
-    let asOf, doy;
-    if (isCurrent) { asOf = real; doy = Math.max(1, dayOfYear(real)); }
-    else { asOf = new Date(Number(year), 11, 31); doy = complete ? 365 : Math.max(1, dayOfYear(real)); }
-    const asOfStr = asOf.toISOString().slice(0, 10);
+  // Cumulative spend by day-of-year (index 0..365). Shared with analysis.jsx.
+  function cumulativeByDay(txns) {
+    const a = Array(366).fill(0);
+    txns.forEach((t) => { a[Math.min(365, dayOfYear(parseDate(t.date)))] += t.amount_eur; });
+    for (let i = 1; i <= 365; i++) a[i] += a[i - 1];
+    return a;
+  }
 
-    const upto = txns.filter((t) => t.date <= asOfStr);
-    const spent = upto.reduce((a, t) => a + t.amount_eur, 0);
-    const dailyRate = spent / doy;
-    const projNoBuffer = complete ? spent : dailyRate * 365;
-    const projection = complete ? spent : projNoBuffer * (1 + buffer);
-    const bufferAmt = projection - projNoBuffer;
-    const pace = (doy / 365) * target;
-    const delta = projection - target;
-    const deltaPct = delta / target;
+  // ---- computeStats helpers ----
 
-    let status;
-    if (complete) status = spent <= target ? "good" : spent <= target * 1.03 ? "watch" : "alert";
-    else status = projection <= target ? "good" : projection <= target * 1.08 ? "watch" : "alert";
-
-    // by category
+  function aggregateByCategory(upto, spent) {
     const byCat = {};
     upto.forEach((t) => { byCat[t.category] = (byCat[t.category] || 0) + t.amount_eur; });
     const catList = Object.entries(byCat)
       .map(([id, amount]) => ({ id, amount, share: spent ? amount / spent : 0, count: upto.filter((t) => t.category === id).length }))
       .sort((a, b) => b.amount - a.amount);
+    return { byCat, catList };
+  }
 
-    // by month + by category-month
+  function aggregateByMonth(upto) {
     const byMonth = Array.from({ length: 12 }, (_, m) => ({ m, label: MONTHS[m], amount: 0 }));
     const catMonth = {};
     upto.forEach((t) => {
@@ -67,11 +53,11 @@
       byMonth[m].amount += t.amount_eur;
       (catMonth[t.category] = catMonth[t.category] || Array(12).fill(0))[m] += t.amount_eur;
     });
+    return { byMonth, catMonth };
+  }
 
-    // cumulative weekly series for chart
-    const dayCum = Array(366).fill(0);
-    upto.forEach((t) => { dayCum[Math.min(365, dayOfYear(parseDate(t.date)))] += t.amount_eur; });
-    for (let i = 1; i <= 365; i++) dayCum[i] += dayCum[i - 1];
+  function buildSeries(upto, doy, target, complete) {
+    const dayCum = cumulativeByDay(upto);
     const series = [];
     for (let x = 0; x <= 365; x += 7) {
       const within = x <= doy;
@@ -79,25 +65,64 @@
         x,
         pace: Math.round((x / 365) * target),
         actual: within ? Math.round(dayCum[Math.min(365, x)]) : null,
-        projected: x >= doy && !complete ? null : null,
       });
     }
-    // ensure a point exactly at today + year end
     if (!complete) {
+      const spent = dayCum[Math.min(365, doy)];
       series.push({ x: doy, pace: Math.round((doy / 365) * target), actual: Math.round(spent) });
       series.sort((a, b) => a.x - b.x);
     }
-    // projected line from today->yearEnd
-    const projSeries = complete ? [] : [
-      { x: doy, projected: Math.round(spent) },
-      { x: 365, projected: Math.round(projection) },
-    ];
+    return series;
+  }
+
+  function computeStats(store, year, asOfDate) {
+    const real = asOfDate || new Date();
+    const currentYear = Number(store.currentYear);
+    const y = store.years[String(year)] || { target: 25000, buffer: 0.04 };
+    const target = y.target, buffer = y.buffer || 0;
+    const txns = yearTxns(store, year);
+    const isCurrent = Number(year) === currentYear;
+    const complete = !isCurrent && Number(year) < currentYear;
+    // Guard: future year treated as not-yet-started
+    const isFuture = Number(year) > currentYear;
+
+    let asOf, doy;
+    if (isFuture) {
+      asOf = new Date(Number(year), 0, 1);
+      doy = 1;
+    } else if (isCurrent) {
+      asOf = real;
+      doy = Math.max(1, dayOfYear(real));
+    } else {
+      asOf = new Date(Number(year), 11, 31);
+      doy = 365;
+    }
+    const asOfStr = asOf.toISOString().slice(0, 10);
+
+    const upto = isFuture ? [] : txns.filter((t) => t.date <= asOfStr);
+    const spent = isFuture ? 0 : upto.reduce((a, t) => a + t.amount_eur, 0);
+    const dailyRate = isFuture ? 0 : spent / doy;
+    const projNoBuffer = (complete || isFuture) ? spent : dailyRate * 365;
+    const projection = (complete || isFuture) ? spent : projNoBuffer * (1 + buffer);
+    const bufferAmt = projection - projNoBuffer;
+    const pace = (doy / 365) * target;
+    const delta = projection - target;
+    const deltaPct = delta / target;
+
+    let status;
+    if (isFuture) status = "good";
+    else if (complete) status = spent <= target ? "good" : spent <= target * 1.03 ? "watch" : "alert";
+    else status = projection <= target ? "good" : projection <= target * 1.08 ? "watch" : "alert";
+
+    const { byCat, catList } = aggregateByCategory(upto, spent);
+    const { byMonth, catMonth } = aggregateByMonth(upto);
+    const series = buildSeries(upto, doy, target, complete || isFuture);
 
     return {
       year: Number(year), target, buffer, isCurrent, complete,
       asOf, asOfStr, doy, spent, dailyRate, projection, projNoBuffer, bufferAmt,
       pace, delta, deltaPct, status, txns, upto, byCat, catList, byMonth, catMonth,
-      series, projSeries,
+      series,
     };
   }
 
@@ -215,6 +240,6 @@
   window.YCalc = {
     MONTHS, MONTHS_LONG, eur0, eur2, eurAuto, signedEur, pct, signedPct,
     dayOfYear, parseDate, fmtDateShort, fmtDateLong, yearTxns,
-    computeStats, projectionAsOf, buildCallouts,
+    cumulativeByDay, computeStats, projectionAsOf, buildCallouts,
   };
 })();
