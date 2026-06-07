@@ -95,6 +95,11 @@ spend, no projection/buffer).
   charts are hand-built SVG that double as the Recharts spec), `y/settings.jsx`
   (target/buffer/years/templates/CSV import-export/clear), `y/addflow.jsx` (Quick keypad +
   Manual add, Edit sheet, category picker).
+  `settings.jsx` — `TargetSheet` and `BufferSheet` accept a `year` prop (defaults to
+  `store.currentYear`); `BufferSheet` computes its own stats internally. `YearsSheet` has
+  tappable year rows that drill into a year detail view (target + buffer rows), plus an
+  "Add year" button that clones the most recent year's target/buffer into `year+1`.
+  Future years with no transactions can be deleted from the detail view.
 - `y/icons.jsx` — inline-SVG Lucide-style icon set via `<Icon name=… />`.
 - `y/tokens.css` — CSS custom property definitions (all ~25 tokens `app.css` consumes).
 - `y/ds.jsx` (`window.ApertureDesignSystem_72a4cd`) — local `Button`, `SegmentedControl`,
