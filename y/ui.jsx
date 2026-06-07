@@ -194,6 +194,27 @@
     );
   }
 
+  function Toast({ open, message, actionLabel, onAction, onDismiss }) {
+    const [mounted, setMounted] = React.useState(open);
+    const [shown, setShown] = React.useState(false);
+    React.useEffect(() => {
+      if (open) { setMounted(true); const r = setTimeout(() => setShown(true), 20); return () => clearTimeout(r); }
+      else { setShown(false); const t = setTimeout(() => setMounted(false), 240); return () => clearTimeout(t); }
+    }, [open]);
+    React.useEffect(() => {
+      if (!open) return;
+      const t = setTimeout(onDismiss, 5000);
+      return () => clearTimeout(t);
+    }, [open, message]);
+    if (!mounted) return null;
+    return (
+      <div className={"toast" + (shown ? " open" : "")} role="status">
+        <span className="toast-msg">{message}</span>
+        {actionLabel && <button className="toast-btn" onClick={onAction}>{actionLabel}</button>}
+      </div>
+    );
+  }
+
   function SectionH({ title, action, onAction }) {
     return (
       <div className="section-h">
@@ -204,5 +225,5 @@
     );
   }
 
-  window.YUI = { CatIcon, DeltaChip, PaceBar, StatusHero, CalloutCard, TxRow, Sheet, SectionH, rich, tint };
+  window.YUI = { CatIcon, DeltaChip, PaceBar, StatusHero, CalloutCard, TxRow, Sheet, SectionH, Toast, rich, tint };
 })();

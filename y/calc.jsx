@@ -149,6 +149,15 @@
     return spent / doy * 365 * (1 + stats.buffer);
   }
 
+  // Required daily rate to stay on target. Returns null when not applicable.
+  function requiredDailyToHit(stats) {
+    if (!stats.isCurrent) return null;
+    if (stats.projection <= stats.target) return null;
+    const daysLeft = 365 - stats.doy;
+    if (daysLeft <= 0) return null;
+    return Math.max(0, (stats.target - stats.spent) / daysLeft);
+  }
+
   // ---- Callout engine ----
   function buildCallouts(store, stats) {
     if (stats.complete) {
@@ -255,6 +264,19 @@
       }
     }
 
+    // 7. required daily pace (current year, projection over target)
+    const reqDaily = requiredDailyToHit(stats);
+    if (reqDaily !== null) {
+      out.push({
+        id: "reqpace",
+        severity: stats.status === "alert" ? "watch" : "info",
+        icon: "activity",
+        text: `Spend ≤ ${eur0(reqDaily)}/day from here to finish on target.`,
+        drill: { section: "projection" },
+        mag: stats.deltaPct * 0.5 + 0.1,
+      });
+    }
+
     const sev = { alert: 3, watch: 2, info: 1, good: 0 };
     out.sort((a, b) => (sev[b.severity] - sev[a.severity]) || (b.mag - a.mag));
 
@@ -272,5 +294,6 @@
     MONTHS, MONTHS_LONG, eur0, eur2, eurAuto, signedEur, pct, signedPct,
     dayOfYear, parseDate, fmtDateShort, fmtDateLong, yearTxns,
     cumulativeByDay, priorYearCumulative, computeStats, projectionAsOf, buildCallouts,
+    requiredDailyToHit,
   };
 })();

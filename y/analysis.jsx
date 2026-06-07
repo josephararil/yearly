@@ -167,6 +167,18 @@
               />
             );
           })()}
+          {(() => {
+            const req = YCalc.requiredDailyToHit(stats);
+            if (req === null) return null;
+            return (
+              <StatCard
+                label="To finish on target"
+                value={`≤ ${eur0(req)}/day`}
+                sub={`${365 - stats.doy} days left`}
+                color="var(--watch)"
+              />
+            );
+          })()}
         </div>
       </div>
     );
