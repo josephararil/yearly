@@ -113,7 +113,7 @@ function computeStats(store, year, asOfDate) {
     const priorSpent = priorCum ? priorCum[Math.min(365, doy)] : null;
 
     return {
-      year: Number(year), target, buffer, isCurrent, complete,
+      year: Number(year), target, buffer, isCurrent, complete, isFuture,
       asOf, asOfStr, doy, spent, dailyRate, projection, projNoBuffer, bufferAmt,
       pace, delta, deltaPct, status, txns, upto, byCat, catList, byMonth, catMonth,
       priorCum, priorSpent,
@@ -148,6 +148,11 @@ function computeStats(store, year, asOfDate) {
         drill: { section: "projection" }, mag: Math.abs(stats.deltaPct),
       }];
     }
+    if (stats.isFuture) return [{
+      id: "future", severity: "good", icon: "clock",
+      text: `${stats.year} hasn't started yet — target ${eur0(stats.target)}.`,
+      drill: { section: "projection" }, mag: 0,
+    }];
     const out = [];
     const linDaily = stats.target / 365;
 

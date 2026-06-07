@@ -23,7 +23,7 @@ diagnostics, period comparisons, activity) for the analytical user who wants to 
 
 ## About the design files
 
-The files in this bundle (`Yearly.html` + the `y/` module folder) are **design
+The files in this repo (`index.html` + the `y/` module folder) are **design
 references built in HTML/React-via-Babel** — a working prototype that demonstrates the
 intended look, behavior, data model, and business logic. **They are not meant to be
 shipped as-is.**
@@ -38,6 +38,13 @@ If you're starting fresh, that stack is the intended target (e.g. Vite + React +
 real component library, or Next.js). The prototype loads React/Babel from CDN and
 splits logic into plain `window`-scoped modules purely so it can run as a single static
 HTML file — **in production, use real ES modules / components and a build step.**
+
+**Running this prototype:** serve the repo root over HTTP (e.g. `python -m http.server`)
+and open `http://localhost:8000/` — the entry point is `index.html`. It will **not** work
+over `file://`. The app is **fully self-contained**: no external `_ds/` Aperture bundle is
+needed. CSS tokens live in `y/tokens.css`; the DS primitives (Button, SegmentedControl,
+Input, Chip) are in `y/ds.jsx`. It is an installable PWA with offline support via `sw.js`
+and a masked app icon (`icons/`).
 
 The prototype's **logic files are directly reusable**: the projection math
 (`y/calc.jsx`), the callout engine (`y/calc.jsx → buildCallouts`), the category/
@@ -401,22 +408,27 @@ Default ease `cubic-bezier(.22,.61,.36,1)`; durations 150–340ms; everything gu
 
 ---
 
-## Files in this bundle
+## Files in this repo
 
 | File | Contents |
 |---|---|
-| `Yearly.html` | App shell — loads React/Babel + Aperture DS bundle/tokens, then the `y/` modules, mounts the app. PWA meta + manifest link. |
-| `manifest.json` | PWA manifest (standalone, portrait, black theme). |
-| `y/app.css` | All app styling, built on Aperture dark tokens. **The source of truth for layout, spacing, and the visual system.** |
+| `index.html` | App shell — loads React/Babel from CDN, then the `y/` modules in dependency order, mounts the app. PWA meta + manifest link + SW registration. |
+| `manifest.json` | PWA manifest (standalone, portrait, black theme, icons). |
+| `sw.js` | Network-first service worker — serves cached app shell when offline. Bump `CACHE_NAME` on shell changes. |
+| `icons/` | App icon SVG assets (192, 512, maskable) for PWA install. |
+| `y/tokens.css` | All ~25 CSS custom properties the app consumes (`--bg`, `--surface`, `--text`, `--accent`, etc.). Loaded before `y/app.css`. |
+| `y/ds.jsx` | Local `Button`, `SegmentedControl`, `Input`, `Chip` primitives exposed as `window.ApertureDesignSystem_72a4cd`. No external DS bundle needed. |
+| `y/app.css` | All app styling, built on the token variables. **The source of truth for layout, spacing, and the visual system.** |
 | `y/data.jsx` | Categories (18, icon+color), default templates (8), seeded sample data generator (deterministic), localStorage load/save/reset. |
 | `y/calc.jsx` | **Projection math + callout engine** + formatters + date helpers. Port verbatim. |
 | `y/icons.jsx` | Inline SVG icon set. |
-| `y/ui.jsx` | Shared primitives: `StatusHero` (+ gauge/bar/spark variants), `CalloutCard`, `TxRow`, `CatIcon`, `DeltaChip`, `PaceBar`, `Sheet`, `SectionH`, mono-number rich-text helper. |
+| `y/ui.jsx` | Shared primitives: `StatusHero` (numerals design), `CalloutCard`, `TxRow`, `CatIcon`, `DeltaChip`, `Sheet`, `SectionH`, `Toast`, mono-number rich-text helper. |
 | `y/home.jsx` | Overview screen + callout density slicing. |
 | `y/addflow.jsx` | Add sheet (Quick keypad + Manual), Edit sheet, category picker, numpad. |
 | `y/analysis.jsx` | Analysis screen: projection chart (chart spec), category diagnostics, activity. |
-| `y/settings.jsx` | Settings + Years + Templates manager + CSV import/export + clear. |
-| `y/app.jsx` | Root: nav, routing, year switch, store + tweaks wiring, mount. |
+| `y/settings.jsx` | Settings + Years + Templates manager + CSV import/export/backup + clear. |
+| `y/app.jsx` | Root: nav, routing, year switch, store wiring, undo-on-delete toast, mount. |
+| `calc.test.html` | Dev-only regression test for `y/calc.jsx` — open over HTTP to run assertions. Not precached by the SW. |
 | `y/tweaks-panel.jsx` | Prototype-only tweak panel scaffold (not part of the product). |
 
 > The prototype also references the **Aperture design system** under `_ds/` (dark theme

@@ -67,7 +67,9 @@ own export to `window`**. There are no imports/exports. Two consequences:
   target; null when not applicable), and the standard formatters.
   `computeStats` return includes `priorCum` (number[366] | null) and `priorSpent` (number | null)
   for the prior year — consumed by `analysis.jsx` without needing store.
-  Future-year guard: `Number(year) > currentYear` → spent 0, projection 0, status "good".
+  Future-year guard: `Number(year) > currentYear` → spent 0, projection 0, status "good"; `isFuture`
+  is included in the returned stats object. `buildCallouts` returns a single `{ id: "future", severity:
+  "good", icon: "clock" }` callout immediately after the `complete` early-return for future years.
   Detector #6 (yoy): current year only — compares spent to prior year at same doy; watch/info/good.
   Detector #7 (reqpace): current year only, when projection > target — surfaces required daily spend cap;
   severity watch (alert status) or info (watch status).
@@ -108,14 +110,20 @@ spend, no projection/buffer).
   `GaugeHero`, `PaceBar`, and `ProjSpark` have been removed (dead since hero is fixed to numerals).
 - Screens: `y/home.jsx` (Overview), `y/analysis.jsx` (Projection/Categories/Activity tabs;
   charts are hand-built SVG that double as the Recharts spec), `y/settings.jsx`
-  (target/buffer/years/density/templates/CSV import-export/clear), `y/addflow.jsx` (Quick keypad +
-  Manual add, Edit sheet, category picker).
+  (target/buffer/years/density/templates/CSV import-export/JSON backup-restore/clear),
+  `y/addflow.jsx` (Quick keypad + Manual add, Edit sheet, category picker).
   `settings.jsx` — `TargetSheet` and `BufferSheet` accept a `year` prop (defaults to
   `store.currentYear`); `BufferSheet` computes its own stats internally. `YearsSheet` has
   tappable year rows that drill into a year detail view (target + buffer rows), plus an
   "Add year" button that clones the most recent year's target/buffer into `year+1`.
   Future years with no transactions can be deleted from the detail view.
   `DensitySheet` — a picker for Overview density (minimal/balanced/all); writes to `store.density`.
+  **JSON backup/restore** (Session 8): "Back up (JSON)" downloads the full store as
+  `yearly-backup.json`; "Restore (JSON)" reads a `.json` file, validates it has `years` +
+  `transactions`, confirms, and calls `setStore(parsed)`. Hidden `#jsonfile` input mirrors
+  the CSV `#csvfile` pattern.
+  **"All activity" routing fix** (Session 8): `AnalysisScreen` focus useEffect now handles
+  `focus.section === "activity"` → `setTab("Activity")`.
 - `y/icons.jsx` — inline-SVG Lucide-style icon set via `<Icon name=… />`.
 - `y/tokens.css` — CSS custom property definitions (all ~25 tokens `app.css` consumes).
 - `y/ds.jsx` (`window.ApertureDesignSystem_72a4cd`) — local `Button`, `SegmentedControl`,
@@ -123,9 +131,8 @@ spend, no projection/buffer).
 - `y/app.css` — **the styling source of truth** (layout, the mobile device column, the
   visual system), built on Aperture dark tokens. The `.ds-btn`, `.ds-seg`, `.ds-input`,
   `.ds-chip` classes at the bottom style the DS primitives from `y/ds.jsx`.
-- `y/tweaks-panel.jsx` — **removed from the product** (prototype scaffold). No longer loaded
-  in `index.html`; the `/*EDITMODE-BEGIN*/…/*EDITMODE-END*/` markers and `useTweaks` / `TweaksPanel`
-  calls have been removed from `y/app.jsx`.
+- `y/tweaks-panel.jsx` — **deleted** (Session 8). Was already unloaded from `index.html`
+  in Session 7; confirmed zero references remained before removal.
 
 ## PWA (offline + install)
 
@@ -139,7 +146,8 @@ The app is a fully installable PWA:
   **Cache-versioning rule:** bump `CACHE_NAME` in `sw.js` whenever the shell changes (new
   file added to the precache list, CDN URL pinned to a new version, etc.). The old cache is
   deleted on `activate`. `skipWaiting()` + `clients.claim()` ensure the new SW takes over
-  immediately without waiting for old tabs to close.
+  immediately without waiting for old tabs to close. Current version: `yearly-v3` (bumped
+  Session 8 after `y/analysis.jsx`, `y/calc.jsx`, `y/settings.jsx` changed).
 - **`manifest.json`** — includes `id`, `scope`, `start_url`, and an `icons` array with
   192×192, 512×512, and a maskable 512×512 variant (all SVG). SVG icons work in Chrome 91+
   and modern WebKit/Firefox; for production Android/iOS you would swap in PNGs.
@@ -164,3 +172,11 @@ The app is a fully installable PWA:
   actuals are always computed from transactions, never stored as aggregates.
 - Match the surrounding inline-style + className idiom already in each file; there is no CSS
   framework or class generator beyond `app.css` and the Aperture tokens.
+
+## Regression test
+
+**`calc.test.html`** (repo root) — a standalone HTML page that loads `y/data.jsx` +
+`y/calc.jsx` as plain `<script>` tags (no Babel needed; neither file has JSX). Serves as
+a smoke-test for the engine: open over HTTP (`http://localhost:8000/calc.test.html`) and all
+rows should show PASS. Not precached by `sw.js` (dev artifact only). Run it after any
+change to `y/calc.jsx` or `y/data.jsx`.
