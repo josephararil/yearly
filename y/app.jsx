@@ -63,8 +63,10 @@
 
     const stats = React.useMemo(() => YCalc.computeStats(store, viewYear), [store, viewYear]);
     const callouts = React.useMemo(() => YCalc.buildCallouts(store, stats), [store, stats]);
+    const fun = React.useMemo(() => YCalc.computeFun(store), [store]);
 
     const onCallout = (c) => { setAnalysisFocus({ ...c.drill, _n: Date.now() }); setRoute("analysis"); };
+    const onOpenFun = () => { setAnalysisFocus({ section: "fun", _n: Date.now() }); setRoute("analysis"); };
 
     const addTx = (tx) => setStore((s) => ({ ...s, transactions: [...s.transactions, tx] }));
     const saveTx = (tx) => setStore((s) => ({ ...s, transactions: s.transactions.map((x) => (x.id === tx.id ? tx : x)) }));
@@ -111,7 +113,7 @@
         <div className="scroll" ref={scrollRef}>
           {route === "home" && (
             <YHome.HomeScreen stats={stats} callouts={callouts} density={store.density || "balanced"}
-              onCallout={onCallout} />
+              onCallout={onCallout} fun={fun} store={store} onOpenFun={onOpenFun} />
           )}
           {route === "analysis" && (
             <YAnalysis.AnalysisScreen stats={stats} focus={analysisFocus} onEditTx={setEditTx} />

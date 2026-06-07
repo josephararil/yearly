@@ -1,5 +1,5 @@
 // Bump this version whenever the app shell changes to invalidate the old cache.
-const CACHE_NAME = 'yearly-v9';
+const CACHE_NAME = 'yearly-v10';
 
 const PRECACHE = [
   './',
@@ -14,6 +14,7 @@ const PRECACHE = [
   './y/data.jsx',
   './y/calc.jsx',
   './y/ui.jsx',
+  './y/fun.jsx',
   './y/home.jsx',
   './y/addflow.jsx',
   './y/analysis.jsx',

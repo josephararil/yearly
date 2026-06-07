@@ -43,17 +43,19 @@
     );
   }
 
-  // Status hero — no card. Serif ink number; over/under carried by a small mono terra/sage
-  // figure; a pace rule (terra fill to spent/target, ink marker at day-of-year).
+  // Status hero — no card. Serif ink number; combined vs ceiling; pace rule; main/fun decomp.
   function StatusHero({ stats }) {
-    const headline = stats.isFuture ? stats.mainTarget : stats.complete ? stats.spent : stats.projection;
-    const eyebrow = stats.complete ? "Final spend · " + stats.year
-      : stats.isFuture ? "Main budget · " + stats.year
+    // Headline: combined projection for current/complete; ceiling for future
+    const headline = stats.isFuture ? stats.ceiling : stats.combinedProjection;
+    const eyebrow = stats.complete ? "Final combined spend · " + stats.year
+      : stats.isFuture ? "Household ceiling · " + stats.year
       : "Projected year-end";
-    const over = stats.delta >= 0;
-    const near = Math.abs(stats.delta) < stats.mainTarget * 0.005;
-    const fillPct = Math.max(0, Math.min(100, (stats.spent / stats.mainTarget) * 100));
+    const over = stats.combinedDelta >= 0;
+    const near = Math.abs(stats.combinedDelta) < stats.ceiling * 0.005;
+    // Pace fills to combined vs ceiling
+    const fillPct = Math.max(0, Math.min(100, (stats.combinedProjection / stats.ceiling) * 100));
     const markPct = Math.max(0, Math.min(100, (stats.doy / 365) * 100));
+    const mainColor = stats.status === "good" ? "var(--sage)" : stats.status === "alert" ? "var(--terra)" : "var(--amber)";
     return (
       <div className="hero">
         <div className="eyebrow">{eyebrow}</div>
@@ -62,11 +64,11 @@
           {stats.isFuture ? (
             <>Nothing logged yet.</>
           ) : near ? (
-            <>On your <span className="num">{eur0(stats.mainTarget)}</span> main budget.</>
+            <>On your <span className="num">{eur0(stats.ceiling)}</span> ceiling.</>
           ) : (
             <>
-              {over ? "Over" : "Under"} your <span className="num">{eur0(stats.mainTarget)}</span> main budget by{" "}
-              <span className={"hero-emph " + (over ? "over" : "under")}>{eur0(Math.abs(stats.delta))}</span>.
+              {over ? "Over" : "Under"} your <span className="num">{eur0(stats.ceiling)}</span> ceiling by{" "}
+              <span className={"hero-emph " + (over ? "over" : "under")}>{eur0(Math.abs(stats.combinedDelta))}</span>.
             </>
           )}
         </div>
@@ -77,8 +79,12 @@
               {!stats.complete && <div className="pace-mark" style={{ left: markPct + "%" }} />}
             </div>
             <div className="pace-legend">
-              <span>{eur0(stats.spent)} spent</span>
+              <span>{eur0(stats.spent + stats.funSpent)} spent</span>
               <span>{stats.complete ? "year complete" : "day " + stats.doy + " / 365"}</span>
+            </div>
+            <div className="pace-legend">
+              <span style={{ color: mainColor }}>main {eur0(stats.projection)} / {eur0(stats.mainTarget)}</span>
+              <span style={{ color: "var(--ink-2)" }}>fun {eur0(stats.funProjection)}</span>
             </div>
           </>
         )}
