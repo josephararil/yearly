@@ -1,6 +1,6 @@
 // app.jsx — root: nav, routing, year switch, store. Mounts the app.
 (function () {
-  const { YData, YCalc, YUI, YHome, YAnalysis, YSettings, YAdd } = window;
+  const { YData, YCalc, YUI, YHome, YAnalysis, YSettings, YAdd, YSync } = window;
   const { Sheet, Toast } = YUI;
 
   function useStore() {
@@ -9,6 +9,11 @@
       setStoreState((prev) => {
         const next = typeof upd === "function" ? upd(prev) : upd;
         YData.saveStore(next);
+        // Detect settings-only mutations (tx reference unchanged) and mark dirty for sync.
+        // Pull updates always change the transactions array, so they never trigger this.
+        if (window.YSync && next.transactions === prev.transactions) {
+          window.YSync.markSettingsDirty();
+        }
         return next;
       });
     }, []);
@@ -58,8 +63,18 @@
     const [deletedTx, setDeletedTx] = React.useState(null);
     const [showToast, setShowToast] = React.useState(false);
     const scrollRef = React.useRef(null);
+    // Stable ref so sync callbacks always see the current store without re-init
+    const storeRef = React.useRef(store);
+    React.useEffect(() => { storeRef.current = store; }, [store]);
 
     React.useEffect(() => { if (scrollRef.current) scrollRef.current.scrollTop = 0; }, [route]);
+
+    // Wire sync once on mount
+    React.useEffect(() => {
+      YSync.init({ getStore: () => storeRef.current, applyServer: setStore });
+      YSync.start();
+      YSync.bootstrap();
+    }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
     const stats = React.useMemo(() => YCalc.computeStats(store, viewYear), [store, viewYear]);
     const callouts = React.useMemo(() => YCalc.buildCallouts(store, stats), [store, stats]);
@@ -68,18 +83,30 @@
     const onCallout = (c) => { setAnalysisFocus({ ...c.drill, _n: Date.now() }); setRoute("analysis"); };
     const onOpenFun = () => { setAnalysisFocus({ section: "fun", _n: Date.now() }); setRoute("analysis"); };
 
-    const addTx = (tx) => setStore((s) => ({ ...s, transactions: [...s.transactions, tx] }));
-    const saveTx = (tx) => setStore((s) => ({ ...s, transactions: s.transactions.map((x) => (x.id === tx.id ? tx : x)) }));
+    const addTx = (tx) => {
+      setStore((s) => ({ ...s, transactions: [...s.transactions, tx] }));
+      YSync.enqueueTx(tx);
+    };
+    const saveTx = (tx) => {
+      setStore((s) => ({ ...s, transactions: s.transactions.map((x) => (x.id === tx.id ? tx : x)) }));
+      YSync.enqueueTx(tx);
+    };
     const delTx = (id) => {
       const tx = store.transactions.find((x) => x.id === id);
       setStore((s) => ({ ...s, transactions: s.transactions.filter((x) => x.id !== id) }));
       setDeletedTx(tx);
       setShowToast(true);
+      if (tx) YSync.enqueueTx({ ...tx, deleted: true });
     };
     const undoDelete = () => {
-      if (deletedTx) setStore((s) => ({ ...s, transactions: [...s.transactions, deletedTx] }));
+      if (deletedTx) {
+        setStore((s) => ({ ...s, transactions: [...s.transactions, deletedTx] }));
+        YSync.enqueueTx({ ...deletedTx }); // deleted omitted → server coerces to 0
+      }
       setShowToast(false);
     };
+    // Pull fresh data before opening an edit sheet
+    const openEdit = React.useCallback((tx) => { YSync.pull(); setEditTx(tx); }, []);
 
     const inSettings = route === "settings";
 
@@ -116,7 +143,7 @@
               onCallout={onCallout} fun={fun} store={store} onOpenFun={onOpenFun} />
           )}
           {route === "analysis" && (
-            <YAnalysis.AnalysisScreen stats={stats} focus={analysisFocus} onEditTx={setEditTx}
+            <YAnalysis.AnalysisScreen stats={stats} focus={analysisFocus} onEditTx={openEdit}
               fun={fun} store={store} setStore={setStore} addTx={addTx} />
           )}
           {route === "settings" && (
