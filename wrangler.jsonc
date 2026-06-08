@@ -17,7 +17,8 @@
        {
          "binding": "DB",
          "database_name": "yearly-db",
-         "database_id": "4fe094b4-f568-4a17-9e5a-2a7fcfacfe62"
+         "database_id": "4fe094b4-f568-4a17-9e5a-2a7fcfacfe62",
+         "migrations_dir": "migrations"
        }
      ]
    }
