@@ -1,5 +1,5 @@
 // Bump this version whenever the app shell changes to invalidate the old cache.
-const CACHE_NAME = 'yearly-v11';
+const CACHE_NAME = 'yearly-v12';
 
 const PRECACHE = [
   './',
@@ -29,7 +29,16 @@ const PRECACHE = [
 
 self.addEventListener('install', event => {
   event.waitUntil(
-    caches.open(CACHE_NAME).then(cache => cache.addAll(PRECACHE))
+    caches.open(CACHE_NAME).then(cache =>
+      // Individual fetches so one CORS/redirect failure (e.g. Access login redirect on
+      // manifest.json) doesn't block the entire SW install. Same !redirected guard as
+      // the fetch handler so an Access redirect can't poison the cache.
+      Promise.all(PRECACHE.map(url =>
+        fetch(url)
+          .then(r => { if ((r.ok || r.type === 'opaque') && !r.redirected) return cache.put(url, r); })
+          .catch(() => {})
+      ))
+    )
   );
   // Take over immediately so updates apply without waiting for old tabs to close.
   self.skipWaiting();

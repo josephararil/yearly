@@ -361,10 +361,11 @@ The app is a fully installable PWA:
   **Cache-versioning rule:** bump `CACHE_NAME` in `sw.js` whenever the shell changes (new
   file added to the precache list, CDN URL pinned to a new version, etc.). The old cache is
   deleted on `activate`. `skipWaiting()` + `clients.claim()` ensure the new SW takes over
-  immediately without waiting for old tabs to close. Current version: `yearly-v11` (Task 3:
-  `y/sync.jsx` added to precache; `/api/*` and `/cdn-cgi/*` bypassed network-only — never
-  cached; cache-put guarded with `!response.redirected` so an Access login redirect can't
-  poison the shell cache).
+  immediately without waiting for old tabs to close. Current version: `yearly-v12`.
+  **Install hardening:** the install handler uses individual `fetch().catch()` calls instead
+  of `cache.addAll` so a single URL failure (e.g. Cloudflare Access CORS redirect on
+  `manifest.json`) does not abort the entire SW install. Same `!response.redirected` guard
+  applied in the install handler as in the fetch handler.
 - **`manifest.json`** — includes `id`, `scope`, `start_url`, and an `icons` array with
   192×192, 512×512, and a maskable 512×512 variant (all SVG). SVG icons work in Chrome 91+
   and modern WebKit/Firefox; for production Android/iOS you would swap in PNGs.
