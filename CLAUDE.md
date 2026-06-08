@@ -135,9 +135,9 @@ own export to `window`**. There are no imports/exports. Two consequences:
    root). If you add a module, add its `<script type="text/babel">` tag there in dependency
    order.
 2. Cross-module calls go through the global namespace: `window.YData`, `window.YCalc`,
-   `window.YUI`, `window.YFun`, `window.YHome`, `window.YAnalysis`, `window.YSettings`,
-   `window.YAdd`, plus `window.Icon`/`window.YIcons`. Aperture components come from
-   `window.ApertureDesignSystem_72a4cd`.
+   `window.YSync`, `window.YUI`, `window.YFun`, `window.YHome`, `window.YAnalysis`,
+   `window.YSettings`, `window.YAdd`, plus `window.Icon`/`window.YIcons`. Aperture components
+   come from `window.ApertureDesignSystem_72a4cd`.
 
 ### The brain (port these first to any production target)
 - `y/calc.jsx` (`window.YCalc`) — **all numbers come from here.** `computeStats(store, year, asOfDate?)`
@@ -186,9 +186,35 @@ own export to `window`**. There are no imports/exports. Two consequences:
   `wishlist` defaults if missing; sets `density` default. Called by `loadStore` and by JSON restore.
   The seed (`buildSeed`) tags ~8 shopping/entertainment/restaurant tx in 2026 with `fun:true` +
   alternating person, includes `people`, `wishlist` (2 sample items), and uses `ceiling` (not `target`).
+  **`uid()`** — now `crypto.randomUUID()` (was a sequential counter that reset to 1000 on every
+  load, causing cross-device and cross-reload id collisions once syncing was introduced).
 
 The README documents the exact projection formula, status thresholds, and each callout
 detector. **If you change the math or detectors, update the README spec in the same change.**
+
+### Sync layer (`y/sync.jsx`, `window.YSync`)
+Loaded immediately after `y/data.jsx` (depends only on `YData` + `fetch`; must be before `app.jsx`).
+Implements outbox-based client↔D1 sync with optimistic UI and offline-safe queuing.
+
+**localStorage keys:**
+- `yearly:sync:cursor` — server `now` timestamp from the last successful pull; used as `since=` in `GET /api/sync`.
+- `yearly:outbox:v1` — JSON array of full tx records pending push; deduped by `id` keeping latest version.
+- `yearly:settings:dirty` — `"1"` when any non-transactions store key has changed since last flush.
+- `yearly:bootstrapped` — `"1"` after the one-time bootstrap completes; prevents re-seeding on reload.
+- `yearly:settings:appliedAt` — `updated_at` of the last settings blob pulled from the server; prevents re-applying a blob we just pushed.
+
+**Public API:**
+- `YSync.init({ getStore, applyServer })` — called once on mount. `getStore()` returns the live store via a ref; `applyServer(updater)` maps to the app's `setStore`.
+- `YSync.enqueueTx(record)` — dedupe-adds a tx (or delete record) to the outbox and schedules a flush.
+- `YSync.markSettingsDirty()` — marks settings for push and schedules a flush. Called automatically from `app.jsx`'s `setStore` wrapper whenever only non-transactions keys change.
+- `YSync.flush()` — push outbox in chunks of 75, then PUT settings if dirty. Captures the sent-id set before the POST so mutations enqueued mid-flight survive. Clears the dirty flag before the PUT and restores it on failure.
+- `YSync.pull()` — calls `flush()` first (prevents golden-source pull from clobbering unsynced writes), then `GET /api/sync?since=cursor`, merges tx by id (deleted rows are removed), applies settings only when `updated_at > appliedAt`, updates cursor.
+- `YSync.bootstrap()` — called once on mount. Pull-first: if server has data, adopt it (second-device path); if server is empty, push local seed + settings (first-device path). Sets `yearly:bootstrapped`.
+- `YSync.start()` — wires `online`, `focus`, and `visibilitychange` → visible triggers.
+
+**Auth-expiry vs offline:** `syncFetch()` wraps every `fetch` call. If the call throws (`TypeError`) it checks `navigator.onLine`: offline → return `null` silently (outbox/cursor unchanged, retry on reconnect); online → `location.reload()` (Cloudflare Access expiry surfaces as a cross-origin 302 CORS block, not `response.redirected`). Online + `!response.ok` or non-JSON response also reloads. **Never reloads while offline.**
+
+**Pull triggers:** on mount (bootstrap), on `visibilitychange` → visible, on window `focus`, and before `EditSheet` opens (freshness pull via `openEdit` wrapper in `app.jsx`).
 
 ### State flow (`y/app.jsx`)
 `App` is the single stateful root. `store` (persisted via a `setStore` that writes the whole
@@ -201,6 +227,8 @@ change). `onOpenFun` sets `analysisFocus = { section:"fun" }` and routes to Anal
 `fun`, `store`, `setStore`, and `addTx` are passed to `AnalysisScreen` (for `FunTab`); `fun`,
 `store`, and `onOpenFun` are passed to `HomeScreen` (for `FunStrip`). `store` is also passed to
 `EditSheet` so it can read `store.people` for the fun toggle owner picker.
+
+**Sync wiring in `app.jsx`:** on mount, `YSync.init({ getStore: () => storeRef.current, applyServer: setStore })` + `YSync.start()` + `YSync.bootstrap()`. `storeRef` is kept current via a `useEffect`. `addTx`/`saveTx` call `YSync.enqueueTx(tx)` after `setStore`; `delTx` enqueues `{ ...tx, deleted:true }`; `undoDelete` re-enqueues without `deleted`. Settings dirty is detected centrally inside `setStore`: when `next.transactions === prev.transactions` (reference unchanged → settings-only mutation) `window.YSync.markSettingsDirty()` is called. `openEdit` wraps `setEditTx` to call `YSync.pull()` before opening the edit sheet.
 
 `density` (minimal/balanced/all) is persisted in `store.density` and controls how many callouts
 the Overview shows. It is editable in Settings → Display → Overview density.

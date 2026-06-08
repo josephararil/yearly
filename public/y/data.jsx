@@ -47,7 +47,7 @@
     };
   }
   const fmtDate = (d) => d.toISOString().slice(0, 10);
-  const uid = (() => { let n = 1000; return () => "tx_" + (n++).toString(36); })();
+  const uid = () => crypto.randomUUID();
 
   // merchant pools per category for realistic descriptions
   const MERCHANTS = {
