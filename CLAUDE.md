@@ -106,9 +106,9 @@ browser.
 - Serve the directory over HTTP and open `index.html` (e.g. `python -m http.server` then
   visit `http://localhost:8000/`). It will **not** work over `file://` — the `type="text/babel" src=`
   scripts require HTTP.
-- State persists to `localStorage` under `yearly:store:v1`; on first load a deterministic
-  seed dataset is generated (`y/data.jsx → buildSeed`). To reset, clear that key or use
-  Settings › Restore sample data.
+- State persists to `localStorage` under `yearly:store:v1`; on first load `buildSeed`
+  creates a blank store (no transactions, no wishlist) with default year settings, people,
+  and templates. To reset to a blank store, clear that key or use Settings › Restore sample data.
 - The app is also hosted on GitHub Pages — `index.html` at the repo root serves as the PWA
   entry point.
 
@@ -174,20 +174,19 @@ own export to `window`**. There are no imports/exports. Two consequences:
   `people[]` (per-person: `id`, `name`, `balance` all-time = accrued − spent, `monthlyRate`, `usedThisMonth`,
   `spentAllTime`), `funSpentYTD`, `funProjection` (linear, approximate), `funCatList` (category breakdown).
 - `y/data.jsx` (`window.YData`) — the persisted store shape, the fixed 18-category list
-  (`CATEGORIES`, id→icon→color), default templates, deterministic seed generator, and
+  (`CATEGORIES`, id→icon→color), default templates, and
   `loadStore`/`saveStore`/`resetStore`/`migrateStore`.
-  **Store shape additions (fun-budget model):**
+  **Store shape (fun-budget model):**
   - `store.people`: `[{id, name, rates:[{from:"YYYY-MM", amount}], startMonth:"YYYY-MM"}]` — forward-only
     dated rate schedule per person. Sorted ascending by `from`. Default: Joseph €100/mo, Marti €200/mo.
   - `store.wishlist`: `[{id, owner, name, price, note?, createdMonth}]` — per-person wishlist items.
   - Transaction fields: optional `fun:true` and `person:"joseph"|"marti"` (only on fun tx).
   - `years[y].ceiling` — renamed from `years[y].target` (sacred household ceiling, never derived).
+  `buildSeed()` — returns a blank store: `transactions: []`, `wishlist: []`, default year ceilings
+  (2024 €21k / 2025 €23k / 2026 €25k), default people rates, default templates. No sample data.
   `migrateStore(s)` (exported, idempotent): `years[y].target` → `ceiling`; injects `people` and
   `wishlist` defaults if missing; sets `density` default. Called by `loadStore` and by JSON restore.
-  The seed (`buildSeed`) tags ~8 shopping/entertainment/restaurant tx in 2026 with `fun:true` +
-  alternating person, includes `people`, `wishlist` (2 sample items), and uses `ceiling` (not `target`).
-  **`uid()`** — now `crypto.randomUUID()` (was a sequential counter that reset to 1000 on every
-  load, causing cross-device and cross-reload id collisions once syncing was introduced).
+  **`uid()`** — `crypto.randomUUID()` (collision-safe across devices and reloads).
 
 The README documents the exact projection formula, status thresholds, and each callout
 detector. **If you change the math or detectors, update the README spec in the same change.**
