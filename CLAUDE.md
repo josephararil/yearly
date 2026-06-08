@@ -278,6 +278,50 @@ spend, no projection/buffer).
 - `y/tweaks-panel.jsx` — **deleted** (Session 8). Was already unloaded from `index.html`
   in Session 7; confirmed zero references remained before removal.
 
+## Backend (Cloudflare Workers + D1)
+
+The app is hosted on Cloudflare Workers with a D1 SQLite database. Static files live in
+`public/`; Worker entry point is `src/index.js`; config is `wrangler.jsonc`. Live at
+**https://yearly.josepharari.com** behind Cloudflare Access (Google SSO).
+
+### D1 schema (`migrations/0001_init.sql`)
+
+Two tables, applied via `npx wrangler d1 migrations apply yearly-db --remote`:
+
+```sql
+transactions(id TEXT PK, date, description, amount_eur REAL, category, note, source,
+             fun INTEGER DEFAULT 0, person, original_amount REAL, original_currency,
+             deleted INTEGER DEFAULT 0, updated_at INTEGER NOT NULL)
+-- idx_tx_updated on updated_at for efficient sync queries
+
+settings(id INTEGER PK CHECK(id=1), blob TEXT, updated_at INTEGER)
+-- single row; blob is a JSON-serialised settings object
+```
+
+`amount_eur` is stored as `REAL` (mirrors the JS field directly). `fun` and `deleted` are
+`0`/`1` integers. `updated_at` is a **server-stamped ms epoch** on every write.
+`"migrations_dir": "migrations"` is set in `wrangler.jsonc`'s `d1_databases[0]`.
+
+### API endpoints (`src/index.js`)
+
+All under `/api/*`. Server clock is authoritative; every write stamps `updated_at = Date.now()`.
+
+| Method | Path | Description |
+|--------|------|-------------|
+| `GET` | `/api/health` | `{ok:true,db:true}` — DB connectivity check |
+| `GET` | `/api/sync?since=<ms>` | Pull: `{now, transactions:[rows with updated_at>=since], settings:row|null}` |
+| `POST` | `/api/transactions` | Batch upsert array of tx records; returns `{now, count}` |
+| `GET` | `/api/settings` | `{blob:{…}, updated_at}` or `{blob:null}` |
+| `PUT` | `/api/settings` | Upsert settings blob; returns `{now, updated_at}` |
+| `GET` | `/api/export` | Full dump: `{exported_at, transactions:[all incl. deleted], settings}` |
+
+Key implementation notes:
+- `GET /api/sync` uses `>=` (not `>`) to avoid dropping a write on the same-ms boundary.
+- `POST /api/transactions` coerces absent/falsy `deleted` → `0` explicitly (reliable un-delete).
+- `fun` boolean → `0/1` on write; client reconstructs `fun:true`/omit on read.
+- Body validation: array required, each item must have a string `id`; returns 400 otherwise.
+- Uses `env.DB.batch([...])` for the upsert array.
+
 ## PWA (offline + install)
 
 The app is a fully installable PWA:
