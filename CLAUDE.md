@@ -311,22 +311,31 @@ The app is hosted on Cloudflare Workers with a D1 SQLite database. Static files 
 `public/`; Worker entry point is `src/index.js`; config is `wrangler.jsonc`. Live at
 **https://yearly.josepharari.com** behind Cloudflare Access (Google SSO).
 
-### D1 schema (`migrations/0001_init.sql`)
+### D1 schema (`migrations/`)
 
 Two tables, applied via `npx wrangler d1 migrations apply yearly-db --remote`:
 
 ```sql
-transactions(id TEXT PK, date, description, amount_eur REAL, category, note, source,
-             fun INTEGER DEFAULT 0, person, original_amount REAL, original_currency,
-             deleted INTEGER DEFAULT 0, updated_at INTEGER NOT NULL)
+-- 0001_init.sql
+transactions(id TEXT PK, date TEXT NOT NULL, description TEXT,
+             amount_eur REAL NOT NULL, category TEXT NOT NULL,
+             note TEXT, source TEXT,
+             fun INTEGER NOT NULL DEFAULT 0, person TEXT,
+             original_amount REAL, original_currency TEXT,
+             deleted INTEGER NOT NULL DEFAULT 0, updated_at INTEGER NOT NULL)
 -- idx_tx_updated on updated_at for efficient sync queries
+
+-- 0002_revolut_fields.sql (added columns for Revolut-sourced data)
+-- revolut_category TEXT, merchant_mcc TEXT, merchant_city TEXT,
+-- merchant_country TEXT, merchant_logo TEXT, card_label TEXT,
+-- tx_type TEXT, e_commerce INTEGER NOT NULL DEFAULT 0, fee_eur REAL
 
 settings(id INTEGER PK CHECK(id=1), blob TEXT, updated_at INTEGER)
 -- single row; blob is a JSON-serialised settings object
 ```
 
-`amount_eur` is stored as `REAL` (mirrors the JS field directly). `fun` and `deleted` are
-`0`/`1` integers. `updated_at` is a **server-stamped ms epoch** on every write.
+`amount_eur` is stored as `REAL` (mirrors the JS field directly). `fun`, `deleted`, and
+`e_commerce` are `0`/`1` integers. `updated_at` is a **server-stamped ms epoch** on every write.
 `"migrations_dir": "migrations"` is set in `wrangler.jsonc`'s `d1_databases[0]`.
 
 ### API endpoints (`src/index.js`)

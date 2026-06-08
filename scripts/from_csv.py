@@ -23,7 +23,7 @@ CATEGORY_RULES = [
     # Groceries
     (r"kaufland|aleks treyd|via trakia|t market|lidl|billa|fantastico|metro|carrefour|nak market|farma mol", "Groceries"),
     # Restaurants & Food
-    (r"restaurant|cafe|coffee|kfc|mcdonald|burger|pizza|sushi|kapancheto|bonbon|west cafe"
+    (r"restaurant|mole|bigstroimat|horeca|borukov|tsveti i tedi|cafe|coffee|kfc|mcdonald|burger|pizza|sushi|kapancheto|bonbon|west cafe"
      r"|gozba|amrest|rozhen|vm beykar|zlatna krusha|fusion|lagardere", "Restaurants"),
     # Health
     (r"pharmacy|apteka|eczanesi|dr\.|clinic|hospital|dental|medical|diagnostichno|vision farm|farma", "Health"),
@@ -34,7 +34,7 @@ CATEGORY_RULES = [
     # Gym (Playbox Tennis Court shows as garbled Cyrillic — match on partial decode)
     (r"gym|toni k eood|royal santelo|sila|dekatlon|fitness|sport|pulse|playbox|\xd0\x9f\xd0\xbb\xd0\xb5\xd0\xb9", "Gym"),
     # Shopping
-    (r"pepco|kik|denim 2019|nike|waikiki|aliexpress|mall|outlet|jumbo|kapancheto|zara|h&m|reserved|amazon|emag|deichmann|plovdiv plaza", "Shopping"),
+    (r"pepco|itx bulgaria|penti|kik|denim 2019|nike|waikiki|aliexpress|mall|outlet|jumbo|kapancheto|zara|h&m|reserved|amazon|emag|deichmann|plovdiv plaza", "Shopping"),
     # Utilities & Bill payments
     (r"evn|toplofikacia|vivacom|Transfer to CHRISTO|a1|yettel|water|electric|internet|epay|epaygo", "Utilities"),
     # House
@@ -44,7 +44,7 @@ CATEGORY_RULES = [
     # Taxes
     (r"nap |noi |national revenue|tax |данък|osigurovki|epay", "Taxes"),
     # Services
-    (r"be partnars|herts|yani|sofi 3012|noir nicol", "Services"),
+    (r"be partnars|et dobrina|herts|yani|sofi 3012|noir nicol", "Services"),
     # Kindergarten
     (r"kindergarten|детска|gradina|sophie", "Sophie Kindergarten"),
 ]
@@ -178,9 +178,16 @@ def clean(input_path: str, output_path: str = None):
 
     general = out_df[out_df["category"] == "General"]
     if not general.empty:
-        print(f"\n⚠️  {len(general)} rows landed in General — review before importing:")
-        for _, r in general.sort_values(by='amount_eur', ascending=False).iterrows():
-            print(f"  {r['date']}  {r['description']:<35}  €{r['amount_eur']:.2f}")
+        # Group by description, sum the amounts, and reset the index to keep it as a column
+        aggregated_general = (
+            general.groupby('description', as_index=False)['amount_eur']
+            .sum()
+            .sort_values(by='amount_eur', ascending=False)
+        )
+
+        print(f"\n⚠️  {len(aggregated_general)} unique categories landed in General — review before importing:")
+        for _, r in aggregated_general.iterrows():
+            print(f"  {r['description']:<35}  €{r['amount_eur']:.2f}")
 
     print("\nEdit the CSV to fix any categories, then import into Yearly.")
 

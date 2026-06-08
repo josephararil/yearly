@@ -24,6 +24,15 @@ function rowToTx(row) {
     original_currency: row.original_currency,
     deleted:           row.deleted,
     updated_at:        row.updated_at,
+    revolut_category:  row.revolut_category,
+    merchant_mcc:      row.merchant_mcc,
+    merchant_city:     row.merchant_city,
+    merchant_country:  row.merchant_country,
+    merchant_logo:     row.merchant_logo,
+    card_label:        row.card_label,
+    tx_type:           row.tx_type,
+    e_commerce:        row.e_commerce,
+    fee_eur:           row.fee_eur,
   };
 }
 
@@ -42,6 +51,15 @@ function txToBinds(tx, now) {
     tx.original_amount   ?? null,
     tx.original_currency ?? null,
     tx.deleted      ? 1 : 0,   // explicit coerce: absent/falsy → 0
+    tx.revolut_category  ?? null,
+    tx.merchant_mcc      ?? null,
+    tx.merchant_city     ?? null,
+    tx.merchant_country  ?? null,
+    tx.merchant_logo     ?? null,
+    tx.card_label        ?? null,
+    tx.tx_type           ?? null,
+    tx.e_commerce        ? 1 : 0,
+    tx.fee_eur           ?? null,
     now,
   ];
 }
@@ -99,8 +117,11 @@ export default {
         const UPSERT = `
           INSERT INTO transactions
             (id,date,description,amount_eur,category,note,source,fun,person,
-             original_amount,original_currency,deleted,updated_at)
-          VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?)
+             original_amount,original_currency,deleted,
+             revolut_category,merchant_mcc,merchant_city,merchant_country,
+             merchant_logo,card_label,tx_type,e_commerce,fee_eur,
+             updated_at)
+          VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)
           ON CONFLICT(id) DO UPDATE SET
             date=excluded.date, description=excluded.description,
             amount_eur=excluded.amount_eur, category=excluded.category,
@@ -108,7 +129,17 @@ export default {
             fun=excluded.fun, person=excluded.person,
             original_amount=excluded.original_amount,
             original_currency=excluded.original_currency,
-            deleted=excluded.deleted, updated_at=excluded.updated_at
+            deleted=excluded.deleted,
+            revolut_category=excluded.revolut_category,
+            merchant_mcc=excluded.merchant_mcc,
+            merchant_city=excluded.merchant_city,
+            merchant_country=excluded.merchant_country,
+            merchant_logo=excluded.merchant_logo,
+            card_label=excluded.card_label,
+            tx_type=excluded.tx_type,
+            e_commerce=excluded.e_commerce,
+            fee_eur=excluded.fee_eur,
+            updated_at=excluded.updated_at
         `;
 
         const stmts = body.map(tx =>
