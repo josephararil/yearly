@@ -362,9 +362,10 @@ The app is a fully installable PWA:
   **Cache-versioning rule:** bump `CACHE_NAME` in `sw.js` whenever the shell changes (new
   file added to the precache list, CDN URL pinned to a new version, etc.). The old cache is
   deleted on `activate`. `skipWaiting()` + `clients.claim()` ensure the new SW takes over
-  immediately without waiting for old tabs to close. Current version: `yearly-v10` (fun
-  budget Session 2: `y/fun.jsx` added to precache, `y/ui.jsx` StatusHero reworked,
-  `y/home.jsx` FunStrip wired, `y/app.jsx` `computeFun` memo + `onOpenFun`).
+  immediately without waiting for old tabs to close. Current version: `yearly-v11` (Task 3:
+  `y/sync.jsx` added to precache; `/api/*` and `/cdn-cgi/*` bypassed network-only — never
+  cached; cache-put guarded with `!response.redirected` so an Access login redirect can't
+  poison the shell cache).
 - **`manifest.json`** — includes `id`, `scope`, `start_url`, and an `icons` array with
   192×192, 512×512, and a maskable 512×512 variant (all SVG). SVG icons work in Chrome 91+
   and modern WebKit/Firefox; for production Android/iOS you would swap in PNGs.

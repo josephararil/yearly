@@ -1,5 +1,5 @@
 // Bump this version whenever the app shell changes to invalidate the old cache.
-const CACHE_NAME = 'yearly-v10';
+const CACHE_NAME = 'yearly-v11';
 
 const PRECACHE = [
   './',
@@ -12,6 +12,7 @@ const PRECACHE = [
   './y/icons.jsx',
   './y/ds.jsx',
   './y/data.jsx',
+  './y/sync.jsx',
   './y/calc.jsx',
   './y/ui.jsx',
   './y/fun.jsx',
@@ -47,11 +48,13 @@ self.addEventListener('activate', event => {
 // Network-first: always try the network; only serve from cache when offline.
 self.addEventListener('fetch', event => {
   if (event.request.method !== 'GET') return;
+  const url = new URL(event.request.url);
+  if (url.pathname.startsWith('/api/') || url.pathname.startsWith('/cdn-cgi/')) return;
 
   event.respondWith(
     fetch(event.request)
       .then(response => {
-        if (response.ok || response.type === 'opaque') {
+        if ((response.ok || response.type === 'opaque') && !response.redirected) {
           const copy = response.clone();
           caches.open(CACHE_NAME).then(cache => cache.put(event.request, copy));
         }
