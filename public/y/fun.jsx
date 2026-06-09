@@ -244,6 +244,8 @@
     const wishlist = (store && store.wishlist) || [];
     const catList = (fun && fun.funCatList) || [];
     const max = catList[0] ? catList[0].amount : 1;
+    const yearStr = String(store.currentYear);
+    const funTxns = (store.transactions || []).filter((t) => t.fun && t.date.slice(0, 4) === yearStr);
 
     const removeWish = (id) => setStore((s) => ({ ...s, wishlist: (s.wishlist || []).filter((w) => w.id !== id) }));
     const addWish = (item) => setStore((s) => ({ ...s, wishlist: [...(s.wishlist || []), item] }));
@@ -286,22 +288,41 @@
             </div>
             {catList.map((c) => {
               const cat = YData.cat(c.id);
+              const catTxns = funTxns
+                .filter((t) => YData.normalizeCategory(t.category) === c.id)
+                .sort((a, b) => b.date.localeCompare(a.date));
               return (
-                <div key={c.id} className="catbar-row" style={{ pointerEvents: "none" }}>
-                  <span className="cat-dot" style={{ background: cat.color }} />
-                  <span className="catbar-main">
-                    <span className="catbar-top">
-                      <span className="catbar-name">{cat.label}</span>
-                      <span className="catbar-amt num">{eurAuto(c.amount)}</span>
+                <div key={c.id}>
+                  <div className="catbar-row" style={{ pointerEvents: "none", borderBottom: catTxns.length > 0 ? "0" : undefined }}>
+                    <span className="cat-dot" style={{ background: cat.color }} />
+                    <span className="catbar-main">
+                      <span className="catbar-top">
+                        <span className="catbar-name">{cat.label}</span>
+                        <span className="catbar-amt num">{eurAuto(c.amount)}</span>
+                      </span>
+                      <span className="catbar-track">
+                        <span className="catbar-fill" style={{ width: Math.max(3, (c.amount / max) * 100) + "%", background: cat.color }} />
+                      </span>
+                      <span className="catbar-sub">
+                        <span>{Math.round(c.share * 100)}% of fun</span>
+                        <span>{c.count} {c.count === 1 ? "entry" : "entries"}</span>
+                      </span>
                     </span>
-                    <span className="catbar-track">
-                      <span className="catbar-fill" style={{ width: Math.max(3, (c.amount / max) * 100) + "%", background: cat.color }} />
-                    </span>
-                    <span className="catbar-sub">
-                      <span>{Math.round(c.share * 100)}% of fun</span>
-                      <span>{c.count} {c.count === 1 ? "entry" : "entries"}</span>
-                    </span>
-                  </span>
+                  </div>
+                  {catTxns.length > 0 && (
+                    <div style={{ padding: "4px 4px 10px 32px", borderBottom: "1px solid var(--hair)" }}>
+                      {catTxns.map((t) => (
+                        <div key={t.id} style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline", padding: "2px 0" }}>
+                          <span style={{ fontFamily: "var(--sans)", fontSize: 11, color: "var(--ink-2)", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", flex: 1, marginRight: 8 }}>
+                            {t.description}
+                          </span>
+                          <span style={{ fontFamily: "var(--mono)", fontSize: 11, color: "var(--muted)", flexShrink: 0 }}>
+                            {eur0(t.amount_eur)}
+                          </span>
+                        </div>
+                      ))}
+                    </div>
+                  )}
                 </div>
               );
             })}

@@ -395,8 +395,36 @@
     );
   }
 
-  function ProjectionTab({ stats }) {
-    const curMonth = stats.asOf.getMonth();
+  function ProjectionTab({ stats, fun, store }) {
+    const curMonth = stats.isFuture ? -1 : stats.asOf.getMonth();
+    const completedMonths = stats.complete ? 12 : Math.max(0, curMonth);
+    const completedAmounts = stats.byMonth.slice(0, completedMonths).map((m) => m.amount);
+    const avgMonthly = completedMonths > 0 ? completedAmounts.reduce((a, v) => a + v, 0) / completedMonths : 0;
+    const monthsRemaining = stats.daysRemaining / 30.4;
+    const neededMonthly = !stats.isFuture && monthsRemaining > 0.5
+      ? Math.max(0, (stats.mainTarget - stats.spent) / monthsRemaining)
+      : null;
+
+    let trend90 = null, trend90Color = "var(--ink)";
+    if (stats.isCurrent && stats.doy >= 90) {
+      const d45 = new Date(stats.asOf); d45.setDate(d45.getDate() - 45);
+      const d45str = d45.toISOString().slice(0, 10);
+      const d90 = new Date(stats.asOf); d90.setDate(d90.getDate() - 90);
+      const d90str = d90.toISOString().slice(0, 10);
+      const recent45 = stats.upto.filter((t) => t.date > d45str).reduce((a, t) => a + t.amount_eur, 0) / 45;
+      const prior45 = stats.upto.filter((t) => t.date > d90str && t.date <= d45str).reduce((a, t) => a + t.amount_eur, 0) / 45;
+      if (prior45 > 0) {
+        const ratio = recent45 / prior45;
+        if (ratio > 1.08) { trend90 = "↑ Increasing"; trend90Color = "var(--terra)"; }
+        else if (ratio < 0.92) { trend90 = "↓ Decreasing"; trend90Color = "var(--sage)"; }
+        else { trend90 = "→ Constant"; }
+      }
+    }
+
+    const numPeople = (store && store.people && store.people.length) || 1;
+    const targetFunPerMo = Math.max(0, stats.ceiling - stats.projection) / 12 / numPeople;
+    const firePortfolio = stats.combinedProjection / 0.04;
+
     return (
       <div className="stagger" style={{ display: "flex", flexDirection: "column", gap: 24 }}>
         <div>
@@ -412,38 +440,57 @@
 
         {!stats.isFuture && <MonthlyBarsChart stats={stats} />}
 
-        <div className="statgrid">
-          <StatCard label="Spent year-to-date" value={eur0(stats.spent)} sub={`${stats.upto.length} entries`} />
-          <StatCard label={stats.complete ? "Days" : "On-pace by today"} value={stats.complete ? "365" : eur0(stats.pace)} sub={stats.complete ? "complete" : `day ${stats.doy} of 365`} />
-          <StatCard label="Blended rate" value={eur0(stats.trailingDailyRate) + "/d"} sub={`YTD avg ${eur0(stats.dailyRate)}/d`} />
-          {!stats.complete && <StatCard label="Buffer adds" value={"+" + eur0(stats.bufferAmt)} sub={`${Math.round(stats.buffer * 100)}% missed-entry`} />}
-          <StatCard label={stats.complete ? "Final spend" : "Projected finish"} value={eur0(stats.projection)}
-            color={stats.status === "good" ? "var(--good)" : stats.status === "alert" ? "var(--alert)" : "var(--watch)"} />
-          <StatCard label="vs target" value={(stats.delta >= 0 ? "+" : "−") + eur0(Math.abs(stats.delta))} sub={signedPct(stats.deltaPct)}
-            color={stats.status === "good" ? "var(--good)" : stats.status === "alert" ? "var(--alert)" : "var(--watch)"} />
-          {stats.priorSpent > 0 && (() => {
-            const diff = stats.spent - stats.priorSpent;
-            return (
+        <div>
+          <div className="section-h" style={{ marginTop: 0, marginBottom: 10 }}><h2>In numbers</h2></div>
+          <div className="statgrid">
+            <StatCard label="Spent year-to-date" value={eur0(stats.spent)} sub={`${stats.upto.length} entries`} />
+            <StatCard label={stats.complete ? "Days" : "On-pace by today"} value={stats.complete ? "365" : eur0(stats.pace)} sub={stats.complete ? "complete" : `day ${stats.doy} of 365`} />
+            <StatCard label="Blended rate" value={eur0(stats.trailingDailyRate) + "/d"} sub={`YTD avg ${eur0(stats.dailyRate)}/d`} />
+            {!stats.complete && <StatCard label="Buffer adds" value={"+" + eur0(stats.bufferAmt)} sub={`${Math.round(stats.buffer * 100)}% missed-entry`} />}
+            {completedMonths > 0 && (
               <StatCard
-                label={stats.complete ? `vs ${stats.year - 1} final` : `vs ${stats.year - 1} same point`}
-                value={signedEur(diff)}
-                sub={signedPct(diff / stats.priorSpent)}
-                color={diff > 0 ? "var(--watch)" : "var(--good)"}
+                label="Avg spend/mo"
+                value={eur0(avgMonthly)}
+                sub={neededMonthly !== null
+                  ? <span style={{ color: avgMonthly > neededMonthly ? "var(--terra)" : "var(--sage)" }}>need ≤{eur0(neededMonthly)}/mo</span>
+                  : null}
               />
-            );
-          })()}
-          {(() => {
-            const req = YCalc.requiredDailyToHit(stats);
-            if (req === null) return null;
-            return (
+            )}
+            {trend90 && <StatCard label="90d trend" value={trend90} mono={false} color={trend90Color} />}
+            {!stats.isFuture && <StatCard label="Total fun budget" value={eur0(stats.funPlanAnnual) + "/yr"} sub={eur0(stats.funPlanAnnual / 12) + "/mo"} />}
+            {stats.isCurrent && (
               <StatCard
-                label="To finish on target"
-                value={`≤ ${eur0(req)}/day`}
-                sub={`${365 - stats.doy} days left`}
-                color="var(--watch)"
+                label="Target fun/mo"
+                value={eur0(targetFunPerMo)}
+                sub="per person"
+                color={stats.projection >= stats.ceiling ? "var(--terra)" : "var(--sage)"}
               />
-            );
-          })()}
+            )}
+            {!stats.isFuture && <StatCard label="FIRE portfolio" value={eurK(firePortfolio)} sub="at 4% rule" />}
+            {stats.priorSpent > 0 && (() => {
+              const diff = stats.spent - stats.priorSpent;
+              return (
+                <StatCard
+                  label={stats.complete ? `vs ${stats.year - 1} final` : `vs ${stats.year - 1} same point`}
+                  value={signedEur(diff)}
+                  sub={signedPct(diff / stats.priorSpent)}
+                  color={diff > 0 ? "var(--watch)" : "var(--good)"}
+                />
+              );
+            })()}
+            {(() => {
+              const req = YCalc.requiredDailyToHit(stats);
+              if (req === null) return null;
+              return (
+                <StatCard
+                  label="To finish on target"
+                  value={`≤ ${eur0(req)}/day`}
+                  sub={`${365 - stats.doy} days left`}
+                  color="var(--watch)"
+                />
+              );
+            })()}
+          </div>
         </div>
       </div>
     );
@@ -580,7 +627,7 @@
         <div style={{ position: "sticky", top: 0, zIndex: 5, paddingBottom: 4 }}>
           <SegmentedControl options={["Projection", "Categories", "Activity", "Fun"]} value={tab} fill onChange={setTab} />
         </div>
-        {tab === "Projection" && <ProjectionTab stats={stats} />}
+        {tab === "Projection" && <ProjectionTab stats={stats} fun={fun} store={store} />}
         {tab === "Categories" && <CategoriesTab stats={stats} focusCategory={focus && focus.category} onEditTx={onEditTx} />}
         {tab === "Activity" && <ActivityTab stats={stats} onEditTx={onEditTx} />}
         {tab === "Fun" && <YFun.FunTab fun={fun} store={store} setStore={setStore} addTx={addTx} />}

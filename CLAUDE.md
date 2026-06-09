@@ -317,7 +317,11 @@ spend, no projection/buffer).
     if balance ≥ price; "—" if rate 0). "Bought it" button logs a fun-tagged shopping tx via
     `addTx` and removes the item from `store.wishlist`. Remove (✕) deletes without buying.
     "Add" button opens `WishlistAddSheet` (name, price, owner Chip picker) pre-set to that person.
-  - Fun category breakdown: catbar-* rows fed from `fun.funCatList` (non-interactive).
+  - Fun category breakdown: catbar-* rows fed from `fun.funCatList` (non-interactive). Each
+    category row is followed by its individual transactions (description + amount, sans 11px / mono
+    11px, sorted newest-first), fetched by filtering `store.transactions` for `fun:true` + current
+    year + matching normalised category. The catbar-row `borderBottom` is suppressed when transactions
+    follow; the transaction block carries the hairline instead.
   Internal: `WishlistAddSheet` (name + price + owner Chip picker), `PersonCard` (stats + wishlist).
 - Screens: `y/home.jsx` (Overview — hero + callouts + FunStrip + spend curve),
   `y/analysis.jsx` (Projection/Categories/Activity/Fun tabs; charts are hand-built SVG that
@@ -343,6 +347,19 @@ spend, no projection/buffer).
   sub-label. Hovered bar gets full opacity + stroke highlight; hovered month label bolds. Hidden for
   future years. `LegendItem` helper renders bar and line swatches; defined in the same IIFE above
   `MonthlyBarsChart`.
+  **"In numbers" section** (`ProjectionTab`) — appears below the two charts with a `section-h` title.
+  Receives `fun` and `store` props (passed from `AnalysisScreen`). Stat cards present:
+  - Spent YTD, On-pace by today, Blended rate, Buffer adds (existing).
+  - **Avg spend/mo** (average over completed months) + sub-line "need ≤€X/mo" coloured sage/terra;
+    `neededMonthly = max(0, mainTarget − spent) / monthsRemaining`. Hidden for future years / no data.
+  - **90d trend** — compares last-45d daily rate to prior-45d rate; `↑ Increasing` (terra),
+    `↓ Decreasing` (sage), or `→ Constant`. Only shown for current year with ≥ 90 days of data.
+  - **Total fun budget** — `funPlanAnnual` per year with per-month sub.
+  - **Target fun/mo** — `max(0, ceiling − projection) / 12 / numPeople`; sage when positive,
+    terra when 0 (projection ≥ ceiling). Current year only.
+  - **FIRE portfolio** — `combinedProjection / 0.04`; "at 4% rule" sub. Not shown for future years.
+  - vs prior year same point, To finish on target (existing, conditional).
+  Removed: "Projected finish" and "VS Target" cards (both surfaced on the Overview hero).
   **CategoriesTab** catbar rows use `CatIcon` (24px, radius 6); expanding a category shows two
   sub-lists: "Recent in [category]" (last 5 by date, reversed) and "Largest in [category]" (top 5
   by `amount_eur` descending), both using `TxRow` with `onClick → onEditTx`. **ActivityTab** —
