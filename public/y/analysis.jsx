@@ -2,7 +2,7 @@
 (function () {
   const { YData, YCalc, YUI, YFun } = window;
   const { eur0, eurAuto, signedEur, signedPct, pct, MONTHS, fmtDateShort } = YCalc;
-  const { TxRow } = YUI;
+  const { TxRow, CatIcon } = YUI;
   const DS = window.ApertureDesignSystem_72a4cd || {};
   const SegmentedControl = DS.SegmentedControl, Input = DS.Input, Chip = DS.Chip;
 
@@ -15,7 +15,7 @@
     const x0 = padL, x1 = W - padR, y0 = padT, y1 = H - padB;
     const priorCum = stats.priorCum;
     const priorMax = priorCum ? priorCum[Math.min(365, stats.doy)] : 0;
-    const maxY = Math.max(stats.mainTarget, stats.projection, priorMax) * 1.1;
+    const maxY = Math.max(stats.mainTarget, stats.ceiling, stats.projection, priorMax) * 1.1;
     const sx = (d) => x0 + (d / 365) * (x1 - x0);
     const sy = (v) => y1 - (v / maxY) * (y1 - y0);
     const cum = YCalc.cumulativeByDay(stats.upto);
@@ -51,6 +51,9 @@
         {/* target reference */}
         <line x1={x0} y1={sy(stats.mainTarget)} x2={x1} y2={sy(stats.mainTarget)} stroke="var(--chart-target)" strokeWidth="1.2" strokeDasharray="4 4" />
         <text x={x1} y={sy(stats.mainTarget) - 5} textAnchor="end" fontSize="9" fill="var(--chart-target)" fontFamily="var(--mono)">target {eurK(stats.mainTarget)}</text>
+        {/* household ceiling */}
+        <line x1={x0} y1={sy(stats.ceiling)} x2={x1} y2={sy(stats.ceiling)} stroke="var(--ink-2)" strokeWidth="1.5" strokeDasharray="6 3" />
+        <text x={x1} y={sy(stats.ceiling) - 5} textAnchor="end" fontSize="9" fill="var(--ink-2)" fontFamily="var(--mono)">ceiling {eurK(stats.ceiling)}</text>
         {/* linear pace */}
         <line x1={sx(0)} y1={sy(0)} x2={sx(365)} y2={sy(stats.mainTarget)} stroke="var(--chart-pace)" strokeWidth="1" strokeDasharray="2 4" opacity="0.6" />
         {/* prior year */}
@@ -203,7 +206,7 @@
             return (
               <div key={c.id}>
                 <button className="catbar-row" onClick={() => setSel(open ? null : c.id)} style={{ borderBottom: open ? "0" : undefined }}>
-                  <span className="cat-dot" style={{ background: cat.color }} />
+                  <CatIcon catId={c.id} size={24} radius={6} />
                   <span className="catbar-main">
                     <span className="catbar-top">
                       <span className="catbar-name">{cat.label}</span>

@@ -1,5 +1,7 @@
 // Bump this version whenever the app shell changes to invalidate the old cache.
-const CACHE_NAME = 'yearly-v13';
+const CACHE_NAME = 'yearly-v14';
+// Logo cache is intentionally never deleted on app updates — logos are stable per-merchant URL.
+const LOGO_CACHE = 'yearly-logos-v1';
 
 const PRECACHE = [
   './',
@@ -48,18 +50,40 @@ self.addEventListener('activate', event => {
   event.waitUntil(
     caches.keys()
       .then(keys => Promise.all(
-        keys.filter(k => k !== CACHE_NAME).map(k => caches.delete(k))
+        // Keep LOGO_CACHE across version bumps — merchant logos never change per URL.
+        keys.filter(k => k !== CACHE_NAME && k !== LOGO_CACHE).map(k => caches.delete(k))
       ))
       .then(() => self.clients.claim())
   );
 });
 
-// Network-first: always try the network; only serve from cache when offline.
+// Cache-first for merchant logos — once fetched, never go to network again.
+function isLogoRequest(url) {
+  return url.hostname === 'storage.googleapis.com' &&
+    url.pathname.startsWith('/revolut-prod-apps_merchant-logo');
+}
+
 self.addEventListener('fetch', event => {
   if (event.request.method !== 'GET') return;
   const url = new URL(event.request.url);
   if (url.pathname.startsWith('/api/') || url.pathname.startsWith('/cdn-cgi/')) return;
 
+  if (isLogoRequest(url)) {
+    event.respondWith(
+      caches.open(LOGO_CACHE).then(async (cache) => {
+        const hit = await cache.match(event.request);
+        if (hit) return hit;
+        const res = await fetch(event.request).catch(() => null);
+        if (res && (res.ok || res.type === 'opaque') && !res.redirected) {
+          cache.put(event.request, res.clone());
+        }
+        return res || new Response('', { status: 503 });
+      })
+    );
+    return;
+  }
+
+  // Network-first for the app shell.
   event.respondWith(
     fetch(event.request)
       .then(response => {

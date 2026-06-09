@@ -111,7 +111,7 @@
   function SpendCurve({ stats }) {
     const W = 360, H = 168, padL = 38, padR = 8, padT = 10, padB = 22;
     const x0 = padL, x1 = W - padR, y0 = padT, y1 = H - padB;
-    const maxY = Math.max(stats.mainTarget, stats.projection, 1) * 1.08;
+    const maxY = Math.max(stats.mainTarget, stats.ceiling, stats.projection, 1) * 1.08;
     const sx = (d) => x0 + (d / 365) * (x1 - x0);
     const sy = (v) => y1 - (v / maxY) * (y1 - y0);
     const cum = YCalc.cumulativeByDay(stats.upto);
@@ -148,6 +148,9 @@
         {/* target reference */}
         <line x1={x0} y1={sy(stats.mainTarget)} x2={x1} y2={sy(stats.mainTarget)} stroke="var(--chart-target)" strokeWidth="1.2" strokeDasharray="4 4" />
         <text x={x1} y={sy(stats.mainTarget) - 5} textAnchor="end" fontSize="10" fill="var(--chart-target)" fontFamily="var(--mono)">target {eurK(stats.mainTarget)}</text>
+        {/* household ceiling */}
+        <line x1={x0} y1={sy(stats.ceiling)} x2={x1} y2={sy(stats.ceiling)} stroke="var(--ink-2)" strokeWidth="1.5" strokeDasharray="6 3" />
+        <text x={x1} y={sy(stats.ceiling) - 5} textAnchor="end" fontSize="10" fill="var(--ink-2)" fontFamily="var(--mono)">ceiling {eurK(stats.ceiling)}</text>
         {/* actual area + line */}
         <polygon points={areaPts} fill={`url(#${uid})`} />
         <polyline points={actLine} fill="none" stroke="var(--chart-actual)" strokeWidth="2.6" strokeLinecap="round" strokeLinejoin="round" />
@@ -164,9 +167,11 @@
     return (
       <button className="txrow" onClick={onClick}>
         {t.merchant_logo
-          ? <img className="tx-logo" src={t.merchant_logo} alt="" onError={(e) => { e.target.style.display = 'none'; e.target.nextSibling.style.display = 'inline-block'; }} />
+          ? <img className="tx-logo" src={t.merchant_logo} alt="" onError={(e) => { e.target.style.display = 'none'; e.target.nextSibling.style.display = 'grid'; }} />
           : null}
-        <span className="cat-dot" style={{ background: c.color, display: t.merchant_logo ? 'none' : 'inline-block' }} />
+        <span className="cat-ic" style={{ width: 24, height: 24, borderRadius: 6, background: tint(c.color, "22"), color: c.color, display: t.merchant_logo ? 'none' : 'grid' }}>
+          <Icon name={c.icon} size={12} />
+        </span>
         <span className="tx-main">
           <div className="tx-desc">{t.description}</div>
           <div className="tx-meta">{fmtDateShort(t.date)} · {c.label}{t.source === "import" ? " · imported" : ""}{t.merchant_city ? ` · ${t.merchant_city}` : ""}</div>

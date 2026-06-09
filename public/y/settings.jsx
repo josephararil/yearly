@@ -1,5 +1,6 @@
 // settings.jsx — target, buffer, years, templates, CSV import/export, clear.
 (function () {
+  const APP_VERSION = 'v14';
   const { YData, YCalc, YUI } = window;
   const { eur0, signedPct, computeStats } = YCalc;
   const { Sheet, DeltaChip } = YUI;
@@ -505,7 +506,7 @@
           <Row icon="trash" title="Clear all data" sub="delete every transaction" danger onClick={() => setSub("clear")} />
         </div>
 
-        <div className="muted" style={{ textAlign: "center", fontSize: 11.5, marginTop: 6 }}>Yearly · all data stays on this device</div>
+        <div className="muted" style={{ textAlign: "center", fontSize: 11.5, marginTop: 6, fontFamily: "var(--mono)" }}>Yearly · {APP_VERSION}</div>
 
         <TargetSheet open={sub === "target"} onClose={() => setSub(null)} store={store} setStore={setStore} />
         <BufferSheet open={sub === "buffer"} onClose={() => setSub(null)} store={store} setStore={setStore} />

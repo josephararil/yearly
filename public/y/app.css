@@ -16,7 +16,10 @@ body {
   background: #E7E2D6;
   background-image: radial-gradient(120% 90% at 50% 0%, #efeadf 0%, #e3ddcf 70%);
   overflow: hidden;
+  font-family: var(--sans);
 }
+/* form elements don't inherit font by default in browsers */
+button, input, select, textarea { font-family: inherit; }
 
 .num { font-family: var(--mono); font-feature-settings: "tnum" 1; letter-spacing: 0; }
 
@@ -135,7 +138,7 @@ body {
 .txrow:hover { background: color-mix(in srgb, var(--ink) 4%, transparent); border-radius: 6px; }
 .cat-ic { flex: 0 0 auto; width: 40px; height: 40px; border-radius: 12px; display: grid; place-items: center; }
 .tx-main { flex: 1; min-width: 0; }
-.tx-desc { font-size: 15px; font-weight: 500; color: var(--ink); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.tx-desc { font-family: var(--sans); font-size: 15px; font-weight: 500; color: var(--ink); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .tx-meta { font-family: var(--mono); font-size: 12px; color: var(--muted); margin-top: 1px; }
 .tx-amt { font-size: 14px; font-weight: 500; color: var(--ink); }
 
@@ -186,7 +189,7 @@ body {
 .sheet.open { transform: translateY(0); }
 .grabber { width: 38px; height: 5px; border-radius: 3px; background: var(--hair-strong); margin: 10px auto 4px; flex: 0 0 auto; }
 .sheet-head { display: flex; align-items: center; gap: 10px; padding: 6px 18px 12px; }
-.sheet-head h3 { margin: 0; font-size: 18px; font-weight: 600; letter-spacing: -0.02em; }
+.sheet-head h3 { margin: 0; font-family: var(--sans); font-size: 18px; font-weight: 600; letter-spacing: -0.02em; }
 .sheet-scroll { overflow-y: auto; padding: 0 18px 18px; }
 .sheet-scroll::-webkit-scrollbar { width: 0; }
 @media (prefers-reduced-motion: reduce) {

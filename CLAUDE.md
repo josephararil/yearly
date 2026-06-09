@@ -265,9 +265,12 @@ spend, no projection/buffer).
   with a day-of-year marker; a decomposition line shows `main €A / €mainTarget` (coloured by
   `stats.status`) and `fun €B` (ink-2). For complete years all projections equal spent.
   **`TxRow`** — shows a 24px rounded merchant logo (`t.merchant_logo`) when present; falls back
-  to the 8px category color dot if absent or on load error. `tx-meta` appends `· city` when
-  `t.merchant_city` is set. Both fields are populated by `rowToTx` in `sync.jsx` from the
-  Revolut D1 columns.
+  to a 24px `cat-ic` category icon (colored square + SVG icon, `CatIcon`-style inline) if
+  absent or on load error. `tx-meta` appends `· city` when `t.merchant_city` is set. Both
+  fields are populated by `rowToTx` in `sync.jsx` from the Revolut D1 columns.
+  **`SpendCurve`** (Overview chart) shows a household ceiling reference line (`--ink-2` dashed
+  "6 3") in addition to the main-target line. Both are labeled inline; `maxY` scales to
+  `max(mainTarget, ceiling, projection) × 1.08` so the ceiling is always visible.
   `Toast({ open, message, actionLabel, onAction, onDismiss })` — transient bottom-anchored
   banner (above nav, z-index 30), auto-dismisses after 5 s via `onDismiss`, optional action button.
   `GaugeHero`, `PaceBar`, and `ProjSpark` have been removed (dead since hero is fixed to numerals).
@@ -292,12 +295,16 @@ spend, no projection/buffer).
   `y/addflow.jsx` (Quick keypad + Manual add, Edit sheet, category picker, fun toggle).
   `analysis.jsx` — `AnalysisScreen` receives `fun`, `store`, `setStore`, `addTx` in addition to
   `stats`/`focus`/`onEditTx`; renders `<YFun.FunTab>` on the "Fun" segment; focus effect handles
-  `focus.section === "fun"` → `setTab("Fun")`.
+  `focus.section === "fun"` → `setTab("Fun")`. **ProjectionChart** now shows a household ceiling
+  line (`--ink-2` dashed "6 3", labeled "ceiling €Xk") above the main-target line; `maxY` scales
+  to `max(mainTarget, ceiling, projection, priorMax) × 1.1`. **CategoriesTab** catbar rows use
+  `CatIcon` (24px, radius 6) instead of the 8px color dot.
   `addflow.jsx` — both `AddSheet` and `EditSheet` expose a **Fun budget toggle** (pill switch, off by
   default). When on, a Chip owner picker (Joseph/Marti) appears. `commit()`/`save()` write `fun:true`
   + `person` when the toggle is on; EditSheet pre-populates toggle state from `txn.fun`/`txn.person`.
   `EditSheet` now accepts a `store` prop for reading `store.people`.
-  `settings.jsx` — `TargetSheet` (now labelled "Household ceiling") and `BufferSheet` accept a `year`
+  `settings.jsx` — footer shows `APP_VERSION` constant (`'v14'` currently, defined at top of
+  IIFE — update it with every release). `TargetSheet` (now labelled "Household ceiling") and `BufferSheet` accept a `year`
   prop (defaults to `store.currentYear`); `TargetSheet` reads/writes `years[y].ceiling`. `BufferSheet`
   computes its own stats internally (unchanged). `YearsSheet` has tappable year rows that drill into a
   year detail view (ceiling + buffer rows), plus an "Add year" button that clones the most recent year's
@@ -319,6 +326,10 @@ spend, no projection/buffer).
 - `y/app.css` — **the styling source of truth** (layout, the mobile device column, the
   visual system), built on Aperture dark tokens. The `.ds-btn`, `.ds-seg`, `.ds-input`,
   `.ds-chip` classes at the bottom style the DS primitives from `y/ds.jsx`.
+  **Font baseline:** `body { font-family: var(--sans); }` + `button, input, select, textarea
+  { font-family: inherit; }` ensure the sans font flows everywhere; `.sheet-head h3` and
+  `.tx-desc` also carry an explicit `font-family: var(--sans)`. Without these, browsers use
+  their UA serif default (Times New Roman) on headings and button descendants.
 - `y/tweaks-panel.jsx` — **deleted** (Session 8). Was already unloaded from `index.html`
   in Session 7; confirmed zero references remained before removal.
 
@@ -391,7 +402,11 @@ The app is a fully installable PWA:
   **Install hardening:** the install handler uses individual `fetch().catch()` calls instead
   of `cache.addAll` so a single URL failure (e.g. Cloudflare Access CORS redirect on
   `manifest.json`) does not abort the entire SW install. Same `!response.redirected` guard
-  applied in the install handler as in the fetch handler. Current version: `yearly-v13`.
+  applied in the install handler as in the fetch handler. Current version: `yearly-v14`.
+  **Logo caching:** merchant logo requests (`storage.googleapis.com/revolut-prod-apps_merchant-logo/…`)
+  are intercepted with a **cache-first** strategy using a dedicated `yearly-logos-v1` cache.
+  Once a logo is fetched it is never re-fetched. The logo cache is intentionally NOT deleted on
+  app version bumps (logos are stable per URL). All other requests remain network-first.
 - **`manifest.json`** — includes `id`, `scope`, `start_url`, and an `icons` array with
   192×192, 512×512, and a maskable 512×512 variant (all SVG). SVG icons work in Chrome 91+
   and modern WebKit/Firefox; for production Android/iOS you would swap in PNGs.
