@@ -216,11 +216,12 @@ def cmd_push(json_path: Path | None = None):
     shutil.copy(json_path, work_json)
     print(f"Copied to {work_json}")
 
-    # Run revolut_clean.py to generate SQL
-    sql_file = WORK_DIR / "latest.sql"
+    # Run revolut_clean.py to generate SQL and CSV
+    sql_file = WORK_DIR / "batches/latest.sql"
+    csv_file = WORK_DIR / "batches/latest.csv"
     clean_script = SCRIPT_DIR / "revolut_clean.py"
 
-    print("\nCleaning transactions...")
+    print("\nCleaning transactions (SQL)...")
     result = subprocess.run(
         [sys.executable, str(clean_script), str(work_json), "--sql", str(sql_file)],
         capture_output=False,
@@ -230,6 +231,14 @@ def cmd_push(json_path: Path | None = None):
 
     if not sql_file.exists() or sql_file.stat().st_size == 0:
         sys.exit("SQL file not generated. Aborting.")
+
+    print("\nCleaning transactions (CSV)...")
+    result = subprocess.run(
+        [sys.executable, str(clean_script), str(work_json), str(csv_file)],
+        capture_output=False,
+    )
+    if result.returncode != 0:
+        sys.exit("revolut_clean.py failed on CSV pass. Aborting.")
 
     # Confirm before pushing
     print(f"\nSQL file ready: {sql_file}")
@@ -266,10 +275,15 @@ def cmd_push(json_path: Path | None = None):
         save_state(state)
         print(f"\n✓ State updated. Latest transaction date: {latest_date}")
 
-    # Archive raw JSON to batches/, clean up working files
+    # Archive raw JSON and CSV to batches/, clean up working files
     BATCHES_DIR.mkdir(exist_ok=True)
-    archive_path = BATCHES_DIR / json_path.name
-    shutil.move(str(json_path), archive_path)
+    date_stem = datetime.now().strftime("%Y-%m-%d")
+    archive_json = BATCHES_DIR / json_path.name
+    archive_csv  = BATCHES_DIR / f"revolut_{date_stem}.csv"
+    shutil.move(str(json_path), archive_json)
+    if csv_file.exists():
+        shutil.move(str(csv_file), archive_csv)
+        print(f"✓ CSV archived to batches/revolut_{date_stem}.csv")
     work_json.unlink(missing_ok=True)
     sql_file.unlink(missing_ok=True)
     print(f"✓ Raw JSON archived to batches/{json_path.name}")

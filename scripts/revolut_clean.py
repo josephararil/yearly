@@ -86,7 +86,7 @@ NAME_RULES = [
     # Entertainment / Subscriptions
     (r"spotify|realdebrid|google|netflix|apple|google play|youtube|steam|disney|hbo|lik 2|prirodonauc", "Entertainment"),
     # Gym (Playbox Tennis Court shows as garbled Cyrillic — match on partial decode)
-    (r"gym|toni k eood|royal santelo|sila|dekatlon|fitness|sport|pulse|playbox|ÐÐ»ÐµÐ¹", "Gym"),
+    (r"gym|toni k eood|royal santelo|sila|dekatlon|fitness|sport|pulse|playbox", "Gym"),
     # Shopping
     (r"pepco|itx bulgaria|penti|kik|denim 2019|nike|waikiki|aliexpress|mall|outlet|jumbo|zara|h&m|reserved|amazon|emag|deichmann|plovdiv plaza", "Shopping"),
     # Utilities & Bill payments
@@ -172,15 +172,19 @@ def assign_category(tx: dict) -> str:
                 return category
         return "Cash"
 
-    for key in [revolut_cat, merchant_cat]:
-        mapped = REVOLUT_CATEGORY_MAP.get(key)
-        if mapped:
-            return mapped
-
+    # NAME_RULES take priority over Revolut's own category —
+    # this lets you override Revolut's categorisation per merchant
+    # (e.g. Dekatlon tagged as "shopping" by Revolut but "Gym" by your rules)
     name_to_check = (merchant_name or description).lower()
     for pattern, category in NAME_RULES:
         if re.search(pattern, name_to_check, re.IGNORECASE):
             return category
+
+    # Fall back to Revolut's own category
+    for key in [revolut_cat, merchant_cat]:
+        mapped = REVOLUT_CATEGORY_MAP.get(key)
+        if mapped:
+            return mapped
 
     return "General"
 
@@ -287,10 +291,20 @@ def build_rows(transactions: list[dict]) -> list[dict]:
 
     rows.sort(key=lambda r: r["date"])
 
+    # Filter to current year only — late-settling transactions from prior year
+    # can bleed through since the API uses startedDate for pagination
+    current_year = str(datetime.now(timezone.utc).year)
+    pre_year  = [r for r in rows if not r["date"].startswith(current_year)]
+    rows      = [r for r in rows if r["date"].startswith(current_year)]
+
     print(f"\n  Skipped:")
     for reason, count in skipped.items():
         if count:
             print(f"    {reason}: {count}")
+    if pre_year:
+        print(f"    prior year (completedDate before {current_year}): {len(pre_year)}")
+        for r in pre_year:
+            print(f"      {r['date']}  {r['description']:<35}  €{r['amount_eur']:.2f}")
 
     return rows
 
