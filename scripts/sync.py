@@ -52,6 +52,9 @@ DOWNLOADS_DIR = Path.home() / "Downloads"
 # Where to put intermediate files (gitignored)
 WORK_DIR = SCRIPT_DIR
 
+# Where raw JSON downloads and console scripts are archived
+BATCHES_DIR = SCRIPT_DIR / "batches"
+
 # ---------------------------------------------------------------------------
 # State management
 # ---------------------------------------------------------------------------
@@ -145,7 +148,8 @@ def cmd_prepare():
         pass
 
     # Also write to file as fallback
-    script_file = WORK_DIR / "console_script.js"
+    BATCHES_DIR.mkdir(exist_ok=True)
+    script_file = BATCHES_DIR / "console_script.js"
     script_file.write_text(script, encoding="utf-8")
 
     if copied:
@@ -187,6 +191,22 @@ def cmd_push(json_path: Path | None = None):
     watch_start = time.time()
 
     if json_path is None:
+        # Check if there's already a revolut_*.json sitting in Downloads
+        existing = sorted(
+            DOWNLOADS_DIR.glob("revolut_*.json"),
+            key=lambda p: p.stat().st_mtime,
+            reverse=True,
+        )
+        if existing:
+            newest = existing[0]
+            age_mins = (time.time() - newest.stat().st_mtime) / 60
+            age_str = f"{int(age_mins)}m ago" if age_mins < 60 else f"{age_mins/60:.1f}h ago"
+            answer = input(f"Found {newest.name} ({age_str}). Use this file? [Y/n] ").strip().lower()
+            if answer != "n":
+                json_path = newest
+
+    if json_path is None:
+        print("Watching Downloads for a new revolut_*.json file (120s timeout)...")
         json_path = find_new_json(since_ts=watch_start - 30, timeout=120)
         if json_path is None:
             sys.exit("Timed out waiting for download. Run 'python sync.py push' after downloading.")
@@ -221,9 +241,9 @@ def cmd_push(json_path: Path | None = None):
     # Push to D1
     print(f"\nPushing to D1 ({D1_DATABASE})...")
     result = subprocess.run(
-        ["npx", "wrangler", "d1", "execute", D1_DATABASE,
-         "--remote", f"--file={sql_file}"],
+        f'npx wrangler d1 execute {D1_DATABASE} --remote "--file={sql_file}"',
         cwd=SCRIPT_DIR,
+        shell=True,
     )
     if result.returncode != 0:
         sys.exit("Wrangler push failed. SQL file kept for retry.")
@@ -246,9 +266,13 @@ def cmd_push(json_path: Path | None = None):
         save_state(state)
         print(f"\n✓ State updated. Latest transaction date: {latest_date}")
 
-    # Cleanup
+    # Archive raw JSON to batches/, clean up working files
+    BATCHES_DIR.mkdir(exist_ok=True)
+    archive_path = BATCHES_DIR / json_path.name
+    shutil.move(str(json_path), archive_path)
     work_json.unlink(missing_ok=True)
     sql_file.unlink(missing_ok=True)
+    print(f"✓ Raw JSON archived to batches/{json_path.name}")
     print("✓ Done.")
 
 # ---------------------------------------------------------------------------
