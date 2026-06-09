@@ -185,7 +185,7 @@
     );
   }
 
-  function CategoriesTab({ stats, focusCategory }) {
+  function CategoriesTab({ stats, focusCategory, onEditTx }) {
     const [sel, setSel] = React.useState(focusCategory || null);
     React.useEffect(() => { if (focusCategory) setSel(focusCategory); }, [focusCategory]);
     const curMonth = stats.asOf.getMonth();
@@ -229,10 +229,7 @@
                     <div className="muted" style={{ fontSize: 11, fontFamily: "var(--mono)", margin: "8px 2px 4px", textTransform: "uppercase", letterSpacing: "0.1em" }}>Recent in {cat.label}</div>
                     <div className="txlist">
                       {stats.upto.filter((t) => t.category === c.id).slice().reverse().slice(0, 5).map((t) => (
-                        <div key={t.id} className="txrow" style={{ cursor: "default" }}>
-                          <span className="tx-main"><div className="tx-desc">{t.description}</div><div className="tx-meta">{fmtDateShort(t.date)}</div></span>
-                          <span className="tx-amt num">{eurAuto(t.amount_eur)}</span>
-                        </div>
+                        <TxRow key={t.id} t={t} onClick={onEditTx ? () => onEditTx(t) : undefined} />
                       ))}
                     </div>
                   </div>
@@ -284,7 +281,7 @@
           <SegmentedControl options={["Projection", "Categories", "Activity", "Fun"]} value={tab} fill onChange={setTab} />
         </div>
         {tab === "Projection" && <ProjectionTab stats={stats} />}
-        {tab === "Categories" && <CategoriesTab stats={stats} focusCategory={focus && focus.category} />}
+        {tab === "Categories" && <CategoriesTab stats={stats} focusCategory={focus && focus.category} onEditTx={onEditTx} />}
         {tab === "Activity" && <ActivityTab stats={stats} onEditTx={onEditTx} />}
         {tab === "Fun" && <YFun.FunTab fun={fun} store={store} setStore={setStore} addTx={addTx} />}
       </div>

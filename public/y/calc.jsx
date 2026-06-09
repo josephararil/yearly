@@ -202,7 +202,7 @@ function computeStats(store, year, asOfDate) {
       }
       const allFunTxns = (store.transactions || []).filter((t) => t.fun && t.person === p.id && t.date <= asOfStr);
       const spentAllTime = allFunTxns.reduce((a, t) => a + t.amount_eur, 0);
-      const balance = accrued - spentAllTime;
+      const balance = accrued - spentAllTime + (p.balanceAdjustment || 0);
       const monthlyRate = rateForMonth(p, currentYM);
       const usedThisMonth = allFunTxns
         .filter((t) => t.date.slice(0, 7) === currentYM)

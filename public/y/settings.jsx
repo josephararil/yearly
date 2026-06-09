@@ -1,6 +1,6 @@
 // settings.jsx — target, buffer, years, templates, CSV import/export, clear.
 (function () {
-  const APP_VERSION = 'v14';
+  const APP_VERSION = 'v16';
   const { YData, YCalc, YUI } = window;
   const { eur0, signedPct, computeStats } = YCalc;
   const { Sheet, DeltaChip } = YUI;
@@ -347,7 +347,22 @@
       return best;
     })();
     const [v, setV] = React.useState(String(latestRate));
-    React.useEffect(() => { if (open) setV(String(latestRate)); }, [open]);
+    const [balMode, setBalMode] = React.useState(false);
+    // Current balance shown to the user (with any existing adjustment included)
+    const currentBalance = React.useMemo(() => {
+      if (!person || !open) return 0;
+      const fun = YCalc.computeFun(store);
+      const pd = fun.people.find((p) => p.id === person.id);
+      return pd ? pd.balance : 0;
+    }, [open, person, store]);
+    const [balVal, setBalVal] = React.useState("");
+    React.useEffect(() => {
+      if (open) {
+        setV(String(latestRate));
+        setBalMode(false);
+        setBalVal(String(Math.round(currentBalance)));
+      }
+    }, [open]);
 
     const save = () => {
       const amount = parseInt(v) || 0;
@@ -362,7 +377,12 @@
             rates.push({ from: currentYM, amount });
           }
           rates.sort((a, b) => (a.from < b.from ? -1 : 1));
-          return { ...p, rates };
+          // Compute raw balance (without existing adjustment) to back-calculate new adjustment
+          const existingAdj = p.balanceAdjustment || 0;
+          const rawBalance = currentBalance - existingAdj;
+          const targetBalance = parseInt(balVal);
+          const newAdj = isNaN(targetBalance) ? existingAdj : targetBalance - rawBalance;
+          return { ...p, rates, balanceAdjustment: Math.round(newAdj) };
         });
         return { ...s, people: updated };
       });
@@ -378,8 +398,35 @@
         <div className="amount-display"><span className="cur">€</span><span className="num">{v || "0"}</span></div>
         <input className="inp inp-num" inputMode="numeric" value={v}
           onChange={(e) => setV(e.target.value.replace(/[^\d]/g, ""))}
-          style={{ textAlign: "center", fontSize: 18, marginBottom: 16 }} />
-        <Button variant="primary" block onClick={save}>Save rate</Button>
+          style={{ textAlign: "center", fontSize: 18, marginBottom: 20 }} />
+
+        <div style={{ borderTop: "1px solid var(--hair)", paddingTop: 16, marginBottom: 16 }}>
+          <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 6 }}>
+            <span style={{ fontFamily: "var(--mono)", fontSize: 11, color: "var(--muted)", textTransform: "uppercase", letterSpacing: "0.07em" }}>Current balance</span>
+            <span style={{ fontFamily: "var(--mono)", fontSize: 13, color: currentBalance < 0 ? "var(--terra)" : "var(--sage)" }}>
+              {currentBalance < 0 ? "−€" + Math.round(Math.abs(currentBalance)) : "€" + Math.round(currentBalance)}
+            </span>
+          </div>
+          <button className="linklike" style={{ fontSize: 12, color: "var(--ink-2)" }}
+            onClick={() => setBalMode((b) => !b)}>
+            {balMode ? "Hide balance correction" : "Correct balance…"}
+          </button>
+          {balMode && (
+            <div style={{ marginTop: 10 }}>
+              <p className="muted" style={{ fontSize: 12, marginTop: 0, marginBottom: 10, lineHeight: 1.5 }}>
+                Override the calculated balance. Enter the actual balance {person.name} should have right now. Future accruals and spending apply on top.
+              </p>
+              <div className="field">
+                <label>Set balance to (€)</label>
+                <input className="inp inp-num" inputMode="numeric" value={balVal}
+                  onChange={(e) => setBalVal(e.target.value.replace(/[^-\d]/g, ""))}
+                  style={{ textAlign: "center", fontSize: 18 }} />
+              </div>
+            </div>
+          )}
+        </div>
+
+        <Button variant="primary" block onClick={save}>Save</Button>
       </Sheet>
     );
   }
@@ -439,6 +486,7 @@
   function SettingsScreen({ store, setStore, stats }) {
     const [sub, setSub] = React.useState(null);
     const [funPersonSub, setFunPersonSub] = React.useState(null); // person id | null
+    const [syncing, setSyncing] = React.useState(false);
     const cur = store.years[String(store.currentYear)];
     const density = store.density || "balanced";
     const densityLabel = density.charAt(0).toUpperCase() + density.slice(1);
@@ -498,7 +546,8 @@
               });
             }} />
           <Row icon="upload" title="Restore (JSON)" sub="replace all data from a backup" onClick={() => document.getElementById("jsonfile").click()} />
-          <Row icon="activity" title="Restore sample data" sub="reset to the demo dataset" onClick={() => { if (confirm("Replace all data with the sample dataset?")) setStore(YData.resetStore()); }} />
+          <Row icon="activity" title={syncing ? "Syncing…" : "Sync now"} sub="fetch latest data from server"
+            onClick={async () => { setSyncing(true); await window.YSync.pull(); setSyncing(false); }} />
         </div>
 
         <div className="section-h"><h2>Danger zone</h2></div>

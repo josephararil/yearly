@@ -108,9 +108,33 @@ browser.
   scripts require HTTP.
 - State persists to `localStorage` under `yearly:store:v1`; on first load `buildSeed`
   creates a blank store (no transactions, no wishlist) with default year settings, people,
-  and templates. To reset to a blank store, clear that key or use Settings › Restore sample data.
+  and templates. To reset to a blank store, clear that key.
 - The app is also hosted on GitHub Pages — `index.html` at the repo root serves as the PWA
   entry point.
+
+### Local dev — no backend, no reload loop
+
+The sync layer (`y/sync.jsx`) calls `/api/sync`, `/api/transactions`, and `/api/settings`.
+These endpoints only exist on the production Cloudflare Worker. Running locally means every
+sync call gets a 404 from the static file server. This is handled gracefully: `syncFetch`
+treats 404 as a silent no-op (returns `null`) and never reloads the page — only 200-with-HTML
+(Cloudflare Access login redirect) or 401/403 trigger a reload.
+
+**If you see the app reloading every second** in the local preview, the likely cause is a
+stale service worker whose precache contains an old `sync.jsx` that had the original
+`location.reload()` on any non-JSON response. Fix:
+
+1. Open DevTools → Application → Service Workers → click "Unregister".
+2. Open DevTools → Application → Cache Storage → delete all `yearly-v*` caches.
+3. Hard-reload (`Ctrl+Shift+R` / `Cmd+Shift+R`).
+
+The new SW (once installed) uses `{cache: 'no-cache'}` when precaching, so this situation
+should not recur after a version bump.
+
+**`yearly:bootstrapped` is absent on a fresh origin** (e.g. localhost vs production). On
+first load, `bootstrap()` tries `/api/sync?since=0`, gets a 404, and returns without setting
+the key. The app still renders fine — bootstrap just silently no-ops on every load. The
+localStorage keys only get populated when the app runs against the real backend.
 
 ### Self-contained (no external dependencies)
 The app is fully self-contained — **no `_ds/` directory is needed**. The original Aperture
@@ -171,14 +195,14 @@ own export to `window`**. There are no imports/exports. Two consequences:
   Detector #6 (yoy): current year only — compares main spent to prior year at same doy; watch/info/good.
   Detector #7 (reqpace): current year only, when projection > mainTarget — surfaces required daily spend cap.
   `computeFun(store, asOfDate?)` — exported, uses `store.currentYear` for YTD figures. Returns:
-  `people[]` (per-person: `id`, `name`, `balance` all-time = accrued − spent, `monthlyRate`, `usedThisMonth`,
+  `people[]` (per-person: `id`, `name`, `balance` all-time = accrued − spent + `balanceAdjustment`, `monthlyRate`, `usedThisMonth`,
   `spentAllTime`), `funSpentYTD`, `funProjection` (linear, approximate), `funCatList` (category breakdown).
 - `y/data.jsx` (`window.YData`) — the persisted store shape, the fixed 18-category list
   (`CATEGORIES`, id→icon→color), default templates, and
   `loadStore`/`saveStore`/`resetStore`/`migrateStore`.
   **Store shape (fun-budget model):**
-  - `store.people`: `[{id, name, rates:[{from:"YYYY-MM", amount}], startMonth:"YYYY-MM"}]` — forward-only
-    dated rate schedule per person. Sorted ascending by `from`. Default: Joseph €100/mo, Marti €200/mo.
+  - `store.people`: `[{id, name, rates:[{from:"YYYY-MM", amount}], startMonth:"YYYY-MM", balanceAdjustment?:number}]` — forward-only
+    dated rate schedule per person. `balanceAdjustment` is an additive offset to the computed balance (set via "Correct balance" in Settings → Fun budget); 0 when absent. Default: Joseph €100/mo, Marti €200/mo.
   - `store.wishlist`: `[{id, owner, name, price, note?, createdMonth}]` — per-person wishlist items.
   - Transaction fields: optional `fun:true` and `person:"joseph"|"marti"` (only on fun tx).
     Optional Revolut-sourced fields: `merchant_logo` (URL string), `merchant_city` (string).
@@ -218,9 +242,9 @@ Implements outbox-based client↔D1 sync with optimistic UI and offline-safe que
 - `YSync.bootstrap()` — called once on mount. Pull-first: if server has data, adopt it (second-device path); if server is empty, push local seed + settings (first-device path). Sets `yearly:bootstrapped`.
 - `YSync.start()` — wires `online`, `focus`, and `visibilitychange` → visible triggers.
 
-**Auth-expiry vs offline:** `syncFetch()` wraps every `fetch` call. If the call throws (`TypeError`) it checks `navigator.onLine`: offline → return `null` silently (outbox/cursor unchanged, retry on reconnect); online → `location.reload()` (Cloudflare Access expiry surfaces as a cross-origin 302 CORS block, not `response.redirected`). Online + `!response.ok` or non-JSON response also reloads. **Never reloads while offline.**
+**Auth-expiry vs offline:** `syncFetch()` wraps every `fetch` call. If the call throws (`TypeError`) it checks `navigator.onLine`: offline → return `null` silently; online → `location.reload()` (Cloudflare Access expiry as a cross-origin 302 CORS block). For non-throwing bad responses, only reloads on auth-expiry patterns: 200 with non-JSON body (Cloudflare Access login page redirect) or HTTP 401/403. 404 and 5xx return `null` silently — they indicate backend or local-dev issues, not auth expiry.
 
-**Pull triggers:** on mount via `bootstrap()` (first-time only), on `visibilitychange` → visible, on window `focus`, and before `EditSheet` opens (freshness pull via `openEdit` wrapper in `app.jsx`).
+**Pull triggers:** on every mount (unconditional `bootstrap().then(() => pull())` in `app.jsx`), on `visibilitychange` → visible, and before `EditSheet` opens (freshness pull via `openEdit` wrapper in `app.jsx`). The `focus` event triggers `flush()` only (no full pull). `pull()` always flushes first so local changes are never overwritten by a server pull. On already-bootstrapped devices, `bootstrap()` is a no-op (returns immediately if `yearly:bootstrapped` is set); settings are compared by `updated_at > appliedAt` so only genuinely newer server settings overwrite local ones.
 
 > **Why no `/api` calls appear on hard reload:** `bootstrap()` is gated by `yearly:bootstrapped` in
 > localStorage — once set (after first ever sync), it returns immediately without any network call.
@@ -298,12 +322,13 @@ spend, no projection/buffer).
   `focus.section === "fun"` → `setTab("Fun")`. **ProjectionChart** now shows a household ceiling
   line (`--ink-2` dashed "6 3", labeled "ceiling €Xk") above the main-target line; `maxY` scales
   to `max(mainTarget, ceiling, projection, priorMax) × 1.1`. **CategoriesTab** catbar rows use
-  `CatIcon` (24px, radius 6) instead of the 8px color dot.
+  `CatIcon` (24px, radius 6); expanding a category shows the last 5 transactions using `TxRow` with
+  `onClick → onEditTx` so they are clickable (opens the same edit sheet as the Activity tab).
   `addflow.jsx` — both `AddSheet` and `EditSheet` expose a **Fun budget toggle** (pill switch, off by
   default). When on, a Chip owner picker (Joseph/Marti) appears. `commit()`/`save()` write `fun:true`
   + `person` when the toggle is on; EditSheet pre-populates toggle state from `txn.fun`/`txn.person`.
   `EditSheet` now accepts a `store` prop for reading `store.people`.
-  `settings.jsx` — footer shows `APP_VERSION` constant (`'v14'` currently, defined at top of
+  `settings.jsx` — footer shows `APP_VERSION` constant (`'v16'` currently, defined at top of
   IIFE — update it with every release). `TargetSheet` (now labelled "Household ceiling") and `BufferSheet` accept a `year`
   prop (defaults to `store.currentYear`); `TargetSheet` reads/writes `years[y].ceiling`. `BufferSheet`
   computes its own stats internally (unchanged). `YearsSheet` has tappable year rows that drill into a
@@ -312,11 +337,15 @@ spend, no projection/buffer).
   Year list rows show `st.ceiling` + `st.combinedProjection` + `DeltaChip(combinedDelta, combinedStatus)`.
   **"Fun budget" section** — one `Row` per person opens `FunConfigSheet`, which sets the person's monthly
   rate for the current YYYY-MM (forward-only: appends/updates a `rates[]` entry, never modifies past
-  entries, keeps `rates` sorted). The derived split is shown inline: `ceiling = main + fun/yr`.
+  entries, keeps `rates` sorted) and optionally corrects the balance: "Correct balance…" toggle reveals
+  a "Set balance to €X" input that back-calculates and stores `p.balanceAdjustment` so the displayed
+  balance equals the entered value, with future accruals and spending applied on top.
+  The derived split is shown inline: `ceiling = main + fun/yr`.
   `DensitySheet` — a picker for Overview density (minimal/balanced/all); writes to `store.density`.
   **JSON backup/restore**: "Restore (JSON)" calls `YData.migrateStore(parsed)` before `setStore` so
   old backups (with `target`, no `people`/`wishlist`) migrate cleanly. Hidden `#jsonfile` input mirrors
-  the CSV `#csvfile` pattern.
+  the CSV `#csvfile` pattern. **"Sync now"** row in the Data section calls `YSync.pull()` on demand
+  (shows "Syncing…" while in flight). "Restore sample data" has been removed.
   Focus routing: `AnalysisScreen` focus useEffect handles `"categories"` → Categories, `"projection"` →
   Projection, `"activity"` → Activity, `"fun"` → Fun.
 - `y/icons.jsx` — inline-SVG Lucide-style icon set via `<Icon name=… />`.
@@ -399,10 +428,9 @@ The app is a fully installable PWA:
   file added to the precache list, CDN URL pinned to a new version, etc.). The old cache is
   deleted on `activate`. `skipWaiting()` + `clients.claim()` ensure the new SW takes over
   immediately without waiting for old tabs to close.
-  **Install hardening:** the install handler uses individual `fetch().catch()` calls instead
-  of `cache.addAll` so a single URL failure (e.g. Cloudflare Access CORS redirect on
-  `manifest.json`) does not abort the entire SW install. Same `!response.redirected` guard
-  applied in the install handler as in the fetch handler. Current version: `yearly-v14`.
+  **Install hardening:** the install handler uses individual `fetch({cache:'no-cache'}).catch()` calls instead
+  of `cache.addAll` so a single URL failure does not abort the entire SW install, and `no-cache` ensures the install always fetches fresh files (bypassing browser HTTP cache). Same `!response.redirected` guard
+  applied in the install handler as in the fetch handler. Current version: `yearly-v16`.
   **Logo caching:** merchant logo requests (`storage.googleapis.com/revolut-prod-apps_merchant-logo/…`)
   are intercepted with a **cache-first** strategy using a dedicated `yearly-logos-v1` cache.
   Once a logo is fetched it is never re-fetched. The logo cache is intentionally NOT deleted on

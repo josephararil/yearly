@@ -73,7 +73,7 @@
     React.useEffect(() => {
       YSync.init({ getStore: () => storeRef.current, applyServer: setStore });
       YSync.start();
-      YSync.bootstrap();
+      YSync.bootstrap().then(() => YSync.pull());
     }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
     const stats = React.useMemo(() => YCalc.computeStats(store, viewYear), [store, viewYear]);

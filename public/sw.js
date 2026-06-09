@@ -1,5 +1,5 @@
 // Bump this version whenever the app shell changes to invalidate the old cache.
-const CACHE_NAME = 'yearly-v14';
+const CACHE_NAME = 'yearly-v16';
 // Logo cache is intentionally never deleted on app updates — logos are stable per-merchant URL.
 const LOGO_CACHE = 'yearly-logos-v1';
 
@@ -36,7 +36,7 @@ self.addEventListener('install', event => {
       // manifest.json) doesn't block the entire SW install. Same !redirected guard as
       // the fetch handler so an Access redirect can't poison the cache.
       Promise.all(PRECACHE.map(url =>
-        fetch(url)
+        fetch(url, { cache: 'no-cache' })
           .then(r => { if ((r.ok || r.type === 'opaque') && !r.redirected) return cache.put(url, r); })
           .catch(() => {})
       ))

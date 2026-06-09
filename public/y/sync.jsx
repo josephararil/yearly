@@ -72,7 +72,13 @@
     }
     const ct = response.headers.get('content-type') || '';
     if (!response.ok || !ct.includes('application/json')) {
-      if (navigator.onLine) location.reload(); // HTML login page or error — re-auth
+      // Only reload for auth-expiry: 200 with HTML (Cloudflare Access login redirect)
+      // or explicit 401/403. Silent-fail on 404/5xx — those are backend or local-dev issues.
+      if (navigator.onLine) {
+        const isAuthExpiry = (response.ok && !ct.includes('application/json'))
+          || response.status === 401 || response.status === 403;
+        if (isAuthExpiry) location.reload();
+      }
       return null;
     }
     return response.json();
