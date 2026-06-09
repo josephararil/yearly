@@ -109,8 +109,24 @@ function computeStats(store, year, asOfDate) {
     const mainTxns = txns.filter((t) => !t.fun);
     const upto = isFuture ? [] : mainTxns.filter((t) => t.date <= asOfStr);
     const spent = isFuture ? 0 : upto.reduce((a, t) => a + t.amount_eur, 0);
-    const dailyRate = isFuture ? 0 : spent / doy;
-    const projNoBuffer = (complete || isFuture) ? spent : dailyRate * 365;
+    const dailyRate = isFuture ? 0 : spent / doy;  // YTD average, kept for display
+    // Trailing 60-day rate: de-weights front-loaded lump sums once they leave the window.
+    // Falls back to YTD rate when fewer than 60 days have elapsed (the window covers all of YTD).
+    // Damped-blend rate: YTD_rate × (doy/365) + trailing_60d_rate × (1 − doy/365).
+    // Early year → trusts recent momentum (YTD history is thin).
+    // Late year → locks onto YTD average (ignores last-minute spikes or quiet patches).
+    let trailingDailyRate = dailyRate;
+    if (!isFuture && !complete && doy >= 1) {
+      const w60 = new Date(asOf); w60.setDate(w60.getDate() - 60);
+      const w60str = w60.toISOString().slice(0, 10);
+      const windowDays = Math.min(60, doy);
+      const last60 = upto.filter((t) => t.date > w60str).reduce((a, t) => a + t.amount_eur, 0);
+      const rawTrailing = last60 / windowDays;
+      const yearWeight = doy / 365;
+      trailingDailyRate = dailyRate * yearWeight + rawTrailing * (1 - yearWeight);
+    }
+    const daysRemaining = Math.max(0, 365 - doy);
+    const projNoBuffer = (complete || isFuture) ? spent : spent + trailingDailyRate * daysRemaining;
     const projection = (complete || isFuture) ? spent : projNoBuffer * (1 + buffer);
     const bufferAmt = projection - projNoBuffer;
 
@@ -157,7 +173,7 @@ function computeStats(store, year, asOfDate) {
 
     return {
       year: Number(year), ceiling, mainTarget, funPlanAnnual, buffer, isCurrent, complete, isFuture,
-      asOf, asOfStr, doy, spent, dailyRate, projection, projNoBuffer, bufferAmt,
+      asOf, asOfStr, doy, spent, dailyRate, trailingDailyRate, daysRemaining, projection, projNoBuffer, bufferAmt,
       pace, delta, deltaPct, status, txns: mainTxns, upto, byCat, catList, byMonth, catMonth,
       priorCum, priorSpent,
       funSpent, funProjection, combinedProjection, combinedDelta, combinedDeltaPct, combinedStatus,
@@ -168,9 +184,17 @@ function computeStats(store, year, asOfDate) {
   function projectionAsOf(stats, daysBack) {
     const ref = new Date(stats.asOf); ref.setDate(ref.getDate() - daysBack);
     const refStr = ref.toISOString().slice(0, 10);
-    const doy = Math.max(1, dayOfYear(ref));
-    const spent = stats.txns.filter((t) => t.date <= refStr).reduce((a, t) => a + t.amount_eur, 0);
-    return spent / doy * 365 * (1 + stats.buffer);
+    const refDoy = Math.max(1, dayOfYear(ref));
+    const refSpent = stats.txns.filter((t) => t.date <= refStr).reduce((a, t) => a + t.amount_eur, 0);
+    const w60 = new Date(ref); w60.setDate(w60.getDate() - 60);
+    const w60str = w60.toISOString().slice(0, 10);
+    const windowDays = Math.min(60, refDoy);
+    const last60 = stats.txns.filter((t) => t.date > w60str && t.date <= refStr).reduce((a, t) => a + t.amount_eur, 0);
+    const ytdRate = refDoy > 0 ? refSpent / refDoy : 0;
+    const rawTrailing = windowDays > 0 ? last60 / windowDays : ytdRate;
+    const yearWeight = refDoy / 365;
+    const blendedRate = ytdRate * yearWeight + rawTrailing * (1 - yearWeight);
+    return (refSpent + blendedRate * Math.max(0, 365 - refDoy)) * (1 + stats.buffer);
   }
 
   // Required daily rate to stay on mainTarget. Returns null when not applicable.

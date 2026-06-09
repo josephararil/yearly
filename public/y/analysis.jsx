@@ -208,6 +208,97 @@
     );
   }
 
+  function LegendItem({ c, dash, rect, label }) {
+    return (
+      <span style={{ display: "inline-flex", alignItems: "center", gap: 5, fontSize: 11, color: "var(--muted)", fontFamily: "var(--mono)" }}>
+        {rect
+          ? <svg width="14" height="10"><rect x="0" y="2" width="14" height="6" rx="1.5" fill={c} opacity="0.82" /></svg>
+          : <svg width="18" height="6"><line x1="0" y1="3" x2="18" y2="3" stroke={c} strokeWidth="2.2" strokeDasharray={dash || "0"} strokeLinecap="round" /></svg>
+        }
+        {label}
+      </span>
+    );
+  }
+
+  function MonthlyBarsChart({ stats }) {
+    const W = 340, H = 170, padL = 38, padR = 10, padT = 12, padB = 20;
+    const barArea = W - padL - padR;
+    const slot = barArea / 12;
+    const bw = Math.max(8, Math.floor(slot * 0.65));
+    const barLeft = (m) => padL + m * slot + (slot - bw) / 2;
+    const barCenter = (m) => padL + m * slot + slot / 2;
+
+    const curMonth = stats.isFuture ? -1 : stats.asOf.getMonth();
+    const amounts = stats.byMonth.map((m) => m.amount);
+
+    const completedMonths = stats.complete ? 12 : curMonth;
+    const completedAmounts = amounts.slice(0, completedMonths);
+    const avgMonthly = completedMonths > 0 ? completedAmounts.reduce((a, v) => a + v, 0) / completedMonths : 0;
+    const maxMonthly = completedMonths > 0 ? Math.max(...completedAmounts) : 0;
+
+    const projectedRemaining = Math.max(0, stats.projection - stats.spent);
+    const monthsRemaining = stats.daysRemaining / 30.4;
+    const requiredMonthlyAvg = monthsRemaining > 0.5 ? projectedRemaining / monthsRemaining : 0;
+
+    const maxY = Math.max(1, avgMonthly * 1.1, maxMonthly, requiredMonthlyAvg, ...amounts) * 1.2;
+    const sy = (v) => padT + (1 - v / maxY) * (H - padT - padB);
+
+    const showMax = maxMonthly > avgMonthly * 1.1 && completedMonths > 0;
+    const showReq = !stats.complete && requiredMonthlyAvg > 0;
+
+    return (
+      <div>
+        <div className="section-h" style={{ marginTop: 0, marginBottom: 10 }}><h2>Monthly breakdown</h2></div>
+        <svg viewBox={`0 0 ${W} ${H}`} width="100%" style={{ display: "block", overflow: "visible" }}>
+          {[0, 0.5, 1].map((f) => {
+            const v = f * maxY;
+            return (
+              <g key={f}>
+                <line x1={padL} y1={sy(v)} x2={W - padR} y2={sy(v)} stroke="var(--chart-grid)" strokeWidth="0.8" />
+                {f > 0 && <text x={padL - 4} y={sy(v) + 3} textAnchor="end" fontSize="9" fill="var(--chart-axis)" fontFamily="var(--mono)">{eurK(v)}</text>}
+              </g>
+            );
+          })}
+          {amounts.map((amt, m) => {
+            const isPast = m < curMonth || stats.complete;
+            const isCur = !stats.complete && m === curMonth;
+            const barH = Math.max(0, (amt / maxY) * (H - padT - padB));
+            if (barH < 1 && !isCur) return null;
+            return (
+              <rect key={m} x={barLeft(m)} y={sy(amt)} width={bw} height={Math.max(1, barH)} rx="2"
+                fill={isCur ? "color-mix(in srgb, var(--chart-actual) 55%, transparent)" : "var(--chart-actual)"}
+                opacity={isPast ? 0.82 : 1}
+              />
+            );
+          })}
+          {amounts.map((_, m) => (
+            <text key={m} x={barCenter(m)} y={H - 4} textAnchor="middle"
+              fontSize="9" fill={m === curMonth ? "var(--ink)" : "var(--chart-axis)"}
+              fontFamily="var(--mono)">{MONTHS[m][0]}</text>
+          ))}
+          {avgMonthly > 0 && (
+            <line x1={padL} y1={sy(avgMonthly)} x2={W - padR} y2={sy(avgMonthly)}
+              stroke="var(--chart-pace)" strokeWidth="1.3" strokeDasharray="4 3" opacity="0.9" />
+          )}
+          {showMax && (
+            <line x1={padL} y1={sy(maxMonthly)} x2={W - padR} y2={sy(maxMonthly)}
+              stroke="var(--amber)" strokeWidth="1" strokeDasharray="2 3" opacity="0.7" />
+          )}
+          {showReq && (
+            <line x1={padL + curMonth * slot} y1={sy(requiredMonthlyAvg)} x2={W - padR} y2={sy(requiredMonthlyAvg)}
+              stroke="var(--chart-proj)" strokeWidth="1.5" strokeDasharray="5 4" />
+          )}
+        </svg>
+        <div style={{ display: "flex", gap: 12, flexWrap: "wrap", marginTop: 8, justifyContent: "center" }}>
+          <LegendItem c="var(--chart-actual)" rect label="Actual" />
+          {avgMonthly > 0 && <LegendItem c="var(--chart-pace)" dash="4 3" label="Mo avg" />}
+          {showMax && <LegendItem c="var(--amber)" dash="2 3" label="Peak mo" />}
+          {showReq && <LegendItem c="var(--chart-proj)" dash="5 4" label="Needed/mo" />}
+        </div>
+      </div>
+    );
+  }
+
   function StatCard({ label, value, sub, mono = true, color }) {
     return (
       <div className="stat">
@@ -227,14 +318,18 @@
           <ProjectionChart stats={stats} />
           <ChartLegend stats={stats} />
           <p className="muted" style={{ fontSize: 12.5, lineHeight: 1.5, margin: "12px 2px 0", textWrap: "pretty" }}>
-            Projection is linear: your daily spend so far, extended across all 365 days{stats.complete ? "" : `, then lifted ${Math.round(stats.buffer * 100)}% for missed entries`}.
+            {stats.complete
+              ? "Final spend recorded — year complete."
+              : `Projection: blended daily rate (${eur0(stats.trailingDailyRate)}/d) × ${stats.daysRemaining} remaining days${stats.buffer > 0 ? `, lifted ${Math.round(stats.buffer * 100)}% for missed entries` : ""}. Blend = ${Math.round((1 - stats.doy / 365) * 100)}% recent 60d + ${Math.round(stats.doy / 365 * 100)}% YTD (${eur0(stats.dailyRate)}/d).`}
           </p>
         </div>
+
+        {!stats.isFuture && <MonthlyBarsChart stats={stats} />}
 
         <div className="statgrid">
           <StatCard label="Spent year-to-date" value={eur0(stats.spent)} sub={`${stats.upto.length} entries`} />
           <StatCard label={stats.complete ? "Days" : "On-pace by today"} value={stats.complete ? "365" : eur0(stats.pace)} sub={stats.complete ? "complete" : `day ${stats.doy} of 365`} />
-          <StatCard label="Daily rate" value={eur0(stats.dailyRate) + "/d"} sub={`linear pace ${eur0(stats.mainTarget / 365)}/d`} />
+          <StatCard label="Blended rate" value={eur0(stats.trailingDailyRate) + "/d"} sub={`YTD avg ${eur0(stats.dailyRate)}/d`} />
           {!stats.complete && <StatCard label="Buffer adds" value={"+" + eur0(stats.bufferAmt)} sub={`${Math.round(stats.buffer * 100)}% missed-entry`} />}
           <StatCard label={stats.complete ? "Final spend" : "Projected finish"} value={eur0(stats.projection)}
             color={stats.status === "good" ? "var(--good)" : stats.status === "alert" ? "var(--alert)" : "var(--watch)"} />

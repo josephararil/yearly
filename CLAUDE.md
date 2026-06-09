@@ -165,7 +165,7 @@ own export to `window`**. There are no imports/exports. Two consequences:
 
 ### The brain (port these first to any production target)
 - `y/calc.jsx` (`window.YCalc`) — **all numbers come from here.** `computeStats(store, year, asOfDate?)`
-  (linear projection + per-year buffer uplift + status thresholds; `asOfDate` defaults to `new Date()`)
+  (damped-blend projection + per-year buffer uplift + status thresholds; `asOfDate` defaults to `new Date()`)
   and `buildCallouts(store, stats)` (the ranked detector engine — 8 detectors). Pure functions, no UI deps.
   Also exports `cumulativeByDay(txns)` → `number[366]` (shared with `analysis.jsx`),
   `priorYearCumulative(store, year, asOfDate)` → number (prior year spend at same day-of-year),
@@ -180,10 +180,16 @@ own export to `window`**. There are no imports/exports. Two consequences:
   - `spent` / `projection` in stats — main (non-fun) only. Fun tx excluded from all main math.
   - `funSpent` / `funProjection` — fun YTD and linear projection (approximate, lumpy).
   - `combinedProjection` = `projection + funProjection`; `combinedDelta` / `combinedStatus` vs `ceiling`.
+  **Projection formula (damped blend):** `projection = (spent + blendedRate × daysRemaining) × (1 + buffer)` where
+  `blendedRate = YTD_rate × (doy/365) + trailing_60d_rate × (1 − doy/365)`. Early in the year the
+  blend trusts recent momentum (thin YTD history); late in the year it locks onto the full-year
+  average, so a July holiday doesn't hijack the December projection. For complete/future years
+  `projection = spent`. `projectionAsOf` uses the same blend for consistent trend comparisons.
   `computeStats` returns: `ceiling`, `mainTarget`, `funPlanAnnual`, `funSpent`, `funProjection`,
   `combinedProjection`, `combinedDelta`, `combinedDeltaPct`, `combinedStatus` plus all existing fields
-  (`spent`, `projection`, `delta`, `status`, etc. — all main-budget). `stats.txns` contains main-only
-  tx (fun tx excluded); `stats.upto` is likewise main-only.
+  (`spent`, `dailyRate` YTD, `trailingDailyRate` blended, `daysRemaining`, `projection`, `delta`,
+  `status`, etc. — all main-budget). `stats.txns` contains main-only tx (fun tx excluded); `stats.upto`
+  is likewise main-only.
   `priorCum` (number[366] | null) and `priorSpent` (number | null) — prior year, main tx only.
   Future-year guard: spent 0, projection 0, status "good"; `isFuture` in returned stats.
   `buildCallouts` returns a single `{id:"future"}` callout for future years; `{id:"final"}` for
@@ -326,6 +332,13 @@ spend, no projection/buffer).
   `ToggleChip` component (defined above `ProjectionChart` in the IIFE) renders small toggle buttons
   that show/hide individual series — Pace, Projection (incomplete year only), Ceiling, and prior-year
   (when `priorCum` is present). `maxY` scales to `max(mainTarget, ceiling, projection, priorMax) × 1.1`.
+  **MonthlyBarsChart** — bar chart below the line chart in `ProjectionTab`. One bar per calendar month
+  (terra, full opacity for complete months; 55% opacity for the current partial month; absent for future
+  months). Three reference lines: monthly average across completed months (`--chart-pace` dashed), peak
+  month (`--amber` dotted, only when > avg × 1.1), and — for incomplete years — the required monthly
+  average to reach `stats.projection` from the remaining days (`--chart-proj` dashed, drawn from the
+  current-month slot forward). Hidden for future years. `LegendItem` helper renders both bar and line
+  swatches; defined in the same IIFE, above `MonthlyBarsChart`.
   **CategoriesTab** catbar rows use `CatIcon` (24px, radius 6); expanding a category shows two
   sub-lists: "Recent in [category]" (last 5 by date, reversed) and "Largest in [category]" (top 5
   by `amount_eur` descending), both using `TxRow` with `onClick → onEditTx`. **ActivityTab** —
@@ -336,7 +349,7 @@ spend, no projection/buffer).
   default). When on, a Chip owner picker (Joseph/Marti) appears. `commit()`/`save()` write `fun:true`
   + `person` when the toggle is on; EditSheet pre-populates toggle state from `txn.fun`/`txn.person`.
   `EditSheet` now accepts a `store` prop for reading `store.people`.
-  `settings.jsx` — footer shows `APP_VERSION` constant (`'v17'` currently, defined at top of
+  `settings.jsx` — footer shows `APP_VERSION` constant (`'v18'` currently, defined at top of
   IIFE — update it with every release). `TargetSheet` (now labelled "Household ceiling") and `BufferSheet` accept a `year`
   prop (defaults to `store.currentYear`); `TargetSheet` reads/writes `years[y].ceiling`. `BufferSheet`
   computes its own stats internally (unchanged). `YearsSheet` has tappable year rows that drill into a
@@ -540,7 +553,7 @@ The app is a fully installable PWA:
   immediately without waiting for old tabs to close.
   **Install hardening:** the install handler uses individual `fetch({cache:'no-cache'}).catch()` calls instead
   of `cache.addAll` so a single URL failure does not abort the entire SW install, and `no-cache` ensures the install always fetches fresh files (bypassing browser HTTP cache). Same `!response.redirected` guard
-  applied in the install handler as in the fetch handler. Current version: `yearly-v17`.
+  applied in the install handler as in the fetch handler. Current version: `yearly-v18`.
   **Logo caching:** merchant logo requests (`storage.googleapis.com/revolut-prod-apps_merchant-logo/…`)
   are intercepted with a **cache-first** strategy using a dedicated `yearly-logos-v1` cache.
   Once a logo is fetched it is never re-fetched. The logo cache is intentionally NOT deleted on
@@ -576,6 +589,19 @@ The app is a fully installable PWA:
 
 **`calc.test.html`** (repo root) — a standalone HTML page that loads `y/data.jsx` +
 `y/calc.jsx` as plain `<script>` tags (no Babel needed; neither file has JSX). Serves as
-a smoke-test for the engine: open over HTTP (`http://localhost:8000/calc.test.html`) and all
-rows should show PASS. Not precached by `sw.js` (dev artifact only). Run it after any
+a smoke-test for the engine. Not precached by `sw.js` (dev artifact only). Run it after any
 change to `y/calc.jsx` or `y/data.jsx`.
+
+**Important:** the standard dev server (`python -m http.server --directory public`) serves
+from `public/` — `calc.test.html` lives at the repo root, not inside `public/`, so it is
+**not reachable** on that server. To run the tests, start a second server from the repo root:
+```
+python -m http.server 8003
+# then open http://localhost:8003/calc.test.html
+```
+All rows should show PASS.
+
+**Claude Code preview caveat:** if you accidentally navigate the preview browser to a URL
+that doesn't exist (e.g. `/calc.test.html` on the `--directory public` server), it lands on
+`chrome-error://chromewebdata/`. From that page, `window.location` assignments are silently
+ignored — the only recovery is `preview_stop` + `preview_start` to reset the browser state.
