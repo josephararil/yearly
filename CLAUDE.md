@@ -332,13 +332,17 @@ spend, no projection/buffer).
   `ToggleChip` component (defined above `ProjectionChart` in the IIFE) renders small toggle buttons
   that show/hide individual series — Pace, Projection (incomplete year only), Ceiling, and prior-year
   (when `priorCum` is present). `maxY` scales to `max(mainTarget, ceiling, projection, priorMax) × 1.1`.
-  **MonthlyBarsChart** — bar chart below the line chart in `ProjectionTab`. One bar per calendar month
-  (terra, full opacity for complete months; 55% opacity for the current partial month; absent for future
-  months). Three reference lines: monthly average across completed months (`--chart-pace` dashed), peak
-  month (`--amber` dotted, only when > avg × 1.1), and — for incomplete years — the required monthly
-  average to reach `stats.projection` from the remaining days (`--chart-proj` dashed, drawn from the
-  current-month slot forward). Hidden for future years. `LegendItem` helper renders both bar and line
-  swatches; defined in the same IIFE, above `MonthlyBarsChart`.
+  **MonthlyBarsChart** — interactive bar chart below the line chart in `ProjectionTab`. One bar per
+  calendar month (terra, full opacity for complete months; 55% opacity for the current partial month;
+  absent for future months). Three toggleable reference lines via `ToggleChip`s (reused from
+  `ProjectionChart`): monthly average (`--chart-pace` dashed), peak month (`--amber` dotted, only when
+  > avg × 1.1), and — for incomplete years — the required monthly average to reach `stats.projection`
+  (`--chart-proj` dashed, drawn from the current-month slot forward). Pointer/touch events show a
+  vertical crosshair, a dot anchored to the hovered bar (or the needed/mo line for future months), and
+  a floating tooltip with the month name and amount; future-month tooltips add an "est. needed/mo"
+  sub-label. Hovered bar gets full opacity + stroke highlight; hovered month label bolds. Hidden for
+  future years. `LegendItem` helper renders bar and line swatches; defined in the same IIFE above
+  `MonthlyBarsChart`.
   **CategoriesTab** catbar rows use `CatIcon` (24px, radius 6); expanding a category shows two
   sub-lists: "Recent in [category]" (last 5 by date, reversed) and "Largest in [category]" (top 5
   by `amount_eur` descending), both using `TxRow` with `onClick → onEditTx`. **ActivityTab** —

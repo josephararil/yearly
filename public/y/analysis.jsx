@@ -228,6 +228,12 @@
     const barLeft = (m) => padL + m * slot + (slot - bw) / 2;
     const barCenter = (m) => padL + m * slot + slot / 2;
 
+    const svgRef = React.useRef(null);
+    const [hover, setHover] = React.useState(null);
+    const [showAvg, setShowAvg] = React.useState(true);
+    const [showPeak, setShowPeak] = React.useState(true);
+    const [showReq, setShowReq] = React.useState(true);
+
     const curMonth = stats.isFuture ? -1 : stats.asOf.getMonth();
     const amounts = stats.byMonth.map((m) => m.amount);
 
@@ -243,13 +249,48 @@
     const maxY = Math.max(1, avgMonthly * 1.1, maxMonthly, requiredMonthlyAvg, ...amounts) * 1.2;
     const sy = (v) => padT + (1 - v / maxY) * (H - padT - padB);
 
-    const showMax = maxMonthly > avgMonthly * 1.1 && completedMonths > 0;
-    const showReq = !stats.complete && requiredMonthlyAvg > 0;
+    const canShowPeak = maxMonthly > avgMonthly * 1.1 && completedMonths > 0;
+    const canShowReq = !stats.complete && requiredMonthlyAvg > 0;
+
+    const handlePointer = (e) => {
+      const svg = svgRef.current;
+      if (!svg) return;
+      const rect = svg.getBoundingClientRect();
+      const scaleX = W / rect.width;
+      const rawX = (e.clientX - rect.left) * scaleX;
+      const month = Math.max(0, Math.min(11, Math.floor((rawX - padL) / slot)));
+      const amt = amounts[month];
+      const isCur = !stats.complete && month === curMonth;
+      const isFut = !stats.complete && !stats.isFuture && month > curMonth;
+      if (isFut) {
+        setHover({
+          month, x: barCenter(month),
+          y: canShowReq ? sy(requiredMonthlyAvg) : padT + 20,
+          val: requiredMonthlyAvg, label: MONTHS[month], subLabel: canShowReq ? "est. needed/mo" : null, isFut: true,
+        });
+      } else {
+        setHover({
+          month, x: barCenter(month), y: sy(amt),
+          val: amt, label: MONTHS[month] + (isCur ? " (so far)" : ""), subLabel: null, isFut: false,
+        });
+      }
+    };
+    const handleEnd = () => setHover(null);
 
     return (
       <div>
         <div className="section-h" style={{ marginTop: 0, marginBottom: 10 }}><h2>Monthly breakdown</h2></div>
-        <svg viewBox={`0 0 ${W} ${H}`} width="100%" style={{ display: "block", overflow: "visible" }}>
+        <div style={{ display: "flex", gap: 6, flexWrap: "wrap", marginBottom: 10 }}>
+          {avgMonthly > 0 && <ToggleChip label="Avg" active={showAvg} color="var(--chart-pace)" onClick={() => setShowAvg(!showAvg)} />}
+          {canShowPeak && <ToggleChip label="Peak" active={showPeak} color="var(--amber)" onClick={() => setShowPeak(!showPeak)} />}
+          {canShowReq && <ToggleChip label="Needed/mo" active={showReq} color="var(--chart-proj)" onClick={() => setShowReq(!showReq)} />}
+        </div>
+        <svg ref={svgRef} viewBox={`0 0 ${W} ${H}`} width="100%"
+          style={{ display: "block", overflow: "visible", touchAction: "none", cursor: "crosshair" }}
+          onPointerMove={handlePointer} onPointerDown={handlePointer}
+          onPointerLeave={handleEnd} onPointerUp={handleEnd} onPointerCancel={handleEnd}>
+
+          {/* grid + y-axis */}
           {[0, 0.5, 1].map((f) => {
             const v = f * maxY;
             return (
@@ -259,41 +300,86 @@
               </g>
             );
           })}
+
+          {/* bars */}
           {amounts.map((amt, m) => {
             const isPast = m < curMonth || stats.complete;
             const isCur = !stats.complete && m === curMonth;
+            const isHov = hover && hover.month === m;
             const barH = Math.max(0, (amt / maxY) * (H - padT - padB));
             if (barH < 1 && !isCur) return null;
             return (
               <rect key={m} x={barLeft(m)} y={sy(amt)} width={bw} height={Math.max(1, barH)} rx="2"
                 fill={isCur ? "color-mix(in srgb, var(--chart-actual) 55%, transparent)" : "var(--chart-actual)"}
-                opacity={isPast ? 0.82 : 1}
+                opacity={isHov ? 1 : isPast ? 0.82 : 1}
+                stroke={isHov ? "var(--chart-actual)" : "none"} strokeWidth={isHov ? 1.5 : 0}
               />
             );
           })}
+
+          {/* month labels */}
           {amounts.map((_, m) => (
-            <text key={m} x={barCenter(m)} y={H - 4} textAnchor="middle"
-              fontSize="9" fill={m === curMonth ? "var(--ink)" : "var(--chart-axis)"}
+            <text key={m} x={barCenter(m)} y={H - 4} textAnchor="middle" fontSize="9"
+              fontWeight={hover && hover.month === m ? "600" : "400"}
+              fill={hover && hover.month === m ? "var(--ink)" : m === curMonth ? "var(--ink)" : "var(--chart-axis)"}
               fontFamily="var(--mono)">{MONTHS[m][0]}</text>
           ))}
-          {avgMonthly > 0 && (
+
+          {/* reference lines */}
+          {showAvg && avgMonthly > 0 && (
             <line x1={padL} y1={sy(avgMonthly)} x2={W - padR} y2={sy(avgMonthly)}
               stroke="var(--chart-pace)" strokeWidth="1.3" strokeDasharray="4 3" opacity="0.9" />
           )}
-          {showMax && (
+          {showPeak && canShowPeak && (
             <line x1={padL} y1={sy(maxMonthly)} x2={W - padR} y2={sy(maxMonthly)}
               stroke="var(--amber)" strokeWidth="1" strokeDasharray="2 3" opacity="0.7" />
           )}
-          {showReq && (
+          {showReq && canShowReq && (
             <line x1={padL + curMonth * slot} y1={sy(requiredMonthlyAvg)} x2={W - padR} y2={sy(requiredMonthlyAvg)}
               stroke="var(--chart-proj)" strokeWidth="1.5" strokeDasharray="5 4" />
           )}
+
+          {/* crosshair + tooltip */}
+          {hover && (
+            <>
+              <line x1={hover.x} y1={padT} x2={hover.x} y2={H - padB}
+                stroke="var(--ink-2)" strokeWidth="0.8" strokeDasharray="3 3" opacity="0.5" />
+              {hover.val > 0 && (
+                <circle cx={hover.x} cy={hover.y} r="3.5"
+                  fill={hover.isFut ? "var(--chart-proj)" : "var(--chart-actual)"}
+                  stroke="var(--paper)" strokeWidth="1.5" />
+              )}
+              {(() => {
+                const tw = 96, th = hover.subLabel ? 42 : 34;
+                const tx = hover.x > W / 2 ? hover.x - tw - 8 : hover.x + 8;
+                const ty = Math.max(padT + 2, hover.y - th - 6);
+                return (
+                  <>
+                    <rect x={tx} y={ty} width={tw} height={th} rx="5"
+                      fill="var(--paper)" stroke="var(--hair-strong)" strokeWidth="0.8" />
+                    <text x={tx + tw / 2} y={ty + 13} textAnchor="middle"
+                      fontSize="11" fill="var(--ink)" fontFamily="var(--mono)" fontWeight="600">
+                      {hover.val > 0 ? eurK(hover.val) : "—"}
+                    </text>
+                    <text x={tx + tw / 2} y={ty + 27} textAnchor="middle"
+                      fontSize="10" fill="var(--muted)" fontFamily="var(--mono)">{hover.label}</text>
+                    {hover.subLabel && (
+                      <text x={tx + tw / 2} y={ty + 39} textAnchor="middle"
+                        fontSize="9" fill="var(--chart-proj)" fontFamily="var(--mono)">{hover.subLabel}</text>
+                    )}
+                  </>
+                );
+              })()}
+            </>
+          )}
         </svg>
+
+        {/* legend */}
         <div style={{ display: "flex", gap: 12, flexWrap: "wrap", marginTop: 8, justifyContent: "center" }}>
           <LegendItem c="var(--chart-actual)" rect label="Actual" />
-          {avgMonthly > 0 && <LegendItem c="var(--chart-pace)" dash="4 3" label="Mo avg" />}
-          {showMax && <LegendItem c="var(--amber)" dash="2 3" label="Peak mo" />}
-          {showReq && <LegendItem c="var(--chart-proj)" dash="5 4" label="Needed/mo" />}
+          {showAvg && avgMonthly > 0 && <LegendItem c="var(--chart-pace)" dash="4 3" label="Mo avg" />}
+          {showPeak && canShowPeak && <LegendItem c="var(--amber)" dash="2 3" label="Peak mo" />}
+          {showReq && canShowReq && <LegendItem c="var(--chart-proj)" dash="5 4" label="Needed/mo" />}
         </div>
       </div>
     );
