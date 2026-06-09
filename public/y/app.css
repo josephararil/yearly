@@ -231,6 +231,7 @@ textarea.inp { height: auto; padding: 12px 15px; resize: vertical; min-height: 6
 }
 .catpick-item.sel { border-color: var(--terra); background: color-mix(in srgb, var(--terra) 12%, transparent); color: var(--ink); }
 .cat-dot { width: 8px; height: 8px; border-radius: 99px; flex: 0 0 auto; }
+.tx-logo { width: 24px; height: 24px; border-radius: 6px; flex: 0 0 auto; object-fit: contain; }
 
 /* category bars (analysis) */
 .catbar-row { display: flex; align-items: center; gap: 12px; padding: 10px 4px; cursor: pointer; width: 100%; background: none; border: 0; text-align: left; border-bottom: 1px solid var(--hair); }

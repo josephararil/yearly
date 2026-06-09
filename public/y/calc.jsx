@@ -47,9 +47,12 @@
 
   function aggregateByCategory(upto, spent) {
     const byCat = {};
-    upto.forEach((t) => { byCat[t.category] = (byCat[t.category] || 0) + t.amount_eur; });
+    upto.forEach((t) => {
+      const cid = window.YData.normalizeCategory(t.category);
+      byCat[cid] = (byCat[cid] || 0) + t.amount_eur;
+    });
     const catList = Object.entries(byCat)
-      .map(([id, amount]) => ({ id, amount, share: spent ? amount / spent : 0, count: upto.filter((t) => t.category === id).length }))
+      .map(([id, amount]) => ({ id, amount, share: spent ? amount / spent : 0, count: upto.filter((t) => window.YData.normalizeCategory(t.category) === id).length }))
       .sort((a, b) => b.amount - a.amount);
     return { byCat, catList };
   }
@@ -59,8 +62,9 @@
     const catMonth = {};
     upto.forEach((t) => {
       const m = parseDate(t.date).getMonth();
+      const cid = window.YData.normalizeCategory(t.category);
       byMonth[m].amount += t.amount_eur;
-      (catMonth[t.category] = catMonth[t.category] || Array(12).fill(0))[m] += t.amount_eur;
+      (catMonth[cid] = catMonth[cid] || Array(12).fill(0))[m] += t.amount_eur;
     });
     return { byMonth, catMonth };
   }

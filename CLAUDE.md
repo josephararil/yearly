@@ -181,11 +181,18 @@ own export to `window`**. There are no imports/exports. Two consequences:
     dated rate schedule per person. Sorted ascending by `from`. Default: Joseph €100/mo, Marti €200/mo.
   - `store.wishlist`: `[{id, owner, name, price, note?, createdMonth}]` — per-person wishlist items.
   - Transaction fields: optional `fun:true` and `person:"joseph"|"marti"` (only on fun tx).
+    Optional Revolut-sourced fields: `merchant_logo` (URL string), `merchant_city` (string).
   - `years[y].ceiling` — renamed from `years[y].target` (sacred household ceiling, never derived).
   `buildSeed()` — returns a blank store: `transactions: []`, `wishlist: []`, default year ceilings
   (2024 €21k / 2025 €23k / 2026 €25k), default people rates, default templates. No sample data.
   `migrateStore(s)` (exported, idempotent): `years[y].target` → `ceiling`; injects `people` and
-  `wishlist` defaults if missing; sets `density` default. Called by `loadStore` and by JSON restore.
+  `wishlist` defaults if missing; sets `density` default; normalizes all `transactions[*].category`
+  to lowercase IDs (fixes Revolut title-case import: `"Groceries"` → `"groceries"`). Called by
+  `loadStore` and by JSON restore.
+  **`normalizeCategory(raw)`** (exported) — resolves any raw category string to a canonical lowercase
+  ID. Handles: valid ID passthrough, title-case ID (`"Groceries"` → `"groceries"`), full label
+  (`"House Stuff"` → `"house"`), unknown → `"general"`. Used by `cat()`, `rowToTx` in sync, and
+  `aggregateByCategory`/`aggregateByMonth` in calc.
   **`uid()`** — `crypto.randomUUID()` (collision-safe across devices and reloads).
 
 The README documents the exact projection formula, status thresholds, and each callout
@@ -213,7 +220,13 @@ Implements outbox-based client↔D1 sync with optimistic UI and offline-safe que
 
 **Auth-expiry vs offline:** `syncFetch()` wraps every `fetch` call. If the call throws (`TypeError`) it checks `navigator.onLine`: offline → return `null` silently (outbox/cursor unchanged, retry on reconnect); online → `location.reload()` (Cloudflare Access expiry surfaces as a cross-origin 302 CORS block, not `response.redirected`). Online + `!response.ok` or non-JSON response also reloads. **Never reloads while offline.**
 
-**Pull triggers:** on mount (bootstrap), on `visibilitychange` → visible, on window `focus`, and before `EditSheet` opens (freshness pull via `openEdit` wrapper in `app.jsx`).
+**Pull triggers:** on mount via `bootstrap()` (first-time only), on `visibilitychange` → visible, on window `focus`, and before `EditSheet` opens (freshness pull via `openEdit` wrapper in `app.jsx`).
+
+> **Why no `/api` calls appear on hard reload:** `bootstrap()` is gated by `yearly:bootstrapped` in
+> localStorage — once set (after first ever sync), it returns immediately without any network call.
+> The `focus` and `visibilitychange` listeners fire only when the window *gains* focus or the tab
+> *becomes* visible after being hidden. A hard reload in an already-focused, already-visible tab
+> triggers neither. To force a pull: switch away from the tab and back, or open an Edit sheet.
 
 ### State flow (`y/app.jsx`)
 `App` is the single stateful root. `store` (persisted via a `setStore` that writes the whole
@@ -251,6 +264,10 @@ spend, no projection/buffer).
   ceiling by €N (coloured by `combinedStatus`); pace rule fills to `combinedProjection/ceiling`
   with a day-of-year marker; a decomposition line shows `main €A / €mainTarget` (coloured by
   `stats.status`) and `fun €B` (ink-2). For complete years all projections equal spent.
+  **`TxRow`** — shows a 24px rounded merchant logo (`t.merchant_logo`) when present; falls back
+  to the 8px category color dot if absent or on load error. `tx-meta` appends `· city` when
+  `t.merchant_city` is set. Both fields are populated by `rowToTx` in `sync.jsx` from the
+  Revolut D1 columns.
   `Toast({ open, message, actionLabel, onAction, onDismiss })` — transient bottom-anchored
   banner (above nav, z-index 30), auto-dismisses after 5 s via `onDismiss`, optional action button.
   `GaugeHero`, `PaceBar`, and `ProjSpark` have been removed (dead since hero is fixed to numerals).
@@ -370,11 +387,11 @@ The app is a fully installable PWA:
   **Cache-versioning rule:** bump `CACHE_NAME` in `sw.js` whenever the shell changes (new
   file added to the precache list, CDN URL pinned to a new version, etc.). The old cache is
   deleted on `activate`. `skipWaiting()` + `clients.claim()` ensure the new SW takes over
-  immediately without waiting for old tabs to close. Current version: `yearly-v12`.
+  immediately without waiting for old tabs to close.
   **Install hardening:** the install handler uses individual `fetch().catch()` calls instead
   of `cache.addAll` so a single URL failure (e.g. Cloudflare Access CORS redirect on
   `manifest.json`) does not abort the entire SW install. Same `!response.redirected` guard
-  applied in the install handler as in the fetch handler.
+  applied in the install handler as in the fetch handler. Current version: `yearly-v13`.
 - **`manifest.json`** — includes `id`, `scope`, `start_url`, and an `icons` array with
   192×192, 512×512, and a maskable 512×512 variant (all SVG). SVG icons work in Chrome 91+
   and modern WebKit/Firefox; for production Android/iOS you would swap in PNGs.

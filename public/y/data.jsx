@@ -23,8 +23,17 @@
     { id: "cash", label: "Cash", icon: "cash", color: "#99a06b" },
     { id: "general", label: "General", icon: "general", color: "#8e8e93" },
   ];
-  const CAT_BY_ID = Object.fromEntries(CATEGORIES.map((c) => [c.id, c]));
-  function cat(id) { return CAT_BY_ID[id] || CAT_BY_ID.general; }
+  const CAT_BY_ID    = Object.fromEntries(CATEGORIES.map((c) => [c.id, c]));
+  // also index by lowercase label so "Groceries" (Revolut) → "groceries" (id)
+  const CAT_BY_LABEL = Object.fromEntries(CATEGORIES.map((c) => [c.label.toLowerCase(), c]));
+  function normalizeCategory(raw) {
+    if (!raw) return 'general';
+    if (CAT_BY_ID[raw]) return raw;                           // already a valid id
+    const lower = raw.toLowerCase();
+    if (CAT_BY_ID[lower]) return lower;                       // title-case id → lowercase
+    return CAT_BY_LABEL[lower] ? CAT_BY_LABEL[lower].id : 'general'; // label match
+  }
+  function cat(id) { return CAT_BY_ID[normalizeCategory(id)]; }
 
   const DEFAULT_TEMPLATES = [
     { id: "t_billa", name: "Billa", category: "groceries" },
@@ -86,6 +95,13 @@
     if (!s.wishlist) s.wishlist = [];
     // density default
     if (!s.density) s.density = "balanced";
+    // normalize transaction categories (Revolut stores title-case labels like "Groceries")
+    if (Array.isArray(s.transactions)) {
+      s.transactions = s.transactions.map((t) => {
+        const nc = normalizeCategory(t.category);
+        return nc === t.category ? t : { ...t, category: nc };
+      });
+    }
     return s;
   }
 
@@ -107,7 +123,7 @@
   function resetStore() { try { localStorage.removeItem(STORAGE_KEY); } catch (e) {} return buildSeed(); }
 
   window.YData = {
-    STORAGE_KEY, CATEGORIES, CAT_BY_ID, cat, DEFAULT_TEMPLATES,
+    STORAGE_KEY, CATEGORIES, CAT_BY_ID, cat, normalizeCategory, DEFAULT_TEMPLATES,
     loadStore, saveStore, resetStore, buildSeed, migrateStore, todayISO, uid,
   };
 })();

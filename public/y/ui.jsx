@@ -163,10 +163,13 @@
     const c = YData.cat(t.category);
     return (
       <button className="txrow" onClick={onClick}>
-        <span className="cat-dot" style={{ background: c.color }} />
+        {t.merchant_logo
+          ? <img className="tx-logo" src={t.merchant_logo} alt="" onError={(e) => { e.target.style.display = 'none'; e.target.nextSibling.style.display = 'inline-block'; }} />
+          : null}
+        <span className="cat-dot" style={{ background: c.color, display: t.merchant_logo ? 'none' : 'inline-block' }} />
         <span className="tx-main">
           <div className="tx-desc">{t.description}</div>
-          <div className="tx-meta">{fmtDateShort(t.date)} · {c.label}{t.source === "import" ? " · imported" : ""}</div>
+          <div className="tx-meta">{fmtDateShort(t.date)} · {c.label}{t.source === "import" ? " · imported" : ""}{t.merchant_city ? ` · ${t.merchant_city}` : ""}</div>
         </span>
         <span className="tx-amt num">{eurAuto(t.amount_eur)}</span>
       </button>

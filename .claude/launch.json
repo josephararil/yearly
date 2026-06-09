@@ -4,8 +4,9 @@
     {
       "name": "yearly",
       "runtimeExecutable": "python",
-      "runtimeArgs": ["-m", "http.server", "8000"],
-      "port": 8000
+      "runtimeArgs": ["-m", "http.server", "--directory", "public"],
+      "port": 8002,
+      "autoPort": true
     }
   ]
 }

@@ -46,7 +46,7 @@
       date: row.date,
       description: row.description,
       amount_eur: row.amount_eur,
-      category: row.category,
+      category: YData.normalizeCategory(row.category),
       source: row.source || 'manual',
     };
     if (row.note)              tx.note              = row.note;
@@ -54,6 +54,8 @@
     if (row.person)            tx.person            = row.person;
     if (row.original_amount  != null) tx.original_amount  = row.original_amount;
     if (row.original_currency)        tx.original_currency = row.original_currency;
+    if (row.merchant_logo)            tx.merchant_logo     = row.merchant_logo;
+    if (row.merchant_city)            tx.merchant_city     = row.merchant_city;
     return tx;
   }
 
