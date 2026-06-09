@@ -9,9 +9,29 @@
   const MONTH_STARTS = [0, 31, 59, 90, 120, 151, 181, 212, 243, 273, 304, 334];
   const eurK = (v) => (Math.abs(v) >= 1000 ? "€" + (v / 1000).toFixed(v % 1000 === 0 ? 0 : 1) + "k" : "€" + Math.round(v));
 
-  // Hand-built SVG projection chart — DS-styled, dependency-free.
+  function ToggleChip({ label, active, color, onClick }) {
+    return (
+      <button onClick={onClick} style={{
+        height: 26, padding: "0 10px", borderRadius: 99, flexShrink: 0,
+        fontFamily: "var(--mono)", fontSize: 11, fontWeight: 500,
+        cursor: "pointer", whiteSpace: "nowrap",
+        border: "1px solid " + (active ? color : "var(--hair)"),
+        background: active ? "color-mix(in srgb, " + color + " 12%, transparent)" : "transparent",
+        color: active ? "var(--ink)" : "var(--muted)",
+      }}>{label}</button>
+    );
+  }
+
+  // Hand-built SVG projection chart — interactive: touch/drag for crosshair, toggleable series.
   function ProjectionChart({ stats }) {
-    const W = 340, H = 212, padL = 40, padR = 14, padT = 12, padB = 24;
+    const W = 340, H = 252, padL = 40, padR = 14, padT = 14, padB = 24;
+    const svgRef = React.useRef(null);
+    const [hover, setHover] = React.useState(null);
+    const [showPace, setShowPace] = React.useState(true);
+    const [showPrior, setShowPrior] = React.useState(true);
+    const [showProj, setShowProj] = React.useState(true);
+    const [showCeiling, setShowCeiling] = React.useState(true);
+
     const x0 = padL, x1 = W - padR, y0 = padT, y1 = H - padB;
     const priorCum = stats.priorCum;
     const priorMax = priorCum ? priorCum[Math.min(365, stats.doy)] : 0;
@@ -31,52 +51,115 @@
     const grid = [0, 0.25, 0.5, 0.75, 1].map((f) => f * maxY);
     const showMonths = [0, 2, 4, 6, 8, 10];
     const uid = "pg" + stats.year;
+
+    const handlePointer = (e) => {
+      if (stats.isFuture) return;
+      const svg = svgRef.current;
+      if (!svg) return;
+      const rect = svg.getBoundingClientRect();
+      const scaleX = W / rect.width;
+      const rawX = (e.clientX - rect.left) * scaleX;
+      const clampedX = Math.max(x0, Math.min(x1, rawX));
+      const day = Math.max(0, Math.min(365, Math.round(((clampedX - x0) / (x1 - x0)) * 365)));
+      const maxActualDay = stats.complete ? 365 : stats.doy;
+      let val, isProj = false;
+      if (day <= maxActualDay) {
+        val = cum[day];
+      } else if (!stats.complete && showProj) {
+        const t = (day - stats.doy) / Math.max(1, 365 - stats.doy);
+        val = stats.spent + t * (stats.projection - stats.spent);
+        isProj = true;
+      } else {
+        val = cum[maxActualDay];
+      }
+      // Day-of-year → month label
+      let month = 0;
+      for (let m = 1; m < MONTH_STARTS.length; m++) { if (MONTH_STARTS[m] <= day) month = m; }
+      const dayOfMonth = day - MONTH_STARTS[month] + 1;
+      setHover({ day, x: sx(day), y: sy(val), val, dateLabel: MONTHS[month] + " " + dayOfMonth, isProj });
+    };
+    const handleEnd = () => setHover(null);
+
     return (
-      <svg viewBox={`0 0 ${W} ${H}`} width="100%" style={{ display: "block", overflow: "visible" }}>
-        <defs>
-          <linearGradient id={uid} x1="0" y1="0" x2="0" y2="1">
-            <stop offset="0%" stopColor="var(--chart-actual)" stopOpacity="0.22" />
-            <stop offset="100%" stopColor="var(--chart-actual)" stopOpacity="0" />
-          </linearGradient>
-        </defs>
-        {grid.map((v, i) => (
-          <g key={i}>
-            <line x1={x0} y1={sy(v)} x2={x1} y2={sy(v)} stroke="var(--chart-grid)" strokeWidth="1" />
-            <text x={x0 - 6} y={sy(v) + 3} textAnchor="end" fontSize="9" fill="var(--chart-axis)" fontFamily="var(--mono)">{eurK(v)}</text>
-          </g>
-        ))}
-        {showMonths.map((m) => (
-          <text key={m} x={sx(MONTH_STARTS[m])} y={H - 8} textAnchor="middle" fontSize="9" fill="var(--chart-axis)" fontFamily="var(--mono)">{MONTHS[m]}</text>
-        ))}
-        {/* target reference */}
-        <line x1={x0} y1={sy(stats.mainTarget)} x2={x1} y2={sy(stats.mainTarget)} stroke="var(--chart-target)" strokeWidth="1.2" strokeDasharray="4 4" />
-        <text x={x1} y={sy(stats.mainTarget) - 5} textAnchor="end" fontSize="9" fill="var(--chart-target)" fontFamily="var(--mono)">target {eurK(stats.mainTarget)}</text>
-        {/* household ceiling */}
-        <line x1={x0} y1={sy(stats.ceiling)} x2={x1} y2={sy(stats.ceiling)} stroke="var(--ink-2)" strokeWidth="1.5" strokeDasharray="6 3" />
-        <text x={x1} y={sy(stats.ceiling) - 5} textAnchor="end" fontSize="9" fill="var(--ink-2)" fontFamily="var(--mono)">ceiling {eurK(stats.ceiling)}</text>
-        {/* linear pace */}
-        <line x1={sx(0)} y1={sy(0)} x2={sx(365)} y2={sy(stats.mainTarget)} stroke="var(--chart-pace)" strokeWidth="1" strokeDasharray="2 4" opacity="0.6" />
-        {/* prior year */}
-        {priorCum && (() => {
-          const endDay = stats.complete ? 365 : stats.doy;
-          const days = [];
-          for (let d = 0; d <= endDay; d += 7) days.push(d);
-          if (days[days.length - 1] !== endDay) days.push(endDay);
-          const pts = days.map((d) => sx(d) + "," + sy(priorCum[Math.min(365, d)])).join(" ");
-          return <polyline points={pts} fill="none" stroke="var(--chart-target)" strokeWidth="1.5" strokeDasharray="3 4" strokeLinecap="round" strokeLinejoin="round" opacity="0.7" />;
-        })()}
-        {/* actual area + line */}
-        <polygon points={areaPts} fill={`url(#${uid})`} />
-        <polyline points={actLine} fill="none" stroke="var(--chart-actual)" strokeWidth="2.6" strokeLinecap="round" strokeLinejoin="round" />
-        {/* projected */}
-        {!stats.complete && (
-          <>
-            <line x1={sx(stats.doy)} y1={sy(stats.spent)} x2={sx(365)} y2={sy(stats.projection)} stroke="var(--chart-proj)" strokeWidth="2.2" strokeDasharray="6 5" strokeLinecap="round" />
-            <circle cx={sx(365)} cy={sy(stats.projection)} r="3.2" fill="var(--chart-proj)" />
-            <circle cx={sx(stats.doy)} cy={sy(stats.spent)} r="3.6" fill="var(--chart-actual)" stroke="var(--paper)" strokeWidth="1.5" />
-          </>
-        )}
-      </svg>
+      <div>
+        <div style={{ display: "flex", gap: 6, flexWrap: "wrap", marginBottom: 10 }}>
+          <ToggleChip label="Pace" active={showPace} color="var(--chart-pace)" onClick={() => setShowPace(!showPace)} />
+          {!stats.complete && !stats.isFuture && <ToggleChip label="Projection" active={showProj} color="var(--chart-proj)" onClick={() => setShowProj(!showProj)} />}
+          <ToggleChip label="Ceiling" active={showCeiling} color="var(--ink-2)" onClick={() => setShowCeiling(!showCeiling)} />
+          {priorCum && <ToggleChip label={String(stats.year - 1)} active={showPrior} color="var(--chart-target)" onClick={() => setShowPrior(!showPrior)} />}
+        </div>
+        <svg ref={svgRef} viewBox={`0 0 ${W} ${H}`} width="100%"
+          style={{ display: "block", overflow: "visible", touchAction: "none", cursor: "crosshair" }}
+          onPointerMove={handlePointer} onPointerDown={handlePointer}
+          onPointerLeave={handleEnd} onPointerUp={handleEnd} onPointerCancel={handleEnd}>
+          <defs>
+            <linearGradient id={uid} x1="0" y1="0" x2="0" y2="1">
+              <stop offset="0%" stopColor="var(--chart-actual)" stopOpacity="0.22" />
+              <stop offset="100%" stopColor="var(--chart-actual)" stopOpacity="0" />
+            </linearGradient>
+          </defs>
+          {grid.map((v, i) => (
+            <g key={i}>
+              <line x1={x0} y1={sy(v)} x2={x1} y2={sy(v)} stroke="var(--chart-grid)" strokeWidth="1" />
+              <text x={x0 - 6} y={sy(v) + 3} textAnchor="end" fontSize="9" fill="var(--chart-axis)" fontFamily="var(--mono)">{eurK(v)}</text>
+            </g>
+          ))}
+          {showMonths.map((m) => (
+            <text key={m} x={sx(MONTH_STARTS[m])} y={H - 8} textAnchor="middle" fontSize="9" fill="var(--chart-axis)" fontFamily="var(--mono)">{MONTHS[m]}</text>
+          ))}
+          {/* target reference — always shown */}
+          <line x1={x0} y1={sy(stats.mainTarget)} x2={x1} y2={sy(stats.mainTarget)} stroke="var(--chart-target)" strokeWidth="1.2" strokeDasharray="4 4" />
+          <text x={x1} y={sy(stats.mainTarget) - 5} textAnchor="end" fontSize="9" fill="var(--chart-target)" fontFamily="var(--mono)">target {eurK(stats.mainTarget)}</text>
+          {/* household ceiling */}
+          {showCeiling && (
+            <>
+              <line x1={x0} y1={sy(stats.ceiling)} x2={x1} y2={sy(stats.ceiling)} stroke="var(--ink-2)" strokeWidth="1.5" strokeDasharray="6 3" />
+              <text x={x1} y={sy(stats.ceiling) - 5} textAnchor="end" fontSize="9" fill="var(--ink-2)" fontFamily="var(--mono)">ceiling {eurK(stats.ceiling)}</text>
+            </>
+          )}
+          {/* linear pace */}
+          {showPace && <line x1={sx(0)} y1={sy(0)} x2={sx(365)} y2={sy(stats.mainTarget)} stroke="var(--chart-pace)" strokeWidth="1" strokeDasharray="2 4" opacity="0.6" />}
+          {/* prior year */}
+          {showPrior && priorCum && (() => {
+            const endDay = stats.complete ? 365 : stats.doy;
+            const days = [];
+            for (let d = 0; d <= endDay; d += 7) days.push(d);
+            if (days[days.length - 1] !== endDay) days.push(endDay);
+            const pts = days.map((d) => sx(d) + "," + sy(priorCum[Math.min(365, d)])).join(" ");
+            return <polyline points={pts} fill="none" stroke="var(--chart-target)" strokeWidth="1.5" strokeDasharray="3 4" strokeLinecap="round" strokeLinejoin="round" opacity="0.7" />;
+          })()}
+          {/* actual area + line */}
+          <polygon points={areaPts} fill={`url(#${uid})`} />
+          <polyline points={actLine} fill="none" stroke="var(--chart-actual)" strokeWidth="2.6" strokeLinecap="round" strokeLinejoin="round" />
+          {/* projected */}
+          {showProj && !stats.complete && !stats.isFuture && (
+            <>
+              <line x1={sx(stats.doy)} y1={sy(stats.spent)} x2={sx(365)} y2={sy(stats.projection)} stroke="var(--chart-proj)" strokeWidth="2.2" strokeDasharray="6 5" strokeLinecap="round" />
+              <circle cx={sx(365)} cy={sy(stats.projection)} r="3.2" fill="var(--chart-proj)" />
+              <circle cx={sx(stats.doy)} cy={sy(stats.spent)} r="3.6" fill="var(--chart-actual)" stroke="var(--paper)" strokeWidth="1.5" />
+            </>
+          )}
+          {/* crosshair tooltip */}
+          {hover && !stats.isFuture && (
+            <>
+              <line x1={hover.x} y1={y0} x2={hover.x} y2={y1} stroke="var(--ink-2)" strokeWidth="0.8" strokeDasharray="3 3" opacity="0.5" />
+              <circle cx={hover.x} cy={hover.y} r="4" fill={hover.isProj ? "var(--chart-proj)" : "var(--chart-actual)"} stroke="var(--paper)" strokeWidth="2" />
+              {(() => {
+                const tw = 80, th = 34;
+                const tx = hover.x > W / 2 ? hover.x - tw - 8 : hover.x + 8;
+                const ty = Math.max(y0 + 2, hover.y - th - 4);
+                return (
+                  <>
+                    <rect x={tx} y={ty} width={tw} height={th} rx="5" fill="var(--paper)" stroke="var(--hair-strong)" strokeWidth="0.8" />
+                    <text x={tx + tw / 2} y={ty + 13} textAnchor="middle" fontSize="11" fill="var(--ink)" fontFamily="var(--mono)" fontWeight="600">{eurK(hover.val)}</text>
+                    <text x={tx + tw / 2} y={ty + 27} textAnchor="middle" fontSize="10" fill="var(--muted)" fontFamily="var(--mono)">{hover.dateLabel}</text>
+                  </>
+                );
+              })()}
+            </>
+          )}
+        </svg>
+      </div>
     );
   }
 
@@ -232,6 +315,12 @@
                         <TxRow key={t.id} t={t} onClick={onEditTx ? () => onEditTx(t) : undefined} />
                       ))}
                     </div>
+                    <div className="muted" style={{ fontSize: 11, fontFamily: "var(--mono)", margin: "14px 2px 4px", textTransform: "uppercase", letterSpacing: "0.1em" }}>Largest in {cat.label}</div>
+                    <div className="txlist">
+                      {stats.upto.filter((t) => t.category === c.id).slice().sort((a, b) => b.amount_eur - a.amount_eur).slice(0, 5).map((t) => (
+                        <TxRow key={t.id} t={t} onClick={onEditTx ? () => onEditTx(t) : undefined} />
+                      ))}
+                    </div>
                   </div>
                 )}
               </div>
@@ -242,20 +331,50 @@
     );
   }
 
+  const SORT_OPTS = [
+    { id: "date-desc", label: "Newest" },
+    { id: "date-asc", label: "Oldest" },
+    { id: "amt-desc", label: "€ High" },
+    { id: "amt-asc", label: "€ Low" },
+    { id: "az", label: "A → Z" },
+    { id: "za", label: "Z → A" },
+  ];
+
   function ActivityTab({ stats, onEditTx }) {
     const [q, setQ] = React.useState("");
     const [fc, setFc] = React.useState(null);
-    let list = stats.txns.slice().reverse();
+    const [sort, setSort] = React.useState("date-desc");
+
+    let list = stats.txns.slice();
     if (fc) list = list.filter((t) => t.category === fc);
     if (q.trim()) { const s = q.toLowerCase(); list = list.filter((t) => t.description.toLowerCase().includes(s)); }
-    const cats = stats.catList.slice(0, 8);
+    if (sort === "date-desc") list.sort((a, b) => b.date.localeCompare(a.date));
+    else if (sort === "date-asc") list.sort((a, b) => a.date.localeCompare(b.date));
+    else if (sort === "amt-desc") list.sort((a, b) => b.amount_eur - a.amount_eur);
+    else if (sort === "amt-asc") list.sort((a, b) => a.amount_eur - b.amount_eur);
+    else if (sort === "az") list.sort((a, b) => a.description.localeCompare(b.description));
+    else if (sort === "za") list.sort((a, b) => b.description.localeCompare(a.description));
+
     return (
-      <div style={{ display: "flex", flexDirection: "column", gap: 14 }}>
+      <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
         <Input icon={<window.Icon name="search" size={16} />} placeholder="Search descriptions…" value={q} ariaLabel="Search transactions"
           onChange={(e) => setQ(e.target.value)} />
-        <div style={{ display: "flex", gap: 7, overflowX: "auto", paddingBottom: 2 }}>
+        <div style={{ display: "flex", gap: 6, overflowX: "auto", paddingBottom: 2 }}>
           <Chip pressed={!fc} onClick={() => setFc(null)}>All</Chip>
-          {cats.map((c) => <Chip key={c.id} pressed={fc === c.id} onClick={() => setFc(fc === c.id ? null : c.id)}>{YData.cat(c.id).label}</Chip>)}
+          {stats.catList.map((c) => <Chip key={c.id} pressed={fc === c.id} onClick={() => setFc(fc === c.id ? null : c.id)}>{YData.cat(c.id).label}</Chip>)}
+        </div>
+        <div style={{ display: "flex", gap: 5, overflowX: "auto", paddingBottom: 2, alignItems: "center" }}>
+          <span style={{ fontFamily: "var(--mono)", fontSize: 10, letterSpacing: "0.1em", textTransform: "uppercase", color: "var(--muted)", flexShrink: 0, paddingRight: 3 }}>Sort</span>
+          {SORT_OPTS.map((s) => (
+            <button key={s.id} onClick={() => setSort(s.id)} style={{
+              height: 26, padding: "0 10px", borderRadius: 99, flexShrink: 0,
+              fontFamily: "var(--mono)", fontSize: 11, fontWeight: 500,
+              cursor: "pointer", whiteSpace: "nowrap",
+              border: "1px solid " + (sort === s.id ? "var(--terra)" : "var(--hair)"),
+              background: sort === s.id ? "color-mix(in srgb, var(--terra) 12%, transparent)" : "transparent",
+              color: sort === s.id ? "var(--terra)" : "var(--muted)",
+            }}>{s.label}</button>
+          ))}
         </div>
         <div>
           {list.length ? (

@@ -292,9 +292,10 @@ spend, no projection/buffer).
   to a 24px `cat-ic` category icon (colored square + SVG icon, `CatIcon`-style inline) if
   absent or on load error. `tx-meta` appends `· city` when `t.merchant_city` is set. Both
   fields are populated by `rowToTx` in `sync.jsx` from the Revolut D1 columns.
-  **`SpendCurve`** (Overview chart) shows a household ceiling reference line (`--ink-2` dashed
-  "6 3") in addition to the main-target line. Both are labeled inline; `maxY` scales to
-  `max(mainTarget, ceiling, projection) × 1.08` so the ceiling is always visible.
+  **`SpendCurve`** (Overview chart) — H=228, viewBox 360×228. Shows all 12 month initials
+  along the x-axis. Y-axis uses dynamically computed nice-round gridlines (~5 levels based on
+  maxY). Ceiling label sits **above** its line; target label sits **below** its line so they
+  never overlap. `maxY` scales to `max(mainTarget, ceiling, projection) × 1.08`.
   `Toast({ open, message, actionLabel, onAction, onDismiss })` — transient bottom-anchored
   banner (above nav, z-index 30), auto-dismisses after 5 s via `onDismiss`, optional action button.
   `GaugeHero`, `PaceBar`, and `ProjSpark` have been removed (dead since hero is fixed to numerals).
@@ -319,16 +320,23 @@ spend, no projection/buffer).
   `y/addflow.jsx` (Quick keypad + Manual add, Edit sheet, category picker, fun toggle).
   `analysis.jsx` — `AnalysisScreen` receives `fun`, `store`, `setStore`, `addTx` in addition to
   `stats`/`focus`/`onEditTx`; renders `<YFun.FunTab>` on the "Fun" segment; focus effect handles
-  `focus.section === "fun"` → `setTab("Fun")`. **ProjectionChart** now shows a household ceiling
-  line (`--ink-2` dashed "6 3", labeled "ceiling €Xk") above the main-target line; `maxY` scales
-  to `max(mainTarget, ceiling, projection, priorMax) × 1.1`. **CategoriesTab** catbar rows use
-  `CatIcon` (24px, radius 6); expanding a category shows the last 5 transactions using `TxRow` with
-  `onClick → onEditTx` so they are clickable (opens the same edit sheet as the Activity tab).
+  `focus.section === "fun"` → `setTab("Fun")`. **ProjectionChart** — H=252, interactive: pointer/touch
+  events (pointer move + down, leave, up, cancel) show a vertical crosshair with a floating tooltip
+  (€ value + month/day label); on the projected portion the tooltip dot switches to `--chart-proj`.
+  `ToggleChip` component (defined above `ProjectionChart` in the IIFE) renders small toggle buttons
+  that show/hide individual series — Pace, Projection (incomplete year only), Ceiling, and prior-year
+  (when `priorCum` is present). `maxY` scales to `max(mainTarget, ceiling, projection, priorMax) × 1.1`.
+  **CategoriesTab** catbar rows use `CatIcon` (24px, radius 6); expanding a category shows two
+  sub-lists: "Recent in [category]" (last 5 by date, reversed) and "Largest in [category]" (top 5
+  by `amount_eur` descending), both using `TxRow` with `onClick → onEditTx`. **ActivityTab** —
+  category filter chips now show **all** categories with spend (`stats.catList`, not capped at 8);
+  a "Sort" label + 6 pill buttons (Newest · Oldest · € High · € Low · A→Z · Z→A) appear below
+  the category chips; active sort uses `--terra` border/background; default sort is Newest.
   `addflow.jsx` — both `AddSheet` and `EditSheet` expose a **Fun budget toggle** (pill switch, off by
   default). When on, a Chip owner picker (Joseph/Marti) appears. `commit()`/`save()` write `fun:true`
   + `person` when the toggle is on; EditSheet pre-populates toggle state from `txn.fun`/`txn.person`.
   `EditSheet` now accepts a `store` prop for reading `store.people`.
-  `settings.jsx` — footer shows `APP_VERSION` constant (`'v16'` currently, defined at top of
+  `settings.jsx` — footer shows `APP_VERSION` constant (`'v17'` currently, defined at top of
   IIFE — update it with every release). `TargetSheet` (now labelled "Household ceiling") and `BufferSheet` accept a `year`
   prop (defaults to `store.currentYear`); `TargetSheet` reads/writes `years[y].ceiling`. `BufferSheet`
   computes its own stats internally (unchanged). `YearsSheet` has tappable year rows that drill into a
@@ -532,7 +540,7 @@ The app is a fully installable PWA:
   immediately without waiting for old tabs to close.
   **Install hardening:** the install handler uses individual `fetch({cache:'no-cache'}).catch()` calls instead
   of `cache.addAll` so a single URL failure does not abort the entire SW install, and `no-cache` ensures the install always fetches fresh files (bypassing browser HTTP cache). Same `!response.redirected` guard
-  applied in the install handler as in the fetch handler. Current version: `yearly-v16`.
+  applied in the install handler as in the fetch handler. Current version: `yearly-v17`.
   **Logo caching:** merchant logo requests (`storage.googleapis.com/revolut-prod-apps_merchant-logo/…`)
   are intercepted with a **cache-first** strategy using a dedicated `yearly-logos-v1` cache.
   Once a logo is fetched it is never re-fetched. The logo cache is intentionally NOT deleted on
