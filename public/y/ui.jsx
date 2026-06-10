@@ -38,19 +38,67 @@
     );
   }
 
-  // Status hero — no card. Serif ink number; combined vs ceiling; pace rule; main/fun decomp.
+  // Status hero — Zone 1 (reality block) + Zone 2 (bullet bar) + Zone 3 placeholder.
   function StatusHero({ stats }) {
-    // Headline: combined projection for current/complete; ceiling for future
+    const [tip, setTip] = React.useState({ open: false, x: 0 });
+
     const headline = stats.isFuture ? stats.ceiling : stats.combinedProjection;
-    const eyebrow = stats.complete ? "Final combined spend · " + stats.year
-      : stats.isFuture ? "Household ceiling · " + stats.year
+    const eyebrow = stats.complete
+      ? "Final combined spend · " + stats.year
+      : stats.isFuture
+      ? "Household ceiling · " + stats.year
       : "Projected year-end";
     const over = stats.combinedDelta >= 0;
     const near = Math.abs(stats.combinedDelta) < stats.ceiling * 0.005;
-    // Pace fills to combined vs ceiling
-    const fillPct = Math.max(0, Math.min(100, (stats.combinedProjection / stats.ceiling) * 100));
-    const markPct = Math.max(0, Math.min(100, (stats.doy / 365) * 100));
-    const mainColor = stats.status === "good" ? "var(--sage)" : stats.status === "alert" ? "var(--terra)" : "var(--amber)";
+    const totalSpent = stats.spent + stats.funSpent;
+
+    // bullet bar coordinate system (viewBox 0 0 100 60)
+    const xMax = Math.max(stats.ceiling, stats.combinedProjection, 1) * 1.02;
+    const scaleX = (v) => (v / xMax) * 100;
+    const showProjTick = !near;
+
+    // compact label formatter: €21.4k, €25k, €500
+    const eurK = (v) => {
+      if (v >= 10000) return '€' + Math.round(v / 1000) + 'k';
+      if (v >= 1000) return '€' + (Math.round(v / 100) / 10) + 'k';
+      return eur0(v);
+    };
+
+    // labels sorted left-to-right; alternating y=44/52 prevents collision
+    const labelSet = [
+      { id: 'spent', x: scaleX(totalSpent), text: eurK(totalSpent) + ' spt' },
+      { id: 'main',  x: scaleX(stats.mainTarget), text: eurK(stats.mainTarget) + ' main' },
+      { id: 'ceil',  x: scaleX(stats.ceiling), text: eurK(stats.ceiling) + ' ceil' },
+      ...(showProjTick
+        ? [{ id: 'proj', x: scaleX(stats.combinedProjection), text: eurK(stats.combinedProjection) + ' proj' }]
+        : []),
+    ].sort((a, b) => a.x - b.x);
+
+    const handleTap = (e) => {
+      e.stopPropagation();
+      const svg = e.currentTarget.closest('svg');
+      if (!svg) return;
+      const rect = svg.getBoundingClientRect();
+      const rawX = ((e.clientX - rect.left) / rect.width) * 100;
+      const tapX = Math.max(0, Math.min(100, rawX));
+      setTip((t) => t.open ? { open: false, x: 0 } : { open: true, x: tapX });
+    };
+
+    React.useEffect(() => {
+      if (!tip.open) return;
+      const dismiss = () => setTip({ open: false, x: 0 });
+      document.addEventListener('pointerdown', dismiss);
+      return () => document.removeEventListener('pointerdown', dismiss);
+    }, [tip.open]);
+
+    // tooltip geometry
+    const tipBW = 50;
+    const tipX = Math.max(tipBW / 2, Math.min(100 - tipBW / 2, tip.x)) - tipBW / 2;
+    const remaining  = Math.max(0, stats.ceiling - stats.combinedProjection);
+    const bufferMain = Math.max(0, stats.mainTarget - stats.projection);
+    const overBy     = Math.max(0, stats.combinedProjection - stats.ceiling);
+    const projVsMain = Math.max(0, stats.projection - stats.mainTarget);
+
     return (
       <div className="hero">
         <div className="eyebrow">{eyebrow}</div>
@@ -64,24 +112,135 @@
             <>
               {over ? "Over" : "Under"} your <span className="num">{eur0(stats.ceiling)}</span> ceiling by{" "}
               <span className={"hero-emph " + (over ? "over" : "under")}>{eur0(Math.abs(stats.combinedDelta))}</span>
-              {stats.bandAmt != null && <span style={{ fontFamily: "var(--mono)", color: "var(--muted)", fontSize: "0.85em", marginLeft: 4 }}>±{eur0(stats.bandAmt)}</span>}.
+              {stats.bandAmt != null && (
+                <span style={{ fontFamily: "var(--mono)", color: "var(--muted)", fontSize: "0.85em", marginLeft: 4 }}>
+                  ±{eur0(stats.bandAmt)}
+                </span>
+              )}.
             </>
           )}
         </div>
         {!stats.isFuture && (
           <>
-            <div className="pace-rule">
-              <div className="pace-fill" style={{ width: fillPct + "%" }} />
-              {!stats.complete && <div className="pace-mark" style={{ left: markPct + "%" }} />}
+            <div className="hero-hr" />
+            <div className="hero-spent">
+              <span>
+                {stats.complete
+                  ? <>Final spend <span className="num-big">{eur0(stats.combinedProjection)}</span></>
+                  : <><span className="num-big">{eur0(totalSpent)}</span> spent</>}
+              </span>
+              <span className="meta">
+                {stats.complete ? stats.year : `day ${stats.doy} / 365`}
+              </span>
             </div>
-            <div className="pace-legend">
-              <span>{eur0(stats.spent + stats.funSpent)} spent</span>
-              <span>{stats.complete ? "year complete" : "day " + stats.doy + " / 365"}</span>
-            </div>
-            <div className="pace-legend">
-              <span style={{ color: mainColor }}>main {eur0(stats.projection)} / {eur0(stats.mainTarget)}</span>
-              <span style={{ color: "var(--ink-2)" }}>fun {eur0(stats.funProjection)}</span>
-            </div>
+
+            {/* Zone 2 — multi-stage bullet bar */}
+            <svg className="bullet-svg" viewBox="0 0 100 60">
+              {/* track background */}
+              <rect x="0" y="23" width="100" height="6" fill="var(--chart-grid)" />
+              {/* solid fill: actual spent */}
+              <rect x="0" y="23" height="6" width={scaleX(totalSpent)} fill="var(--terra)" />
+              {/* projection extension (current year, translucent) */}
+              {!stats.complete && stats.combinedProjection > totalSpent && (
+                <rect
+                  x={scaleX(totalSpent)} y="23" height="6"
+                  width={Math.max(0, scaleX(stats.combinedProjection) - scaleX(totalSpent))}
+                  fill="var(--terra)" opacity="0.45"
+                />
+              )}
+              {/* DOY pace marker (current year only) */}
+              {!stats.complete && (
+                <line
+                  x1={scaleX((stats.doy / 365) * stats.ceiling)} y1="20"
+                  x2={scaleX((stats.doy / 365) * stats.ceiling)} y2="27"
+                  stroke="var(--muted)" strokeWidth="1" strokeDasharray="1 1"
+                />
+              )}
+              {/* tick: main target */}
+              <line
+                x1={scaleX(stats.mainTarget)} y1="18"
+                x2={scaleX(stats.mainTarget)} y2="33"
+                stroke="var(--ink-2)" strokeWidth="1.5"
+              />
+              {/* tick: ceiling (taller = hard stop) */}
+              <line
+                x1={scaleX(stats.ceiling)} y1="15"
+                x2={scaleX(stats.ceiling)} y2="35"
+                stroke="var(--ink)" strokeWidth="1.5"
+              />
+              {/* tick: projection end (only when meaningfully different from ceiling) */}
+              {showProjTick && (
+                <line
+                  x1={scaleX(stats.combinedProjection)} y1="18"
+                  x2={scaleX(stats.combinedProjection)} y2="33"
+                  stroke="var(--terra)" strokeWidth="1.5"
+                />
+              )}
+              {/* labels: sorted left-to-right, alternating y-offset avoids collision */}
+              {labelSet.map((l, i) => (
+                <text
+                  key={l.id}
+                  x={l.x} y={i % 2 === 0 ? 44 : 52}
+                  textAnchor="middle" fontSize="3.5"
+                  fontFamily="var(--mono)" fill="var(--muted)"
+                >{l.text}</text>
+              ))}
+              {/* transparent hit area — 24 vb-units tall (~40px) for mobile */}
+              <rect
+                x="0" y="10" width="100" height="24"
+                fill="transparent"
+                style={{ pointerEvents: 'all', cursor: 'pointer' }}
+                onPointerDown={handleTap}
+              />
+              {/* tooltip */}
+              {tip.open && (
+                <g className="bullet-tip">
+                  <rect
+                    x={tipX} y="1" width={tipBW} height="19"
+                    rx="1.5" fill="var(--paper)"
+                    stroke="var(--hair-strong)" strokeWidth="0.5"
+                  />
+                  <text
+                    x={tipX + tipBW / 2} y="9"
+                    textAnchor="middle" fontSize="3.8"
+                    fontFamily="var(--mono)" fontWeight="600" fill="var(--ink)"
+                  >
+                    {over ? `Over ceiling  ${eur0(overBy)}` : `Remaining  ${eur0(remaining)}`}
+                  </text>
+                  <text
+                    x={tipX + tipBW / 2} y="16"
+                    textAnchor="middle" fontSize="3.3"
+                    fontFamily="var(--mono)" fill="var(--muted)"
+                  >
+                    {over ? `Proj vs main  +${eur0(projVsMain)}` : `Buffer to main  ${eur0(bufferMain)}`}
+                  </text>
+                </g>
+              )}
+            </svg>
+
+            {/* Zone 3 — monthly pulse (current year only) */}
+            {!stats.complete && (() => {
+              const month = stats.asOf.getMonth();
+              const monthLabel = stats.asOf.toLocaleDateString('en', { month: 'long' }).toUpperCase();
+              const now = stats.byMonth[month].amount;
+              const cap = YCalc.neededMonthlyCap(stats);
+              const proj = YCalc.projectedMonthEnd(stats);
+              const verdict =
+                proj > cap * 1.1  ? { cls: 'over',  text: 'Slow down ▲' } :
+                proj > cap * 0.95 ? { cls: 'tight', text: 'Tight ●' }     :
+                                    { cls: 'under', text: 'Room to spend ▼' };
+              return (
+                <div className="pulse">
+                  <span className="pulse-month">{monthLabel}</span>
+                  <span className="pulse-now">{eur0(now)} so far</span>
+                  <span className="pulse-sep">·</span>
+                  <span className="pulse-cap">cap {eur0(cap)}</span>
+                  <span className="pulse-sep">·</span>
+                  <span className="pulse-proj">projected {eur0(proj)}</span>
+                  <span className={`pulse-verdict ${verdict.cls}`}>{verdict.text}</span>
+                </div>
+              );
+            })()}
           </>
         )}
       </div>

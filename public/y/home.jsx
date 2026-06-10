@@ -66,7 +66,7 @@
     const spentSoFar = dayCum[dayOfMonth];
     const neededMonthly = YCalc.neededMonthlyCap(stats);
     const monthlyDailyRate = dayOfMonth > 0 ? spentSoFar / dayOfMonth : 0;
-    const projectedEnd = spentSoFar + monthlyDailyRate * (daysInMonth - dayOfMonth);
+    const projectedEnd = YCalc.projectedMonthEnd(stats);
 
     // Previous month cumulative (same year only; skipped for January)
     let hasPrevData = false, prevDaysInMonth = 30, prevDayCum = null;

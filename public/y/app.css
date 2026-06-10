@@ -100,11 +100,24 @@ button, input, select, textarea { font-family: inherit; }
 .bg-alert { background: var(--alert-dim); color: var(--terra); }
 .bg-info { background: var(--paper-tint); color: var(--ink-2); }
 
-/* pace rule — 3px track, terra fill to spent/target, ink marker at day-of-year */
-.pace-rule { position: relative; height: 3px; border-radius: 2px; background: var(--chart-grid); margin-top: 22px; }
-.pace-fill { position: absolute; left: 0; top: 0; height: 3px; border-radius: 2px; background: var(--terra); }
-.pace-mark { position: absolute; top: -4px; width: 1.5px; height: 11px; background: var(--ink); }
-.pace-legend { display: flex; justify-content: space-between; margin-top: 8px; font-family: var(--mono); font-size: 11px; color: var(--muted); }
+/* ---- hero v2 (sessions 2–4) ---- */
+.hero-hr { height: 1px; background: var(--hair); margin: 18px 0 14px; }
+.hero-spent { display: flex; align-items: baseline; justify-content: space-between; gap: 16px; }
+.hero-spent .num-big { font-family: var(--serif); font-weight: 300; font-size: 38px; line-height: 1; letter-spacing: -0.02em; color: var(--ink); }
+.hero-spent .meta { font-family: var(--mono); font-size: 11.5px; color: var(--muted); flex-shrink: 0; }
+/* bullet bar — Zone 2 */
+.bullet-svg { display: block; width: 100%; height: auto; overflow: visible; margin-top: 24px; touch-action: manipulation; }
+/* Zone 3 — monthly pulse */
+.pulse { display: flex; flex-wrap: wrap; align-items: baseline; gap: 8px; margin-top: 18px; font-size: 13px; }
+.pulse-month { font-family: var(--mono); font-size: 11px; letter-spacing: 0.15em; color: var(--muted); }
+.pulse-now { font-family: var(--mono); color: var(--ink); }
+.pulse-cap { font-family: var(--mono); color: var(--ink); }
+.pulse-proj { font-family: var(--mono); color: var(--ink-2); }
+.pulse-sep { color: var(--muted); }
+.pulse-verdict { font-family: var(--sans); font-size: 12px; margin-left: auto; }
+.pulse-verdict.over { color: var(--terra); }
+.pulse-verdict.tight { color: var(--amber); }
+.pulse-verdict.under { color: var(--sage); }
 
 /* gauge */
 .gauge-wrap { display: grid; place-items: center; padding: 6px 0 2px; }
