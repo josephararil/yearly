@@ -6,7 +6,14 @@
   const DIRTY_KEY   = 'yearly:settings:dirty';
   const BOOT_KEY    = 'yearly:bootstrapped';
   const APPLIED_KEY = 'yearly:settings:appliedAt';
+  const SEQ_KEY     = 'yearly:outbox:seq';
   const CHUNK       = 75;
+
+  // Monotonically-increasing sequence counter — persisted so restarts don't reset it.
+  // Each outbox entry is stamped with __seq on enqueue; flush captures (id → __seq) pairs
+  // so an entry updated mid-flight (same id, higher __seq) survives the post-flush filter.
+  let _seq = parseInt(localStorage.getItem(SEQ_KEY) || '0', 10);
+  function nextSeq() { _seq += 1; localStorage.setItem(SEQ_KEY, String(_seq)); return _seq; }
 
   let _getStore    = null;
   let _applyServer = null;
@@ -92,10 +99,11 @@
 
   // ---- public: enqueueTx ----
   function enqueueTx(record) {
-    const outbox = getOutbox();
-    const idx    = outbox.findIndex(x => x.id === record.id);
-    if (idx >= 0) outbox[idx] = record;
-    else          outbox.push(record);
+    const outbox  = getOutbox();
+    const idx     = outbox.findIndex(x => x.id === record.id);
+    const stamped = { ...record, __seq: nextSeq() };
+    if (idx >= 0) outbox[idx] = stamped;
+    else          outbox.push(stamped);
     setOutbox(outbox);
     scheduleFlush();
   }
@@ -106,13 +114,16 @@
     scheduleFlush();
   }
 
-  // ---- public: flush ----
-  async function flush() {
+  // ---- flush internals ----
+  async function _flush() {
     // 1. Flush transaction outbox
     const outbox = getOutbox();
     if (outbox.length > 0) {
-      const sentIds = new Set(outbox.map(x => x.id));
-      const rows    = outbox.map(txToRow);
+      // Capture (id → __seq) so a mid-flight update (same id, higher __seq) survives the filter.
+      // Entries written before this change have __seq === undefined; undefined === undefined
+      // removes them after send, matching the previous Set-based behavior.
+      const sent = new Map(outbox.map(x => [x.id, x.__seq]));
+      const rows = outbox.map(txToRow);
       for (let i = 0; i < rows.length; i += CHUNK) {
         const chunk  = rows.slice(i, i + CHUNK);
         const result = await syncFetch('/api/transactions', {
@@ -122,8 +133,8 @@
         });
         if (!result) return; // offline or reload triggered
       }
-      // Remove only the ids we captured — new mutations added during the POST survive
-      setOutbox(getOutbox().filter(x => !sentIds.has(x.id)));
+      // Keep any entry whose __seq advanced mid-flight — its newer version was never sent.
+      setOutbox(getOutbox().filter(x => sent.get(x.id) !== x.__seq));
     }
 
     // 2. Flush settings (capture-then-clear so an edit mid-flight isn't lost)
@@ -142,6 +153,16 @@
       }
       if (result.updated_at) setAppliedAt(result.updated_at);
     }
+  }
+
+  // ---- public: flush (reentrancy latch) ----
+  // Timer, 'online', 'focus', and pull() can all call flush() concurrently.
+  // The latch collapses concurrent calls into one shared promise.
+  let _flushing = null;
+  function flush() {
+    if (_flushing) return _flushing;
+    _flushing = _flush().finally(() => { _flushing = null; });
+    return _flushing;
   }
 
   // ---- public: pull ----
