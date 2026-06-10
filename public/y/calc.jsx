@@ -13,8 +13,11 @@
   const signedPct = (n) => (n >= 0 ? "+" : "−") + Math.round(Math.abs(n) * 100) + "%";
 
   function dayOfYear(d) {
-    const start = new Date(d.getFullYear(), 0, 0);
-    return Math.floor((d - start) / 86400000);
+    const start = Date.UTC(d.getFullYear(), 0, 0);
+    return Math.round((Date.UTC(d.getFullYear(), d.getMonth(), d.getDate()) - start) / 86400000);
+  }
+  function daysInYear(y) {
+    return ((y % 4 === 0 && y % 100 !== 0) || y % 400 === 0) ? 366 : 365;
   }
   function parseDate(s) { return new Date(s + "T00:00:00"); }
   function localISO(d) {
@@ -30,6 +33,8 @@
   }
 
   // Cumulative spend by day-of-year (index 0..365). Shared with analysis.jsx.
+  // Array size and Math.min(365,...) are intentionally fixed: on a leap year, Dec 31 (doy=366)
+  // merges into the last chart bucket (index 365). This is a cosmetic chart approximation only.
   function cumulativeByDay(txns) {
     const a = Array(366).fill(0);
     txns.forEach((t) => { a[Math.min(365, dayOfYear(parseDate(t.date)))] += t.amount_eur; });
@@ -86,7 +91,7 @@
 // Linear fun extrapolation, capped by what the allowance system permits this year:
 // YTD fun spend + positive carryover balances + accruals still to come through December.
 function funProjectionFor(store, year, doy, funSpentYTD, asOfStr) {
-  const linear = doy > 0 ? (funSpentYTD / doy) * 365 : 0;
+  const linear = doy > 0 ? (funSpentYTD / doy) * daysInYear(year) : 0;
   const currentYM = asOfStr.slice(0, 7);
   let balances = 0, futureAccruals = 0;
   for (const p of store.people || []) {
@@ -119,6 +124,7 @@ function computeStats(store, year, asOfDate) {
     const complete = !isCurrent && Number(year) < currentYear;
     // Guard: future year treated as not-yet-started
     const isFuture = Number(year) > currentYear;
+    const diy = daysInYear(Number(year));
 
     let asOf, doy;
     if (isFuture) {
@@ -129,7 +135,7 @@ function computeStats(store, year, asOfDate) {
       doy = Math.max(1, dayOfYear(real));
     } else {
       asOf = new Date(Number(year), 11, 31);
-      doy = 365;
+      doy = diy;
     }
     const asOfStr = localISO(asOf);
 
@@ -171,16 +177,16 @@ function computeStats(store, year, asOfDate) {
       const recurringYtdRate = doy > 0 ? recurring.reduce((a, t) => a + t.amount_eur, 0) / doy : 0;
       const last60 = recurring.filter((t) => t.date > w60str).reduce((a, t) => a + t.amount_eur, 0);
       const rawTrailing = last60 / windowDays;
-      const yearWeight = doy / 365;
+      const yearWeight = doy / diy;
       trailingDailyRate = recurringYtdRate * yearWeight + rawTrailing * (1 - yearWeight);
     }
-    const daysRemaining = Math.max(0, 365 - doy);
+    const daysRemaining = Math.max(0, diy - doy);
     const extrapolated = trailingDailyRate * daysRemaining;
     const projNoBuffer = (complete || isFuture) ? spent : spent + extrapolated;
     const projection = (complete || isFuture) ? spent : spent + extrapolated * (1 + buffer);
     const bufferAmt = projection - projNoBuffer;
 
-    const pace = (doy / 365) * mainTarget;
+    const pace = (doy / diy) * mainTarget;
     const delta = projection - mainTarget;
     const deltaPct = mainTarget > 0 ? delta / mainTarget : 0;
 
@@ -212,7 +218,7 @@ function computeStats(store, year, asOfDate) {
 
     return {
       year: Number(year), ceiling, mainTarget, funPlanAnnual, buffer, isCurrent, complete, isFuture,
-      asOf, asOfStr, doy, spent, dailyRate, trailingDailyRate, daysRemaining, projection, projNoBuffer, bufferAmt,
+      asOf, asOfStr, doy, daysInYear: diy, spent, dailyRate, trailingDailyRate, daysRemaining, projection, projNoBuffer, bufferAmt,
       pace, delta, deltaPct, status, txns: mainTxns, upto, byCat, catList, byMonth, catMonth,
       priorCum, priorSpent,
       funSpent, funProjection, combinedProjection, combinedDelta, combinedDeltaPct, combinedStatus,
@@ -235,9 +241,9 @@ function computeStats(store, year, asOfDate) {
     const ytdRate = refDoy > 0 ? recurringSum / refDoy : 0;
     const last60 = refRecurring.filter((t) => t.date > w60str).reduce((a, t) => a + t.amount_eur, 0);
     const rawTrailing = windowDays > 0 ? last60 / windowDays : ytdRate;
-    const yearWeight = refDoy / 365;
+    const yearWeight = refDoy / daysInYear(stats.year);
     const blendedRate = ytdRate * yearWeight + rawTrailing * (1 - yearWeight);
-    const daysLeft = Math.max(0, 365 - refDoy);
+    const daysLeft = Math.max(0, daysInYear(stats.year) - refDoy);
     return refSpent + blendedRate * daysLeft * (1 + stats.buffer);
   }
 
@@ -245,7 +251,7 @@ function computeStats(store, year, asOfDate) {
   function requiredDailyToHit(stats) {
     if (!stats.isCurrent) return null;
     if (stats.projection <= stats.mainTarget) return null;
-    const daysLeft = 365 - stats.doy;
+    const daysLeft = stats.daysInYear - stats.doy;
     if (daysLeft <= 0) return null;
     return Math.max(0, (stats.mainTarget - stats.spent) / daysLeft);
   }
@@ -311,7 +317,7 @@ function computeStats(store, year, asOfDate) {
       drill: { section: "projection" }, mag: 0,
     }];
     const out = [];
-    const linDaily = stats.mainTarget / 365;
+    const linDaily = stats.mainTarget / stats.daysInYear;
 
     // 1. projection trend (vs 4 weeks ago) — skip in January (doy ≤ 28) where the reference
     // date falls in the prior year, making refSpent=0 and proj4≈0 (false "everything moved up").
@@ -428,7 +434,7 @@ function computeStats(store, year, asOfDate) {
     let ceilingCallout = null;
     if (stats.isCurrent && !(stats.upto.length === 0 && stats.funSpent === 0)) {
       if (stats.combinedProjection > stats.ceiling) {
-        const monthsLeft = Math.max(1, (365 - stats.doy) / 30.4);
+        const monthsLeft = Math.max(1, (stats.daysInYear - stats.doy) / 30.4);
         const overBy = stats.combinedProjection - stats.ceiling;
         const trimPer = overBy / monthsLeft;
         const severity = overBy > stats.ceiling * 0.08 ? "alert" : "watch";
@@ -439,7 +445,7 @@ function computeStats(store, year, asOfDate) {
         };
       } else if (stats.combinedProjection < stats.ceiling * 0.94) {
         const gap = stats.ceiling - stats.combinedProjection;
-        const monthsLeft = Math.max(1, (365 - stats.doy) / 30.4);
+        const monthsLeft = Math.max(1, (stats.daysInYear - stats.doy) / 30.4);
         const raisePer = gap / monthsLeft;
         ceilingCallout = {
           id: "ceiling", severity: "good", icon: "checkCircle",
@@ -478,7 +484,7 @@ function computeStats(store, year, asOfDate) {
 
   window.YCalc = {
     MONTHS, MONTHS_LONG, eur0, eur2, eurAuto, signedEur, pct, signedPct,
-    dayOfYear, parseDate, localISO, fmtDateShort, fmtDateLong, yearTxns,
+    dayOfYear, daysInYear, parseDate, localISO, fmtDateShort, fmtDateLong, yearTxns,
     cumulativeByDay, priorYearCumulative, aggregateByCategory,
     rateForMonth, computeStats, computeFun, projectionAsOf, buildCallouts,
     requiredDailyToHit, neededMonthlyCap,

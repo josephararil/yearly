@@ -23,8 +23,8 @@
   <div id="summary"></div>
 
   <!-- Plain script tags — no Babel needed; these files contain no JSX -->
-  <script src="y/data.jsx"></script>
-  <script src="y/calc.jsx"></script>
+  <script src="public/y/data.jsx"></script>
+  <script src="public/y/calc.jsx"></script>
   <script>
     const container = document.getElementById('results');
     let passed = 0, failed = 0;
@@ -352,6 +352,61 @@
     YData.migrateStore(oldBackup);
     assert('migrateStore idempotent: ceiling unchanged', oldBackup.years['2026'].ceiling === 25000);
     assert('migrateStore idempotent: no duplicate people', oldBackup.people.length === 2);
+
+    // ---- Phase 9: DST-safe dayOfYear ----
+    section('Phase 9 — DST-safe dayOfYear (§3.3)');
+    // 2026-07-01 is day 182 of 2026 (Jan31+Feb28+Mar31+Apr30+May31+Jun30+1=182).
+    // The DST bug (Math.floor on local-time difference) would return 181 in UTC+2/+3 summer timezone.
+    // UTC arithmetic (Date.UTC both ends) is immune regardless of timezone.
+    const dstDoy = YCalc.dayOfYear(YCalc.parseDate('2026-07-01'));
+    assert('dayOfYear("2026-07-01") === 182 (DST-safe)', dstDoy === 182, 'got ' + dstDoy);
+    assert('dayOfYear("2026-01-01") === 1', YCalc.dayOfYear(YCalc.parseDate('2026-01-01')) === 1, 'got ' + YCalc.dayOfYear(YCalc.parseDate('2026-01-01')));
+    assert('dayOfYear("2026-12-31") === 365 (non-leap)', YCalc.dayOfYear(YCalc.parseDate('2026-12-31')) === 365, 'got ' + YCalc.dayOfYear(YCalc.parseDate('2026-12-31')));
+    assert('daysInYear(2024) === 366 (leap)', YCalc.daysInYear(2024) === 366, 'got ' + YCalc.daysInYear(2024));
+    assert('daysInYear(2026) === 365 (non-leap)', YCalc.daysInYear(2026) === 365, 'got ' + YCalc.daysInYear(2026));
+    assert('daysInYear(2000) === 366 (div-400 leap)', YCalc.daysInYear(2000) === 366, 'got ' + YCalc.daysInYear(2000));
+    assert('daysInYear(1900) === 365 (div-100 non-leap)', YCalc.daysInYear(1900) === 365, 'got ' + YCalc.daysInYear(1900));
+    assert('dayOfYear("2024-12-31") === 366 (leap year last day)', YCalc.dayOfYear(YCalc.parseDate('2024-12-31')) === 366, 'got ' + YCalc.dayOfYear(YCalc.parseDate('2024-12-31')));
+
+    // ---- Phase 9: leap year computeStats (§3.4) ----
+    section('Phase 9 — leap year computeStats (§3.4)');
+    // 2024 was a leap year; asOf is 2025-01-01 so 2024 is a complete year (currentYear=2026)
+    const leap2024Store = {
+      currentYear: 2026,
+      people: [],
+      wishlist: [],
+      years: { '2024': { ceiling: 25000, buffer: 0.04 } },
+      density: 'balanced',
+      templates: [],
+      transactions: [
+        { id: 'l1', date: '2024-01-15', description: 'Jan',   amount_eur: 200, category: 'groceries', source: 'manual' },
+        { id: 'l2', date: '2024-06-01', description: 'Jun',   amount_eur: 300, category: 'groceries', source: 'manual' },
+        { id: 'l3', date: '2024-12-31', description: 'Dec31', amount_eur: 100, category: 'groceries', source: 'manual' },
+      ],
+    };
+    const leap2024Stats = YCalc.computeStats(leap2024Store, 2024);
+    assert('leap 2024 complete: doy === 366', leap2024Stats.doy === 366, 'got ' + leap2024Stats.doy);
+    assert('leap 2024 complete: daysInYear === 366', leap2024Stats.daysInYear === 366, 'got ' + leap2024Stats.daysInYear);
+    assert('leap 2024 complete: Dec 31 tx included in spent', Math.abs(leap2024Stats.spent - 600) < 0.01, 'got ' + leap2024Stats.spent);
+    assert('leap 2024 complete: daysRemaining === 0', leap2024Stats.daysRemaining === 0, 'got ' + leap2024Stats.daysRemaining);
+    assert('leap 2024 complete: projection === spent (complete year)', Math.abs(leap2024Stats.projection - leap2024Stats.spent) < 0.01, 'got ' + leap2024Stats.projection);
+
+    // Current-year leap fixture: daysRemaining === daysInYear − doy
+    // Use 2024 as currentYear to treat it as in-progress; asOf = 2024-07-01 (doy=183)
+    const leap2024CurrentStore = {
+      currentYear: 2024,
+      people: [],
+      wishlist: [],
+      years: { '2024': { ceiling: 25000, buffer: 0.0 } },
+      density: 'balanced',
+      templates: [],
+      transactions: [],
+    };
+    const leap2024AsOf = new Date('2024-07-01T12:00:00Z');
+    const leap2024CurStats = YCalc.computeStats(leap2024CurrentStore, 2024, leap2024AsOf);
+    const expectedDoy2024 = YCalc.dayOfYear(leap2024AsOf);
+    assert('leap 2024 current: daysRemaining === 366 − doy', leap2024CurStats.daysRemaining === 366 - expectedDoy2024, 'daysRemaining=' + leap2024CurStats.daysRemaining + ' doy=' + expectedDoy2024);
+    assert('leap 2024 current: daysInYear === 366', leap2024CurStats.daysInYear === 366, 'got ' + leap2024CurStats.daysInYear);
 
     // ---- Summary ----
     const total = passed + failed;
