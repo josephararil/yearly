@@ -242,10 +242,8 @@
     const avgMonthly = completedMonths > 0 ? completedAmounts.reduce((a, v) => a + v, 0) / completedMonths : 0;
     const maxMonthly = completedMonths > 0 ? Math.max(...completedAmounts) : 0;
 
-    // ceiling-based: how much to spend per remaining calendar month to land at ceiling
-    const monthsRemainingCal = !stats.isFuture ? Math.max(1, 12 - curMonth) : 12;
     const requiredMonthlyAvg = (!stats.complete && !stats.isFuture)
-      ? Math.max(0, (stats.ceiling - stats.spent) / monthsRemainingCal) : 0;
+      ? YCalc.neededMonthlyCap(stats) : 0;
 
     const maxY = Math.max(1, avgMonthly * 1.1, maxMonthly, requiredMonthlyAvg, ...amounts) * 1.2;
     const sy = (v) => padT + (1 - v / maxY) * (H - padT - padB);
@@ -267,7 +265,7 @@
         setHover({
           month, x: barCenter(month),
           y: canShowReq ? sy(requiredMonthlyAvg) : padT + 20,
-          val: requiredMonthlyAvg, label: MONTHS[month], subLabel: canShowReq ? "est. needed/mo" : null, isFut: true,
+          val: requiredMonthlyAvg, label: MONTHS[month], subLabel: canShowReq ? "needed/mo" : null, isFut: true,
         });
       } else {
         setHover({
@@ -413,10 +411,7 @@
     const completedMonths = stats.complete ? 12 : Math.max(0, curMonth);
     const completedAmounts = stats.byMonth.slice(0, completedMonths).map((m) => m.amount);
     const avgMonthly = completedMonths > 0 ? completedAmounts.reduce((a, v) => a + v, 0) / completedMonths : 0;
-    const monthsRemaining = stats.daysRemaining / 30.4;
-    const neededMonthly = !stats.isFuture && monthsRemaining > 0.5
-      ? Math.max(0, (stats.ceiling - stats.spent) / monthsRemaining)
-      : null;
+    const neededMonthly = stats.isCurrent ? YCalc.neededMonthlyCap(stats) : null;
 
     let trend90 = null, trend90Color = "var(--ink)";
     if (stats.isCurrent && stats.doy >= 90) {
