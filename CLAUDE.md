@@ -247,7 +247,7 @@ Implements outbox-based client↔D1 sync with optimistic UI and offline-safe que
 - `YSync.init({ getStore, applyServer })` — called once on mount. `getStore()` returns the live store via a ref; `applyServer(updater)` maps to the app's `setStore`.
 - `YSync.enqueueTx(record)` — dedupe-adds a tx (or delete record) to the outbox and schedules a flush.
 - `YSync.markSettingsDirty()` — marks settings for push and schedules a flush. Called automatically from `app.jsx`'s `setStore` wrapper whenever only non-transactions keys change.
-- `YSync.flush()` — push outbox in chunks of 75, then PUT settings if dirty. Captures the sent-id set before the POST so mutations enqueued mid-flight survive. Clears the dirty flag before the PUT and restores it on failure.
+- `YSync.flush()` — push outbox in chunks of 75, then PUT settings if dirty. Captures `(id → __seq)` pairs before the POST; entries updated mid-flight (same id, higher `__seq`) survive the post-flush filter and are re-sent next flush. Clears the dirty flag before the PUT and restores it on failure. Concurrent calls share one in-flight promise (reentrancy latch); the cursor is never advanced here — only `pull()` advances the cursor.
 - `YSync.pull()` — calls `flush()` first (prevents golden-source pull from clobbering unsynced writes), then `GET /api/sync?since=cursor`, merges tx by id (deleted rows are removed), applies settings only when `updated_at > appliedAt`, updates cursor.
 - `YSync.bootstrap()` — called once on mount. Pull-first: if server has data, adopt it (second-device path); if server is empty, push local seed + settings (first-device path). Sets `yearly:bootstrapped`.
 - `YSync.start()` — wires `online`, `focus`, and `visibilitychange` → visible triggers.
