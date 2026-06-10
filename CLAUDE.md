@@ -17,85 +17,10 @@ the README as the source of truth for *intended* behavior; treat the code below 
 
 ## Visual layer: the "Broadsheet" restyle (complete)
 
-The app is being reskinned from the old Aperture **dark** theme to **Broadsheet** — an
-editorial light look (warm paper, hairline rules, three fonts, one terracotta accent). The
-authoritative spec is `design/BROADSHEET_DESIGN_SPEC.md` with a runnable reference in
-`design/reference/` (`broadsheet.html` + `lb-a.jsx` + `lb-data.jsx`). **This is a
-visual-layer-only change — logic, data, projection math, the callout engine, routing, and
-persistence are untouched.**
-
-- **Phase 0 (done):** `y/tokens.css` defines the Broadsheet token set (`--paper`,
-  `--ink`, `--ink-2`, `--muted`, `--hair`/`--hair-strong`, `--terra`/`--amber`/`--sage`,
-  the `--chart-*` palette, and `--serif`/`--sans`/`--mono`). The three fonts (Newsreader /
-  Hanken Grotesk / JetBrains Mono) are wired via a Google Fonts `<link>` in `index.html`.
-- **Phase 1 (done):** **Overview** is restyled pixel-for-pixel to the reference:
-  hero (no card, serif-`ink` number, over/under as a small mono `terra`/`sage` figure, a
-  3px pace rule), "What's happening" callouts as hairline list rows with severity dots
-  (terra/amber/sage) + faded serif "→", and a themed **Spend curve** (`SpendCurve` in
-  `y/ui.jsx`). The Overview's old **Recent** transaction list was removed in favour of the
-  Spend curve (matching the reference); transactions are still reachable on Analysis →
-  Activity. Bottom nav is editorial text (mono labels, terra underline on active, an outline
-  "+" circle).
-- **Phase 1.5 (done):** **Shared primitives** restyled to Broadsheet (`y/ds.jsx` +
-  `.ds-*` classes in `y/app.css`; `Sheet` + `Toast` in `y/ui.jsx`; form classes `.field` /
-  `.inp` / `.inp-num`). All legacy token names replaced with canonical ones in touched rules.
-  Button: terra fill / paper text / sans 600 (primary), transparent / hair border / ink
-  (secondary). Chips: hair border; active = ink fill + paper text inversion. SegmentedControl:
-  paper-tint track, paper active item, warm shadow. Inputs: transparent, hair border, terra
-  focus ring, mono labels mono 11px uppercase muted, amount fields in mono. Sheet: paper
-  surface, hair border, hair-strong grabber, warm scrim, `prefers-reduced-motion` guard.
-  Toast: paper surface, hair-strong border, ink text, terra action. `DeltaChip` restyled to a
-  bare mono terra/sage/amber inline figure (no background chip) for future reuse.
-  SW cache bumped to `yearly-v5`.
-- **Phase 2a (done):** **Add/Edit flow** (`y/addflow.jsx`) restyled to Broadsheet.
-  Template tiles: multicolor filled icon chips replaced with calm 10px category color dots +
-  label. Category picker: filled CatIcon squares replaced with 8px color dots. NumPad keys:
-  canonical tokens (`--paper`, `--hair`, `--ink`, `--mono`), no shadows. DateField:
-  `colorScheme` set to `"light"`. CSS: `.tpl`, `.tpl-dot`, `.tpl-name`, `.catpick-item`,
-  `.catpick-item.sel`, `.cat-dot`, `.amount-display .cur` all updated to canonical tokens
-  (`--paper`, `--hair`, `--hair-strong`, `--ink`, `--ink-2`, `--muted`, `--terra`); legacy
-  `.tpl-ic` and `.catpick-item .cat-ic` removed. SW cache bumped to `yearly-v6`.
-- **Phase 2b (done):** **Analysis** (`y/analysis.jsx`) restyled to Broadsheet.
-  **ProjectionChart**: actual line/area locked to `--chart-actual` (terra) regardless of
-  status — the "no red hero line" fix; projection → `--chart-proj` dashed "6 5" 2.2px;
-  target → `--chart-target` dashed "4 4"; pace → `--chart-pace` dashed "2 4"; prior-year →
-  `--chart-target` dashed; axis ticks mono `--chart-axis`; grid → `--chart-grid`.
-  **ChartLegend**: all swatch colors updated to `--chart-*` palette; mono muted labels.
-  **StatCards** (`.stat*`): filled grey cards dropped → flat hairline-separated figures;
-  labels mono 10px uppercase muted, values mono ink, no card borders or radii.
-  **CategoriesTab**: `CatIcon` chip replaced with 8px `cat-dot` color dot per category;
-  catbar track height 3px in category color over `--hair` background; numbers mono; MoM
-  delta uses canonical `--amber`/`--sage`. **TxRow** (shared in `y/ui.jsx`): `CatIcon`
-  replaced with `cat-dot` color dot; `tx-meta` now mono `--muted`. All `.panel.panel-pad`
-  wrappers removed from Projection, Categories, and Activity tabs — content sits directly
-  on paper separated by `section-h` hairline rules. CSS: `.catbar-*`, `.txrow`, `.tx-*`
-  updated to canonical tokens; `.stat*` rewritten as flat grid with hairline separators.
-  Recharts engine not adopted — dependency-free SVG chart retained (same as SpendCurve).
-  SW cache bumped to `yearly-v7`.
-- **Phase 2c (done):** **Settings** (`y/settings.jsx`) restyled to Broadsheet.
-  **Setting rows** (`.setrow*`): filled grey `.setrow-ic` tile removed — icon floats bare
-  in `--ink-2`; titles sans `--ink`; sub-labels and values mono `--muted`; dividers `--hair`.
-  **Year list** (`.year-row`): dividers `--hair`; "CURRENT" badge mono `--terra`; target /
-  projection figures mono `--ink-2`; delta display switched from background `delta-chip` to
-  bare `DeltaChip` component (mono, colored, no chip). **Range slider** (`.rng`): track is a
-  terra-filled linear gradient driven by `--rng-fill` CSS variable (set inline from `v/15`);
-  thumb is `--paper` with `1.5px --hair-strong` border, no heavy shadow. **Import preview**:
-  `.chk` border `--hair-strong`, checked fill `--terra`; `.dupflag` mono `--amber`. **Category
-  select pill** (`.selpill`): `--paper-tint` background, `--hair` border, `--sans` font, `--ink`
-  text. **Templates**: `CatIcon` replaced with 8px `cat-dot` color dot. **DensitySheet**: active
-  check `--terra`. All inline legacy token names (`--text`, `--text-2`, `--text-3`, `--accent`,
-  `--font`, `--font-mono`, `--surface-sunk`, `--hairline`, `--hairline-strong`, `--watch`)
-  replaced with canonical equivalents. SW cache bumped to `yearly-v8`.
-- **Phase 3 (done):** **Consistency sweep.** All remaining legacy token usages replaced with
-  canonical names throughout `y/app.css` and `y/app.jsx`: `.device` `--bg`→`--paper`;
-  `.panel` `--surface`→`--paper`, `--hairline`→`--hair`; `.gauge-label`, `.muted`, `.empty`
-  `--text-3`→`--muted`; `.callout-text` hardcoded `#3b352a`→`--ink`; `.callout-arrow`
-  hardcoded `#bdb39a`→`--muted`; inline `--accent`→`--terra`, `--text-3`→`--muted` in
-  `app.jsx`. The **legacy-remap block** removed from `y/tokens.css` — file now contains only
-  canonical Broadsheet names. SW cache bumped to `yearly-v9`.
-- **Spend curve note:** the spec §4 calls for Recharts, but this repo is deliberately
-  self-contained/offline-first, so `SpendCurve` and `ProjectionChart` are dependency-free
-  themed SVGs. Adopting the Recharts engine is an optional future decision.
+The app is fully reskinned to the editorial light Broadsheet theme (warm paper, hairline
+rules, three fonts, one terracotta accent). The token set is defined in `y/tokens.css`;
+the spec is `design/BROADSHEET_DESIGN_SPEC.md`. The full session-by-session restyle log
+(Phases 0–3) is in `design/RESTYLE_LOG.md`.
 
 ## Running it
 
@@ -176,13 +101,29 @@ own export to `window`**. There are no imports/exports. Two consequences:
   `rateForMonth(person, ym)` → number (latest applicable rate for a person in a "YYYY-MM"; 0 before startMonth),
   `computeFun(store, asOfDate?)` → per-person fun ledger (see below),
   `projectionAsOf` (trend detector), `requiredDailyToHit(stats)` → number|null (daily cap to finish on
-  mainTarget; null when not applicable), and the standard formatters.
+  mainTarget; null when not applicable), `neededMonthlyCap(stats)` → number (`max(0, (mainTarget −
+  spentBeforeCurrentMonth) / (12 − currentMonthIndex))` — used by MonthCurve target line and the
+  "needed/mo" stat), and the standard formatters.
+  **Key implementation conventions:**
+  - **`localISO(d)`** — always format dates as "YYYY-MM-DD" using `getFullYear()/getMonth()/getDate()`,
+    never `toISOString()`. `toISOString()` uses UTC midnight and shifts the date backward in UTC+ timezones
+    (EET = UTC+2/+3), silently dropping Dec 31 transactions from completed years.
+  - **Lump-sum winsorization** — transactions > 2% of `mainTarget` are excluded from the blended trailing
+    rate calculation (but still included in `spent`). Without this, a single €5k holiday inflates the
+    year-end projection by ~4× the purchase price. Winsorized tx appear in `stats.lumps[]`.
+  - **doy>28 trend guard** — the trend detector (detector #1) only fires when `stats.doy > 28`. Before
+    day 28, `projectionAsOf(stats, 28)` would reference the prior year, producing a spurious near-zero
+    reference projection and triggering a false "year-end projection has shot up" alert every January.
+  - **`funProjection` cap** — `funProjection = min(linear, funSpentYTD + max(0, Σbalances) + futureAccruals)`.
+    Without the cap, a single large fun purchase in January extrapolates linearly to ~€22k, inflating
+    `combinedProjection` by ~7× what the allowance system can ever permit. The cap is based on what
+    the allowance system will actually produce over the rest of the year.
   **Vocabulary** (canonical names — never use `target` for the stored ceiling):
   - `ceiling` — `years[y].ceiling`, stored, user-set, sacred. Renamed from `target`.
   - `funPlanAnnual` — Σ people × 12 months × rateForMonth; derived.
   - `mainTarget` — `ceiling − funPlanAnnual`; derived, never stored. Non-discretionary budget.
   - `spent` / `projection` in stats — main (non-fun) only. Fun tx excluded from all main math.
-  - `funSpent` / `funProjection` — fun YTD and linear projection (approximate, lumpy).
+  - `funSpent` / `funProjection` — fun YTD and capped projection (linear, but capped at what the allowance system can permit; see "funProjection cap" above).
   - `combinedProjection` = `projection + funProjection`; `combinedDelta` / `combinedStatus` vs `ceiling`.
   **Projection formula (damped blend):** `projection = spent + blendedRate × daysRemaining × (1 + buffer)` where
   `blendedRate = YTD_rate × (doy/365) + trailing_60d_rate × (1 − doy/365)`. The buffer uplifts only
@@ -198,14 +139,16 @@ own export to `window`**. There are no imports/exports. Two consequences:
   is likewise main-only.
   `priorCum` (number[366] | null) and `priorSpent` (number | null) — prior year, main tx only.
   Future-year guard: spent 0, projection 0, status "good"; `isFuture` in returned stats.
-  `buildCallouts` returns a single `{id:"future"}` callout for future years; `{id:"final"}` for
-  complete years. For current year, detectors #1–7 describe the main budget; detector #8 (ceiling)
-  is the sacred combined verdict, always prepended at the top:
-  - over ceiling → watch/alert "trim fun ~€Y/mo"; drill {section:"fun"}.
-  - comfortably under (< ceiling×0.94) → good/info "room to raise fun ~€Y/mo"; drill {section:"fun"}.
-  When the ceiling callout is present it replaces the "calm" fallback.
-  Detector #6 (yoy): current year only — compares main spent to prior year at same doy; watch/info/good.
-  Detector #7 (reqpace): current year only, when projection > mainTarget — surfaces required daily spend cap.
+  `buildCallouts` — 8 detectors; see README for the authoritative spec. Quick index:
+  #1 trend (doy>28 guard, 4-week projection change), #2 streak (14-day pace vs baseline),
+  #3 mover (MoM category change), #4 share (top category % of spend), #5 buffer explanation,
+  #6 yoy (main spent vs prior year at same doy), #7 reqpace (when projection > mainTarget),
+  #8 ceiling (sacred combined verdict, always first).
+  Ceiling callout states: `combinedProjection > ceiling` → watch/alert; between 0.94×–1× →
+  `info` "tight but on course"; < 0.94× → good/info "room to raise fun budget". Always
+  prepended first; replaces the calm fallback.
+  Complete year: single `{id:"final"}` callout compares `spent + funSpent` vs `ceiling` (not
+  just main spend vs mainTarget). Future year: single `{id:"future"}` callout.
   `computeFun(store, asOfDate?)` — exported, uses `store.currentYear` for YTD figures. Returns:
   `people[]` (per-person: `id`, `name`, `balance` all-time = accrued − spent + `balanceAdjustment`, `monthlyRate`, `usedThisMonth`,
   `spentAllTime`), `funSpentYTD`, `funProjection` (linear, approximate), `funCatList` (category breakdown).
@@ -304,7 +247,7 @@ spend, no projection/buffer).
   to a 24px `cat-ic` category icon (colored square + SVG icon, `CatIcon`-style inline) if
   absent or on load error. `tx-meta` appends `· city` when `t.merchant_city` is set. Both
   fields are populated by `rowToTx` in `sync.jsx` from the Revolut D1 columns.
-  **`SpendCurve`** has been removed (replaced by `MonthCurve` in `y/home.jsx`). The Overview now shows an interactive monthly chart (`MonthCurve`) for the current month. Features: day-by-day cumulative actual spend (terra line + area fill); Pace diagonal (0 → neededMonthly, faint dashed); dashed Projection line from today to month-end; horizontal Target line at `max(0, ceiling − spent) / (12 − month)` (ceiling-based, accounts for YTD spend); horizontal Month-end line at `projectedEnd` (where this month will land); faint amber Prev-month overlay (previous month's cumulative curve, scaled proportionally to the same x-width, same-year only — not shown for January); explanatory legend below the chart (colored dot + label + description for each series). Toggle chips: Pace / Projection / Target / Month-end / Prev-month (prev month chip only shown when prior-month data exists; Month-end only shown for incomplete months). For past/future years it shows a plain text fallback. `MonthCurve` is defined locally in `y/home.jsx` (not exported from `y/ui.jsx`), using the same SVG/pointer pattern as `ProjectionChart`.
+  **`SpendCurve`** has been removed (replaced by `MonthCurve` in `y/home.jsx`). The Overview now shows an interactive monthly chart (`MonthCurve`) for the current month. Features: day-by-day cumulative actual spend (terra line + area fill); Pace diagonal (0 → neededMonthly, faint dashed); dashed Projection line from today to month-end; horizontal Target line at `YCalc.neededMonthlyCap(stats)` (`max(0, mainTarget − spentBeforeCurrentMonth) / monthsRemainingInclCurrent` — same helper used by the "needed/mo" stat in Analysis); horizontal Month-end line at `projectedEnd` (where this month will land); faint amber Prev-month overlay (previous month's cumulative curve, scaled proportionally to the same x-width, same-year only — not shown for January); explanatory legend below the chart (colored dot + label + description for each series). Toggle chips: Pace / Projection / Target / Month-end / Prev-month (prev month chip only shown when prior-month data exists; Month-end only shown for incomplete months). For past/future years it shows a plain text fallback. `MonthCurve` is defined locally in `y/home.jsx` (not exported from `y/ui.jsx`), using the same SVG/pointer pattern as `ProjectionChart`.
   `Toast({ open, message, actionLabel, onAction, onDismiss })` — transient bottom-anchored
   banner (above nav, z-index 30), auto-dismisses after 5 s via `onDismiss`, optional action button.
   `GaugeHero`, `PaceBar`, and `ProjSpark` have been removed (dead since hero is fixed to numerals).
@@ -343,8 +286,8 @@ spend, no projection/buffer).
   calendar month (terra, full opacity for complete months; 55% opacity for the current partial month;
   absent for future months). Three toggleable reference lines via `ToggleChip`s (reused from
   `ProjectionChart`): monthly average (`--chart-pace` dashed, label at left), peak month (`--amber` dotted, only when
-  > avg × 1.1, label at right), and — for incomplete current years — the ceiling-based required monthly average
-  `max(0, ceiling − spent) / (12 − curMonth)` (`--chart-proj` dashed, drawn from the current-month slot forward, label at right). Each reference line carries an inline text label showing its value (e.g. "avg €1.9k", "peak €2.3k", "needed €1.7k"). Pointer/touch events show a
+  > avg × 1.1, label at right), and — for incomplete current years — the `neededMonthlyCap`-based required monthly average (`YCalc.neededMonthlyCap(stats)` —
+  `max(0, mainTarget − spentBeforeCurrentMonth) / (12 − curMonth)`, `--chart-proj` dashed, drawn from the current-month slot forward, label at right). Each reference line carries an inline text label showing its value (e.g. "avg €1.9k", "peak €2.3k", "needed €1.7k"). Pointer/touch events show a
   vertical crosshair, a dot anchored to the hovered bar (or the needed/mo line for future months), and
   a floating tooltip with the month name and amount; future-month tooltips add an "est. needed/mo"
   sub-label. Hovered bar gets full opacity + stroke highlight; hovered month label bolds. Hidden for
@@ -374,7 +317,7 @@ spend, no projection/buffer).
   default). When on, a Chip owner picker (Joseph/Marti) appears. `commit()`/`save()` write `fun:true`
   + `person` when the toggle is on; EditSheet pre-populates toggle state from `txn.fun`/`txn.person`.
   `EditSheet` now accepts a `store` prop for reading `store.people`.
-  `settings.jsx` — footer shows `APP_VERSION` constant (`'v20'` currently, defined at top of
+  `settings.jsx` — footer shows `APP_VERSION` constant (`'v29'` currently, defined at top of
   IIFE — update it with every release). `TargetSheet` (now labelled "Household ceiling") and `BufferSheet` accept a `year`
   prop (defaults to `store.currentYear`); `TargetSheet` reads/writes `years[y].ceiling`. `BufferSheet`
   computes its own stats internally (unchanged). `YearsSheet` has tappable year rows that drill into a
@@ -578,7 +521,7 @@ The app is a fully installable PWA:
   immediately without waiting for old tabs to close.
   **Install hardening:** the install handler uses individual `fetch({cache:'no-cache'}).catch()` calls instead
   of `cache.addAll` so a single URL failure does not abort the entire SW install, and `no-cache` ensures the install always fetches fresh files (bypassing browser HTTP cache). Same `!response.redirected` guard
-  applied in the install handler as in the fetch handler. Current version: `yearly-v20`.
+  applied in the install handler as in the fetch handler. Current version: `yearly-v29`.
   **Logo caching:** merchant logo requests (`storage.googleapis.com/revolut-prod-apps_merchant-logo/…`)
   are intercepted with a **cache-first** strategy using a dedicated `yearly-logos-v1` cache.
   Once a logo is fetched it is never re-fetched. The logo cache is intentionally NOT deleted on
