@@ -23,8 +23,8 @@
   <div id="summary"></div>
 
   <!-- Plain script tags — no Babel needed; these files contain no JSX -->
-  <script src="public/y/data.jsx?v=32"></script>
-  <script src="public/y/calc.jsx?v=32"></script>
+  <script src="public/y/data.jsx?v=33"></script>
+  <script src="public/y/calc.jsx?v=33"></script>
   <script>
     const container = document.getElementById('results');
     let passed = 0, failed = 0;
@@ -778,6 +778,42 @@
     assert('§6.4: historical asOf (mid-2024) → funProjection > funSpentYTD (current-year path)',
       hist2024Result.funProjection > hist2024Result.funSpentYTD,
       'funProjection=' + hist2024Result.funProjection.toFixed(0) + ' funSpentYTD=' + hist2024Result.funSpentYTD.toFixed(0));
+
+    // ---- §7.2 regression: aggregateByCategory one-pass counts ----
+    section('§7.2 regression — aggregateByCategory counts computed in one pass');
+    // 3 groceries + 1 transport: catList must report count=3 for groceries and count=1 for transport.
+    // Also: a tx with an unknown category must land in "general" with count=1.
+    const catCountStore = {
+      currentYear: 2026,
+      people: [],
+      wishlist: [],
+      years: { '2026': { ceiling: 25000, buffer: 0.04 } },
+      density: 'balanced',
+      templates: [],
+      transactions: [
+        { id: 'cc1', date: '2026-01-10', description: 'G1',  amount_eur: 100, category: 'groceries',  source: 'manual' },
+        { id: 'cc2', date: '2026-02-10', description: 'G2',  amount_eur: 150, category: 'groceries',  source: 'manual' },
+        { id: 'cc3', date: '2026-03-10', description: 'G3',  amount_eur: 200, category: 'groceries',  source: 'manual' },
+        { id: 'cc4', date: '2026-04-10', description: 'T1',  amount_eur: 80,  category: 'transport',  source: 'manual' },
+        { id: 'cc5', date: '2026-05-10', description: 'Unk', amount_eur: 50,  category: 'bogus-cat',  source: 'manual' },
+      ],
+    };
+    const ccStats = YCalc.computeStats(catCountStore, 2026, new Date('2026-06-07T12:00:00Z'));
+    const groceriesEntry  = ccStats.catList.find(c => c.id === 'groceries');
+    const transportEntry  = ccStats.catList.find(c => c.id === 'transport');
+    const generalEntry    = ccStats.catList.find(c => c.id === 'general');
+    assert('§7.2: groceries count === 3', groceriesEntry && groceriesEntry.count === 3,
+      'got ' + (groceriesEntry ? groceriesEntry.count : 'missing'));
+    assert('§7.2: transport count === 1', transportEntry && transportEntry.count === 1,
+      'got ' + (transportEntry ? transportEntry.count : 'missing'));
+    assert('§7.2: bogus-cat aggregates under general', generalEntry !== undefined,
+      '[' + ccStats.catList.map(c => c.id).join(', ') + ']');
+    assert('§7.2: general count === 1 (from bogus-cat tx)', generalEntry && generalEntry.count === 1,
+      'got ' + (generalEntry ? generalEntry.count : 'missing'));
+    // catList is sorted amount descending: groceries (450) > transport (80) > general (50)
+    assert('§7.2: catList sorted by amount descending',
+      ccStats.catList[0].id === 'groceries' && ccStats.catList[1].id === 'transport',
+      ccStats.catList.map(c => c.id + ':' + c.amount).join(', '));
 
     // ---- Summary ----
     const total = passed + failed;

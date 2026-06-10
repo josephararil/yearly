@@ -77,12 +77,14 @@
 
   function aggregateByCategory(upto, spent) {
     const byCat = {};
+    const byCatCount = {};
     upto.forEach((t) => {
       const cid = window.YData.normalizeCategory(t.category);
       byCat[cid] = (byCat[cid] || 0) + t.amount_eur;
+      byCatCount[cid] = (byCatCount[cid] || 0) + 1;
     });
     const catList = Object.entries(byCat)
-      .map(([id, amount]) => ({ id, amount, share: spent ? amount / spent : 0, count: upto.filter((t) => window.YData.normalizeCategory(t.category) === id).length }))
+      .map(([id, amount]) => ({ id, amount, share: spent ? amount / spent : 0, count: byCatCount[id] || 0 }))
       .sort((a, b) => b.amount - a.amount);
     return { byCat, catList };
   }
@@ -139,7 +141,7 @@ function computeStats(store, year, asOfDate) {
     const real = asOfDate || new Date();
     const currentYear = Number(store.currentYear);
     const y = store.years[String(year)] || { ceiling: 25000, buffer: 0.04 };
-    const ceiling = y.ceiling != null ? y.ceiling : (y.target || 25000);
+    const ceiling = y.ceiling != null ? y.ceiling : 25000;
     const buffer = y.buffer || 0;
     const txns = yearTxns(store, year);
     const isCurrent = Number(year) === currentYear;
