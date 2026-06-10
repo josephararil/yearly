@@ -155,7 +155,8 @@ own export to `window`**. There are no imports/exports. Two consequences:
   just main spend vs mainTarget). Future year: single `{id:"future"}` callout.
   `computeFun(store, asOfDate?)` — exported, uses `store.currentYear` for YTD figures. Returns:
   `people[]` (per-person: `id`, `name`, `balance` all-time = accrued − spent + `balanceAdjustment`, `monthlyRate`, `usedThisMonth`,
-  `spentAllTime`), `funSpentYTD`, `funProjection` (linear, approximate), `funCatList` (category breakdown).
+  `spentAllTime`), `funSpentYTD`, `funProjection` (linear/capped, see §6.2), `funCatList` (category breakdown).
+  **Balance** only counts fun txns with `t.date >= p.startMonth + "-01"` — pre-startMonth transactions are excluded (no matching accrual). **Year classification** (current / complete / future) is relative to `asOf.getFullYear()`, not `new Date().getFullYear()`, so historical `asOfDate` values classify consistently.
 - `y/data.jsx` (`window.YData`) — the persisted store shape, the fixed 18-category list
   (`CATEGORIES`, id→icon→color), default templates, and
   `loadStore`/`saveStore`/`resetStore`/`migrateStore`.
@@ -306,8 +307,7 @@ spend, no projection/buffer).
   - **90d trend** — compares last-45d daily rate to prior-45d rate; `↑ Increasing` (terra),
     `↓ Decreasing` (sage), or `→ Constant`. Only shown for current year with ≥ 90 days of data.
   - **Total fun budget** — `funPlanAnnual` per year with per-month sub.
-  - **Target fun/mo** — `max(0, ceiling − projection) / 12 / numPeople`; sage when positive,
-    terra when 0 (projection ≥ ceiling). Current year only.
+  - **Target fun/mo** — `max(0, ceiling − combinedProjection) / monthsLeft / numPeople` where `monthsLeft = max(1, daysRemaining / 30.4)`; sage when positive, terra when 0 (combinedProjection ≥ ceiling). Current year only.
   - **FIRE portfolio** — `combinedProjection / 0.04`; "at 4% rule" sub. Not shown for future years.
   - vs prior year same point, To finish on target (existing, conditional).
   Removed: "Projected finish" and "VS Target" cards (both surfaced on the Overview hero).

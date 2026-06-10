@@ -124,7 +124,7 @@ function funProjectionFor(store, year, doy, funSpentYTD, asOfStr) {
       ym = m === 12 ? (y + 1) + "-01" : y + "-" + String(m + 1).padStart(2, "0");
     }
     const spentAll = (store.transactions || [])
-      .filter((t) => t.fun && t.person === p.id && t.date <= asOfStr)
+      .filter((t) => t.fun && t.person === p.id && t.date <= asOfStr && t.date >= p.startMonth + "-01")
       .reduce((a, t) => a + t.amount_eur, 0);
     balances += accrued - spentAll + (p.balanceAdjustment || 0);
     for (let m = 1; m <= 12; m++) {
@@ -296,7 +296,7 @@ function computeStats(store, year, asOfDate) {
         const [y, m] = ym.split("-").map(Number);
         ym = m === 12 ? (y + 1) + "-01" : y + "-" + String(m + 1).padStart(2, "0");
       }
-      const allFunTxns = (store.transactions || []).filter((t) => t.fun && t.person === p.id && t.date <= asOfStr);
+      const allFunTxns = (store.transactions || []).filter((t) => t.fun && t.person === p.id && t.date <= asOfStr && t.date >= p.startMonth + "-01");
       const spentAllTime = allFunTxns.reduce((a, t) => a + t.amount_eur, 0);
       const balance = accrued - spentAllTime + (p.balanceAdjustment || 0);
       const monthlyRate = rateForMonth(p, currentYM);
@@ -310,7 +310,7 @@ function computeStats(store, year, asOfDate) {
     const yearStr = String(year);
     const funYearTxns = (store.transactions || []).filter((t) => t.fun && t.date.slice(0, 4) === yearStr && t.date <= asOfStr);
     const funSpentYTD = funYearTxns.reduce((a, t) => a + t.amount_eur, 0);
-    const realYear = new Date().getFullYear();
+    const realYear = asOf.getFullYear();
     const isCurrent = year === realYear;
     const complete = year < realYear;
     const isFuture = year > realYear;
