@@ -466,7 +466,7 @@
           <div className="section-h" style={{ marginTop: 0, marginBottom: 10 }}><h2>In numbers</h2></div>
           <div className="statgrid">
             <StatCard label="Spent year-to-date" value={eur0(stats.spent)} sub={`${stats.upto.length} entries`} />
-            <StatCard label={stats.complete ? "Days" : "On-pace by today"} value={stats.complete ? "365" : eur0(stats.pace)} sub={stats.complete ? "complete" : `day ${stats.doy} of 365`} />
+            <StatCard label={stats.complete ? "Days" : "On-pace by today"} value={stats.complete ? "365" : eur0(stats.pace)} sub={stats.complete ? "complete" : `day ${stats.doy} of ${stats.daysInYear}`} />
             <StatCard label="Blended rate" value={eur0(stats.trailingDailyRate) + "/d"} sub={`YTD avg ${eur0(stats.dailyRate)}/d`} />
             {!stats.complete && <StatCard label="Buffer adds" value={"+" + eur0(stats.bufferAmt)} sub={`${Math.round(stats.buffer * 100)}% missed-entry`} />}
             {completedMonths > 0 && (
@@ -507,7 +507,7 @@
                 <StatCard
                   label="To finish on target"
                   value={`≤ ${eur0(req)}/day`}
-                  sub={`${365 - stats.doy} days left`}
+                  sub={`${stats.daysInYear - stats.doy} days left`}
                   color="var(--watch)"
                 />
               );

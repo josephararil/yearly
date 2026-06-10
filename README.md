@@ -197,7 +197,7 @@ delta          = projection - mainTarget
 deltaPct       = delta / mainTarget
 ```
 
-The buffer uplifts only the extrapolated remainder, so on Dec 31 (`daysRemaining = 0`) projection equals `spent` exactly; `funProjection` carries no buffer by design.
+The buffer uplifts only the extrapolated remainder, so on Dec 31 (`daysRemaining = 0`) projection equals `spent` exactly; `funProjection` carries no buffer by design. All day counts use the actual year length; leap years (366 days) are supported.
 
 For a **completed (past) year**: `projection = spent` (no extrapolation, no buffer).
 
