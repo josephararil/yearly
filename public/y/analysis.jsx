@@ -242,15 +242,16 @@
     const avgMonthly = completedMonths > 0 ? completedAmounts.reduce((a, v) => a + v, 0) / completedMonths : 0;
     const maxMonthly = completedMonths > 0 ? Math.max(...completedAmounts) : 0;
 
-    const projectedRemaining = Math.max(0, stats.projection - stats.spent);
-    const monthsRemaining = stats.daysRemaining / 30.4;
-    const requiredMonthlyAvg = monthsRemaining > 0.5 ? projectedRemaining / monthsRemaining : 0;
+    // ceiling-based: how much to spend per remaining calendar month to land at ceiling
+    const monthsRemainingCal = !stats.isFuture ? Math.max(1, 12 - curMonth) : 12;
+    const requiredMonthlyAvg = (!stats.complete && !stats.isFuture)
+      ? Math.max(0, (stats.ceiling - stats.spent) / monthsRemainingCal) : 0;
 
     const maxY = Math.max(1, avgMonthly * 1.1, maxMonthly, requiredMonthlyAvg, ...amounts) * 1.2;
     const sy = (v) => padT + (1 - v / maxY) * (H - padT - padB);
 
     const canShowPeak = maxMonthly > avgMonthly * 1.1 && completedMonths > 0;
-    const canShowReq = !stats.complete && requiredMonthlyAvg > 0;
+    const canShowReq = !stats.complete && !stats.isFuture && requiredMonthlyAvg > 0;
 
     const handlePointer = (e) => {
       const svg = svgRef.current;
@@ -325,18 +326,30 @@
               fontFamily="var(--mono)">{MONTHS[m][0]}</text>
           ))}
 
-          {/* reference lines */}
+          {/* reference lines with inline labels */}
           {showAvg && avgMonthly > 0 && (
-            <line x1={padL} y1={sy(avgMonthly)} x2={W - padR} y2={sy(avgMonthly)}
-              stroke="var(--chart-pace)" strokeWidth="1.3" strokeDasharray="4 3" opacity="0.9" />
+            <>
+              <line x1={padL} y1={sy(avgMonthly)} x2={W - padR} y2={sy(avgMonthly)}
+                stroke="var(--chart-pace)" strokeWidth="1.3" strokeDasharray="4 3" opacity="0.9" />
+              <text x={padL + 3} y={sy(avgMonthly) - 3} textAnchor="start" fontSize="9"
+                fill="var(--chart-pace)" fontFamily="var(--mono)">avg {eurK(avgMonthly)}</text>
+            </>
           )}
           {showPeak && canShowPeak && (
-            <line x1={padL} y1={sy(maxMonthly)} x2={W - padR} y2={sy(maxMonthly)}
-              stroke="var(--amber)" strokeWidth="1" strokeDasharray="2 3" opacity="0.7" />
+            <>
+              <line x1={padL} y1={sy(maxMonthly)} x2={W - padR} y2={sy(maxMonthly)}
+                stroke="var(--amber)" strokeWidth="1" strokeDasharray="2 3" opacity="0.7" />
+              <text x={W - padR} y={sy(maxMonthly) - 3} textAnchor="end" fontSize="9"
+                fill="var(--amber)" fontFamily="var(--mono)">peak {eurK(maxMonthly)}</text>
+            </>
           )}
           {showReq && canShowReq && (
-            <line x1={padL + curMonth * slot} y1={sy(requiredMonthlyAvg)} x2={W - padR} y2={sy(requiredMonthlyAvg)}
-              stroke="var(--chart-proj)" strokeWidth="1.5" strokeDasharray="5 4" />
+            <>
+              <line x1={padL + curMonth * slot} y1={sy(requiredMonthlyAvg)} x2={W - padR} y2={sy(requiredMonthlyAvg)}
+                stroke="var(--chart-proj)" strokeWidth="1.5" strokeDasharray="5 4" />
+              <text x={W - padR} y={sy(requiredMonthlyAvg) - 3} textAnchor="end" fontSize="9"
+                fill="var(--chart-proj)" fontFamily="var(--mono)">needed {eurK(requiredMonthlyAvg)}</text>
+            </>
           )}
 
           {/* crosshair + tooltip */}
@@ -402,7 +415,7 @@
     const avgMonthly = completedMonths > 0 ? completedAmounts.reduce((a, v) => a + v, 0) / completedMonths : 0;
     const monthsRemaining = stats.daysRemaining / 30.4;
     const neededMonthly = !stats.isFuture && monthsRemaining > 0.5
-      ? Math.max(0, (stats.mainTarget - stats.spent) / monthsRemaining)
+      ? Math.max(0, (stats.ceiling - stats.spent) / monthsRemaining)
       : null;
 
     let trend90 = null, trend90Color = "var(--ink)";
