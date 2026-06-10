@@ -175,8 +175,9 @@ function computeStats(store, year, asOfDate) {
       trailingDailyRate = recurringYtdRate * yearWeight + rawTrailing * (1 - yearWeight);
     }
     const daysRemaining = Math.max(0, 365 - doy);
-    const projNoBuffer = (complete || isFuture) ? spent : spent + trailingDailyRate * daysRemaining;
-    const projection = (complete || isFuture) ? spent : projNoBuffer * (1 + buffer);
+    const extrapolated = trailingDailyRate * daysRemaining;
+    const projNoBuffer = (complete || isFuture) ? spent : spent + extrapolated;
+    const projection = (complete || isFuture) ? spent : spent + extrapolated * (1 + buffer);
     const bufferAmt = projection - projNoBuffer;
 
     const pace = (doy / 365) * mainTarget;
@@ -236,7 +237,8 @@ function computeStats(store, year, asOfDate) {
     const rawTrailing = windowDays > 0 ? last60 / windowDays : ytdRate;
     const yearWeight = refDoy / 365;
     const blendedRate = ytdRate * yearWeight + rawTrailing * (1 - yearWeight);
-    return (refSpent + blendedRate * Math.max(0, 365 - refDoy)) * (1 + stats.buffer);
+    const daysLeft = Math.max(0, 365 - refDoy);
+    return refSpent + blendedRate * daysLeft * (1 + stats.buffer);
   }
 
   // Required daily rate to stay on mainTarget. Returns null when not applicable.

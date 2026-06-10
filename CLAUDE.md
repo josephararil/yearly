@@ -182,11 +182,13 @@ own export to `window`**. There are no imports/exports. Two consequences:
   - `spent` / `projection` in stats — main (non-fun) only. Fun tx excluded from all main math.
   - `funSpent` / `funProjection` — fun YTD and linear projection (approximate, lumpy).
   - `combinedProjection` = `projection + funProjection`; `combinedDelta` / `combinedStatus` vs `ceiling`.
-  **Projection formula (damped blend):** `projection = (spent + blendedRate × daysRemaining) × (1 + buffer)` where
-  `blendedRate = YTD_rate × (doy/365) + trailing_60d_rate × (1 − doy/365)`. Early in the year the
-  blend trusts recent momentum (thin YTD history); late in the year it locks onto the full-year
-  average, so a July holiday doesn't hijack the December projection. For complete/future years
-  `projection = spent`. `projectionAsOf` uses the same blend for consistent trend comparisons.
+  **Projection formula (damped blend):** `projection = spent + blendedRate × daysRemaining × (1 + buffer)` where
+  `blendedRate = YTD_rate × (doy/365) + trailing_60d_rate × (1 − doy/365)`. The buffer uplifts only
+  the extrapolated remainder, so on Dec 31 projection equals spent exactly; `funProjection` carries no
+  buffer by design. Early in the year the blend trusts recent momentum (thin YTD history); late in the
+  year it locks onto the full-year average, so a July holiday doesn't hijack the December projection.
+  For complete/future years `projection = spent`. `projectionAsOf` uses the same blend for consistent
+  trend comparisons.
   `computeStats` returns: `ceiling`, `mainTarget`, `funPlanAnnual`, `funSpent`, `funProjection`,
   `combinedProjection`, `combinedDelta`, `combinedDeltaPct`, `combinedStatus` plus all existing fields
   (`spent`, `dailyRate` YTD, `trailingDailyRate` blended, `daysRemaining`, `projection`, `delta`,

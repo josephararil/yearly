@@ -188,13 +188,16 @@ mainTarget     = ceiling − funPlanAnnual               // derived, never store
 buffer         = years[year].buffer                   // fraction
 spent          = sum(amount_eur) for NON-FUN txns in year, date <= asOf
 dailyRate      = spent / doy
-projNoBuffer   = dailyRate * 365                       // raw linear projection
-projection     = projNoBuffer * (1 + buffer)           // missed-entry buffer applied
+blendedRate    = YTD_rate × (doy/365) + trailing_60d_rate × (1 − doy/365)
+projNoBuffer   = spent + blendedRate × daysRemaining   // raw extrapolation, no buffer
+projection     = spent + blendedRate × daysRemaining × (1 + buffer)
 bufferAmt      = projection - projNoBuffer
 pace           = (doy / 365) * mainTarget              // on-pace benchmark
 delta          = projection - mainTarget
 deltaPct       = delta / mainTarget
 ```
+
+The buffer uplifts only the extrapolated remainder, so on Dec 31 (`daysRemaining = 0`) projection equals `spent` exactly; `funProjection` carries no buffer by design.
 
 For a **completed (past) year**: `projection = spent` (no extrapolation, no buffer).
 
