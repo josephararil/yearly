@@ -120,7 +120,9 @@ The sync layer (`y/sync.jsx`) calls `/api/sync`, `/api/transactions`, and `/api/
 These endpoints only exist on the production Cloudflare Worker. Running locally means every
 sync call gets a 404 from the static file server. This is handled gracefully: `syncFetch`
 treats 404 as a silent no-op (returns `null`) and never reloads the page — only 200-with-HTML
-(Cloudflare Access login redirect) or 401/403 trigger a reload.
+(Cloudflare Access login redirect) or 401/403 trigger a reload. Auth-expiry reloads are
+throttled to one per 30 s via `safeReload()` (sessionStorage key `yearly:lastReload`) so a
+persistent transient error never becomes a reload loop.
 
 **If you see the app reloading every second** in the local preview, the likely cause is a
 stale service worker whose precache contains an old `sync.jsx` that had the original
@@ -249,7 +251,7 @@ Implements outbox-based client↔D1 sync with optimistic UI and offline-safe que
 - `YSync.markSettingsDirty()` — marks settings for push and schedules a flush. Called automatically from `app.jsx`'s `setStore` wrapper whenever only non-transactions keys change.
 - `YSync.flush()` — push outbox in chunks of 75, then PUT settings if dirty. Captures `(id → __seq)` pairs before the POST; entries updated mid-flight (same id, higher `__seq`) survive the post-flush filter and are re-sent next flush. Clears the dirty flag before the PUT and restores it on failure. Concurrent calls share one in-flight promise (reentrancy latch); the cursor is never advanced here — only `pull()` advances the cursor.
 - `YSync.pull()` — calls `flush()` first (prevents golden-source pull from clobbering unsynced writes), then `GET /api/sync?since=cursor`, merges tx by id (deleted rows are removed), applies settings only when `updated_at > appliedAt`, updates cursor.
-- `YSync.bootstrap()` — called once on mount. Pull-first: if server has data, adopt it (second-device path); if server is empty, push local seed + settings (first-device path). Sets `yearly:bootstrapped`.
+- `YSync.bootstrap()` — called once on mount. Flushes the outbox first so offline-created transactions reach the server before the since=0 pull decides adopt vs seed path. If server has data, adopts it (second-device path); if empty, seeds it (first-device path). Sets `yearly:bootstrapped`.
 - `YSync.start()` — wires `online`, `focus`, and `visibilitychange` → visible triggers.
 
 **Auth-expiry vs offline:** `syncFetch()` wraps every `fetch` call. If the call throws (`TypeError`) it checks `navigator.onLine`: offline → return `null` silently; online → `location.reload()` (Cloudflare Access expiry as a cross-origin 302 CORS block). For non-throwing bad responses, only reloads on auth-expiry patterns: 200 with non-JSON body (Cloudflare Access login page redirect) or HTTP 401/403. 404 and 5xx return `null` silently — they indicate backend or local-dev issues, not auth expiry.

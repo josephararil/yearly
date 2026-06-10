@@ -1,6 +1,6 @@
 // settings.jsx — target, buffer, years, templates, CSV import/export, clear.
 (function () {
-  const APP_VERSION = 'v28';
+  const APP_VERSION = 'v29';
   const { YData, YCalc, YUI } = window;
   const { eur0, signedPct, computeStats } = YCalc;
   const { Sheet, DeltaChip } = YUI;
