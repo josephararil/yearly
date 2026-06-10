@@ -270,11 +270,12 @@ function computeStats(store, year, asOfDate) {
   // ---- Callout engine ----
   function buildCallouts(store, stats) {
     if (stats.complete) {
-      const over = stats.spent > stats.mainTarget;
+      const finalSpent = stats.spent + stats.funSpent;
+      const over = finalSpent > stats.ceiling;
       return [{
         id: "final", severity: over ? "watch" : "good", icon: over ? "trendingUp" : "checkCircle",
-        text: `Finished ${over ? "over" : "under"} main budget by ${eur0(Math.abs(stats.delta))} — ${eur0(stats.spent)} against a ${eur0(stats.mainTarget)} main budget.`,
-        drill: { section: "projection" }, mag: Math.abs(stats.deltaPct),
+        text: `Finished ${over ? "over" : "under"} the ceiling by ${eur0(Math.abs(stats.combinedDelta))} — ${eur0(finalSpent)} against a ${eur0(stats.ceiling)} ceiling.`,
+        drill: { section: "projection" }, mag: Math.abs(stats.combinedDeltaPct),
       }];
     }
     if (stats.isFuture) return [{
@@ -299,13 +300,13 @@ function computeStats(store, year, asOfDate) {
       });
     }
 
-    // 2. recent 14-day pace streak
+    // 2. recent 14-day pace streak — skip before 14 days of data (ratio14 is always 0 on an empty store)
     const ref14 = new Date(stats.asOf); ref14.setDate(ref14.getDate() - 14);
     const r14 = localISO(ref14);
     const last14 = stats.upto.filter((t) => t.date > r14).reduce((a, t) => a + t.amount_eur, 0);
     const d14 = last14 / 14;
     const ratio14 = d14 / linDaily;
-    if (ratio14 > 1.15 || ratio14 < 0.7) {
+    if (stats.doy >= 14 && stats.upto.length > 0 && (ratio14 > 1.15 || ratio14 < 0.7)) {
       const hot = ratio14 > 1;
       out.push({
         id: "streak", severity: hot ? (ratio14 > 1.35 ? "alert" : "watch") : "good",
@@ -396,8 +397,9 @@ function computeStats(store, year, asOfDate) {
     out.sort((a, b) => (sev[b.severity] - sev[a.severity]) || (b.mag - a.mag));
 
     // 8. ceiling detector (current year only) — sacred combined verdict, always top
+    // Skip entirely when the store has no data yet (avoids "room to raise fun €X/mo" noise on first load).
     let ceilingCallout = null;
-    if (stats.isCurrent) {
+    if (stats.isCurrent && !(stats.upto.length === 0 && stats.funSpent === 0)) {
       if (stats.combinedProjection > stats.ceiling) {
         const monthsLeft = Math.max(1, (365 - stats.doy) / 30.4);
         const overBy = stats.combinedProjection - stats.ceiling;
@@ -416,6 +418,13 @@ function computeStats(store, year, asOfDate) {
           id: "ceiling", severity: "good", icon: "checkCircle",
           text: `You're tracking ${eur0(gap)} under your ${eur0(stats.ceiling)} ceiling — room to raise the fun budget by ~${eur0(raisePer)}/mo if you want.`,
           drill: { section: "fun" }, mag: 0.5,
+        };
+      } else {
+        // 0.94–1.00 band: tight but on course
+        ceilingCallout = {
+          id: "ceiling", severity: "info", icon: "checkCircle",
+          text: `Tracking ${eur0(stats.ceiling - stats.combinedProjection)} under your ${eur0(stats.ceiling)} ceiling — tight but on course.`,
+          drill: { section: "projection" }, mag: 0.5,
         };
       }
     }
