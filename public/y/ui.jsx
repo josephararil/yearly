@@ -6,11 +6,6 @@
   // tint a hex color with alpha (e.g. "#32d74b" -> "#32d74b26")
   const tint = (hex, aa) => hex + aa;
 
-  // first-of-month day-of-year offsets; month initials for the spend curve axis
-  const MONTH_STARTS = [0, 31, 59, 90, 120, 151, 181, 212, 243, 273, 304, 334];
-  const MONTH_INITIALS = ["J", "F", "M", "A", "M", "J", "J", "A", "S", "O", "N", "D"];
-  const eurK = (v) => (Math.abs(v) >= 1000 ? "€" + (v / 1000).toFixed(v % 1000 === 0 ? 0 : 1) + "k" : "€" + Math.round(v));
-
   function CatIcon({ catId, size = 40, radius = 12, iconSize }) {
     const c = YData.cat(catId);
     return (
@@ -106,73 +101,7 @@
     );
   }
 
-  // Broadsheet spend curve — themed SVG (dependency-free, mirrors the reference SpendChart):
-  // terra actual area + line, muted-terra dashed projection, dashed target reference, faint pace.
-  function SpendCurve({ stats }) {
-    const W = 360, H = 228, padL = 38, padR = 8, padT = 12, padB = 22;
-    const x0 = padL, x1 = W - padR, y0 = padT, y1 = H - padB;
-    const maxY = Math.max(stats.mainTarget, stats.ceiling, stats.projection, 1) * 1.08;
-    const sx = (d) => x0 + (d / 365) * (x1 - x0);
-    const sy = (v) => y1 - (v / maxY) * (y1 - y0);
-    const cum = YCalc.cumulativeByDay(stats.upto);
-    const endDay = stats.complete ? 365 : Math.max(1, stats.doy);
-
-    const days = [];
-    for (let d = 0; d <= endDay; d += 7) days.push(d);
-    if (days[days.length - 1] !== endDay) days.push(endDay);
-    const actPts = days.map((d) => [sx(d), sy(cum[Math.min(365, d)])]);
-    const actLine = actPts.map((p) => p.join(",")).join(" ");
-    const areaPts = `${x0},${y1} ${actLine} ${actPts[actPts.length - 1][0]},${y1}`;
-
-    // Nice round Y-axis gridlines (~5 levels)
-    const roughStep = maxY / 4;
-    const mag = Math.pow(10, Math.floor(Math.log10(roughStep)));
-    const mult = roughStep / mag;
-    const step = mult <= 1 ? mag : mult <= 2 ? 2 * mag : mult <= 5 ? 5 * mag : 10 * mag;
-    const yTicks = [];
-    for (let v = 0; v <= maxY * 1.001; v += step) yTicks.push(Math.round(v));
-
-    const uid = "sc" + stats.year;
-    return (
-      <svg viewBox={`0 0 ${W} ${H}`} width="100%" style={{ display: "block", overflow: "visible" }}>
-        <defs>
-          <linearGradient id={uid} x1="0" y1="0" x2="0" y2="1">
-            <stop offset="0%" stopColor="var(--chart-actual)" stopOpacity="0.25" />
-            <stop offset="100%" stopColor="var(--chart-actual)" stopOpacity="0" />
-          </linearGradient>
-        </defs>
-        {yTicks.map((v, i) => (
-          <g key={i}>
-            <line x1={x0} y1={sy(v)} x2={x1} y2={sy(v)} stroke="var(--chart-grid)" strokeWidth="1" />
-            <text x={x0 - 6} y={sy(v) + 3} textAnchor="end" fontSize="9.5" fill="var(--chart-axis)" fontFamily="var(--mono)">{eurK(v)}</text>
-          </g>
-        ))}
-        {MONTH_INITIALS.map((lbl, m) => (
-          <text key={m} x={sx(MONTH_STARTS[m])} y={H - 7} textAnchor="middle" fontSize="9.5" fill="var(--chart-axis)" fontFamily="var(--mono)">{lbl}</text>
-        ))}
-        {/* faint linear pace diagonal */}
-        <line x1={sx(0)} y1={sy(0)} x2={sx(365)} y2={sy(stats.mainTarget)} stroke="var(--chart-pace)" strokeWidth="1" strokeDasharray="2 4" opacity="0.6" />
-        {/* main target reference */}
-        <line x1={x0} y1={sy(stats.mainTarget)} x2={x1} y2={sy(stats.mainTarget)} stroke="var(--chart-target)" strokeWidth="1.2" strokeDasharray="4 4" />
-        <text x={x1} y={sy(stats.mainTarget) + 12} textAnchor="end" fontSize="9.5" fill="var(--chart-target)" fontFamily="var(--mono)">target {eurK(stats.mainTarget)}</text>
-        {/* household ceiling */}
-        <line x1={x0} y1={sy(stats.ceiling)} x2={x1} y2={sy(stats.ceiling)} stroke="var(--ink-2)" strokeWidth="1.5" strokeDasharray="6 3" />
-        <text x={x1} y={sy(stats.ceiling) - 5} textAnchor="end" fontSize="9.5" fill="var(--ink-2)" fontFamily="var(--mono)">ceiling {eurK(stats.ceiling)}</text>
-        {/* actual area + line */}
-        <polygon points={areaPts} fill={`url(#${uid})`} />
-        <polyline points={actLine} fill="none" stroke="var(--chart-actual)" strokeWidth="2.8" strokeLinecap="round" strokeLinejoin="round" />
-        {/* projection */}
-        {!stats.complete && !stats.isFuture && (
-          <>
-            <line x1={sx(stats.doy)} y1={sy(stats.spent)} x2={sx(365)} y2={sy(stats.projection)} stroke="var(--chart-proj)" strokeWidth="2.2" strokeDasharray="6 5" strokeLinecap="round" />
-            <circle cx={sx(stats.doy)} cy={sy(stats.spent)} r="3.6" fill="var(--chart-actual)" stroke="var(--paper)" strokeWidth="1.5" />
-          </>
-        )}
-      </svg>
-    );
-  }
-
-  function TxRow({ t, onClick }) {
+function TxRow({ t, onClick }) {
     const c = YData.cat(t.category);
     return (
       <button className="txrow" onClick={onClick}>
@@ -253,5 +182,5 @@
     );
   }
 
-  window.YUI = { CatIcon, DeltaChip, StatusHero, CalloutCard, TxRow, SpendCurve, Sheet, SectionH, Toast, rich, tint };
+  window.YUI = { CatIcon, DeltaChip, StatusHero, CalloutCard, TxRow, Sheet, SectionH, Toast, rich, tint };
 })();

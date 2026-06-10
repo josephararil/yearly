@@ -2,7 +2,7 @@
 (function () {
   const { YData, YCalc, YUI, YFun } = window;
   const { eur0, eurAuto, signedEur, signedPct, pct, MONTHS, fmtDateShort } = YCalc;
-  const { TxRow, CatIcon } = YUI;
+  const { TxRow, CatIcon, CalloutCard, SectionH } = YUI;
   const DS = window.ApertureDesignSystem_72a4cd || {};
   const SegmentedControl = DS.SegmentedControl, Input = DS.Input, Chip = DS.Chip;
 
@@ -395,7 +395,7 @@
     );
   }
 
-  function ProjectionTab({ stats, fun, store }) {
+  function ProjectionTab({ stats, fun, store, callouts, onCallout }) {
     const curMonth = stats.isFuture ? -1 : stats.asOf.getMonth();
     const completedMonths = stats.complete ? 12 : Math.max(0, curMonth);
     const completedAmounts = stats.byMonth.slice(0, completedMonths).map((m) => m.amount);
@@ -439,6 +439,20 @@
         </div>
 
         {!stats.isFuture && <MonthlyBarsChart stats={stats} />}
+
+        {callouts && callouts.length > 0 && (
+          <div>
+            <SectionH
+              title={stats.complete ? "The year in review" : "What's happening"}
+              meta={callouts.length + (callouts.length === 1 ? " NOTE" : " NOTES")}
+            />
+            <div className="callouts">
+              {callouts.map((c) => (
+                <CalloutCard key={c.id} c={c} onClick={() => onCallout && onCallout(c)} />
+              ))}
+            </div>
+          </div>
+        )}
 
         <div>
           <div className="section-h" style={{ marginTop: 0, marginBottom: 10 }}><h2>In numbers</h2></div>
@@ -614,7 +628,7 @@
     );
   }
 
-  function AnalysisScreen({ stats, focus, onEditTx, fun, store, setStore, addTx }) {
+  function AnalysisScreen({ stats, focus, onEditTx, fun, store, setStore, addTx, callouts, onCallout }) {
     const [tab, setTab] = React.useState("Projection");
     React.useEffect(() => {
       if (focus && focus.section === "categories") setTab("Categories");
@@ -627,7 +641,7 @@
         <div style={{ position: "sticky", top: 0, zIndex: 5, paddingBottom: 4 }}>
           <SegmentedControl options={["Projection", "Categories", "Activity", "Fun"]} value={tab} fill onChange={setTab} />
         </div>
-        {tab === "Projection" && <ProjectionTab stats={stats} fun={fun} store={store} />}
+        {tab === "Projection" && <ProjectionTab stats={stats} fun={fun} store={store} callouts={callouts} onCallout={onCallout} />}
         {tab === "Categories" && <CategoriesTab stats={stats} focusCategory={focus && focus.category} onEditTx={onEditTx} />}
         {tab === "Activity" && <ActivityTab stats={stats} onEditTx={onEditTx} />}
         {tab === "Fun" && <YFun.FunTab fun={fun} store={store} setStore={setStore} addTx={addTx} />}
