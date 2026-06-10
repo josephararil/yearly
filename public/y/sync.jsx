@@ -66,6 +66,16 @@
     return tx;
   }
 
+  // ---- reload throttle: max one auth-expiry reload per 30s ----
+  // navigator.onLine lies (captive portals, DNS failures) so a transient error
+  // must not trigger a reload loop. sessionStorage resets on tab close.
+  function safeReload() {
+    const last = parseInt(sessionStorage.getItem('yearly:lastReload') || '0', 10);
+    if (Date.now() - last < 30000) return;
+    sessionStorage.setItem('yearly:lastReload', String(Date.now()));
+    location.reload();
+  }
+
   // ---- fetch wrapper: distinguishes offline vs auth-expiry ----
   async function syncFetch(url, opts) {
     let response;
@@ -74,7 +84,7 @@
     } catch (_e) {
       // fetch threw — could be offline OR cross-origin 302 (Access expiry) CORS block
       if (!navigator.onLine) return null; // offline — keep outbox, retry on reconnect
-      location.reload();                  // online + threw = expired Access session
+      safeReload();                       // online + threw = expired Access session
       return null;
     }
     const ct = response.headers.get('content-type') || '';
@@ -84,7 +94,7 @@
       if (navigator.onLine) {
         const isAuthExpiry = (response.ok && !ct.includes('application/json'))
           || response.status === 401 || response.status === 403;
-        if (isAuthExpiry) location.reload();
+        if (isAuthExpiry) safeReload();
       }
       return null;
     }
@@ -201,6 +211,9 @@
   // ---- public: bootstrap ----
   async function bootstrap() {
     if (localStorage.getItem(BOOT_KEY)) return;
+    // Flush outbox first so offline-created transactions reach the server before
+    // the since=0 pull decides whether the server "has data" (adopt vs seed path).
+    await flush();
 
     const result = await syncFetch('/api/sync?since=0');
     if (!result) return; // offline — will retry on next trigger
