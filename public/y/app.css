@@ -107,16 +107,17 @@ button, input, select, textarea { font-family: inherit; }
 .hero-spent .meta { font-family: var(--mono); font-size: 11.5px; color: var(--muted); flex-shrink: 0; }
 /* bullet bar — Zone 2 */
 .bullet-svg { display: block; width: 100%; height: auto; overflow: visible; margin-top: 24px; touch-action: manipulation; }
-/* Zone 3 placeholder — min-height reserves space for Session 4 pulse line */
-.pulse { min-height: 24px; }
-.pulse-month {}
-.pulse-now {}
-.pulse-cap {}
-.pulse-proj {}
-.pulse-verdict {}
-.pulse-verdict.over {}
-.pulse-verdict.under {}
-.pulse-verdict.tight {}
+/* Zone 3 — monthly pulse */
+.pulse { display: flex; flex-wrap: wrap; align-items: baseline; gap: 8px; margin-top: 18px; font-size: 13px; }
+.pulse-month { font-family: var(--mono); font-size: 11px; letter-spacing: 0.15em; color: var(--muted); }
+.pulse-now { font-family: var(--mono); color: var(--ink); }
+.pulse-cap { font-family: var(--mono); color: var(--ink); }
+.pulse-proj { font-family: var(--mono); color: var(--ink-2); }
+.pulse-sep { color: var(--muted); }
+.pulse-verdict { font-family: var(--sans); font-size: 12px; margin-left: auto; }
+.pulse-verdict.over { color: var(--terra); }
+.pulse-verdict.tight { color: var(--amber); }
+.pulse-verdict.under { color: var(--sage); }
 
 /* gauge */
 .gauge-wrap { display: grid; place-items: center; padding: 6px 0 2px; }
