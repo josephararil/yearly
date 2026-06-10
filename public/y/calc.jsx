@@ -113,27 +113,9 @@ function computeStats(store, year, asOfDate) {
     const upto = isFuture ? [] : mainTxns.filter((t) => t.date <= asOfStr);
     const spent = isFuture ? 0 : upto.reduce((a, t) => a + t.amount_eur, 0);
     const dailyRate = isFuture ? 0 : spent / doy;  // YTD average, kept for display
-    // Trailing 60-day rate: de-weights front-loaded lump sums once they leave the window.
-    // Falls back to YTD rate when fewer than 60 days have elapsed (the window covers all of YTD).
-    // Damped-blend rate: YTD_rate × (doy/365) + trailing_60d_rate × (1 − doy/365).
-    // Early year → trusts recent momentum (YTD history is thin).
-    // Late year → locks onto YTD average (ignores last-minute spikes or quiet patches).
-    let trailingDailyRate = dailyRate;
-    if (!isFuture && !complete && doy >= 1) {
-      const w60 = new Date(asOf); w60.setDate(w60.getDate() - 60);
-      const w60str = localISO(w60);
-      const windowDays = Math.min(60, doy);
-      const last60 = upto.filter((t) => t.date > w60str).reduce((a, t) => a + t.amount_eur, 0);
-      const rawTrailing = last60 / windowDays;
-      const yearWeight = doy / 365;
-      trailingDailyRate = dailyRate * yearWeight + rawTrailing * (1 - yearWeight);
-    }
-    const daysRemaining = Math.max(0, 365 - doy);
-    const projNoBuffer = (complete || isFuture) ? spent : spent + trailingDailyRate * daysRemaining;
-    const projection = (complete || isFuture) ? spent : projNoBuffer * (1 + buffer);
-    const bufferAmt = projection - projNoBuffer;
 
-    // Derived main target: ceiling minus the planned annual fun allocation
+    // Derived main target: ceiling minus the planned annual fun allocation.
+    // Computed before the trailing rate so lumpThreshold can reference mainTarget.
     const people = store.people || [];
     let funPlanAnnual = 0;
     for (const p of people) {
@@ -143,6 +125,34 @@ function computeStats(store, year, asOfDate) {
       }
     }
     const mainTarget = ceiling - funPlanAnnual;
+
+    // Lump-sum winsorization: transactions above 2% of mainTarget count in `spent` but are
+    // excluded from the RATE that gets extrapolated over daysRemaining. A single large
+    // transaction counts once as money spent; it does not inflate the year-end projection
+    // by 4× its own size by being multiplied over the remaining days.
+    const lumpThreshold = mainTarget > 0 ? mainTarget * 0.02 : Infinity;
+    const recurring = upto.filter((t) => t.amount_eur <= lumpThreshold);
+
+    // Trailing 60-day rate: de-weights front-loaded lump sums once they leave the window.
+    // Falls back to recurring-YTD rate when fewer than 60 days have elapsed.
+    // Damped-blend rate: recurringYtdRate × (doy/365) + trailing_60d_rate × (1 − doy/365).
+    // Early year → trusts recent momentum (YTD history is thin).
+    // Late year → locks onto YTD average (ignores last-minute spikes or quiet patches).
+    let trailingDailyRate = dailyRate;
+    if (!isFuture && !complete && doy >= 1) {
+      const w60 = new Date(asOf); w60.setDate(w60.getDate() - 60);
+      const w60str = localISO(w60);
+      const windowDays = Math.min(60, doy);
+      const recurringYtdRate = doy > 0 ? recurring.reduce((a, t) => a + t.amount_eur, 0) / doy : 0;
+      const last60 = recurring.filter((t) => t.date > w60str).reduce((a, t) => a + t.amount_eur, 0);
+      const rawTrailing = last60 / windowDays;
+      const yearWeight = doy / 365;
+      trailingDailyRate = recurringYtdRate * yearWeight + rawTrailing * (1 - yearWeight);
+    }
+    const daysRemaining = Math.max(0, 365 - doy);
+    const projNoBuffer = (complete || isFuture) ? spent : spent + trailingDailyRate * daysRemaining;
+    const projection = (complete || isFuture) ? spent : projNoBuffer * (1 + buffer);
+    const bufferAmt = projection - projNoBuffer;
 
     const pace = (doy / 365) * mainTarget;
     const delta = projection - mainTarget;
@@ -192,8 +202,12 @@ function computeStats(store, year, asOfDate) {
     const w60 = new Date(ref); w60.setDate(w60.getDate() - 60);
     const w60str = localISO(w60);
     const windowDays = Math.min(60, refDoy);
-    const last60 = stats.txns.filter((t) => t.date > w60str && t.date <= refStr).reduce((a, t) => a + t.amount_eur, 0);
-    const ytdRate = refDoy > 0 ? refSpent / refDoy : 0;
+    // Lump-sum winsorization — must match computeStats so the trend comparison is apples-to-apples.
+    const lumpThreshold = stats.mainTarget > 0 ? stats.mainTarget * 0.02 : Infinity;
+    const refRecurring = stats.txns.filter((t) => t.date <= refStr && t.amount_eur <= lumpThreshold);
+    const recurringSum = refRecurring.reduce((a, t) => a + t.amount_eur, 0);
+    const ytdRate = refDoy > 0 ? recurringSum / refDoy : 0;
+    const last60 = refRecurring.filter((t) => t.date > w60str).reduce((a, t) => a + t.amount_eur, 0);
     const rawTrailing = windowDays > 0 ? last60 / windowDays : ytdRate;
     const yearWeight = refDoy / 365;
     const blendedRate = ytdRate * yearWeight + rawTrailing * (1 - yearWeight);
@@ -271,10 +285,11 @@ function computeStats(store, year, asOfDate) {
     const out = [];
     const linDaily = stats.mainTarget / 365;
 
-    // 1. projection trend (vs 4 weeks ago)
-    const proj4 = projectionAsOf(stats, 28);
-    const trendD = stats.projection - proj4;
-    if (Math.abs(trendD) > stats.mainTarget * 0.012) {
+    // 1. projection trend (vs 4 weeks ago) — skip in January (doy ≤ 28) where the reference
+    // date falls in the prior year, making refSpent=0 and proj4≈0 (false "everything moved up").
+    const proj4 = stats.doy > 28 ? projectionAsOf(stats, 28) : null;
+    const trendD = proj4 !== null ? stats.projection - proj4 : 0;
+    if (proj4 !== null && Math.abs(trendD) > stats.mainTarget * 0.012) {
       const worse = trendD > 0;
       out.push({
         id: "trend", severity: worse ? (Math.abs(trendD) > stats.mainTarget * 0.04 ? "alert" : "watch") : "good",

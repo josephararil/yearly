@@ -130,16 +130,20 @@
         { id: 'tr7', date: '2026-06-01', description: 'Jun', amount_eur: 200, category: 'groceries', source: 'manual' },
       ],
     };
-    // asOf = Jun 7: doy=158; spent=4400; 60-day window = Apr 8 → Jun 7
-    // In window: Apr 15(500)+May 15(500)+Jun 1(200) = 1200 over 60 days → rawTrailing=20/d
-    // YTD rate = 4400/158 ≈ 27.85/d; yearWeight = 158/365 ≈ 0.433
-    // blended = 27.85×0.433 + 20×0.567 ≈ 12.06 + 11.33 ≈ 23.39/d
-    // daysRemaining=207; projNoBuffer ≈ 4400 + 23.39×207 ≈ 9242 (no buffer)
+    // asOf = Jun 7: doy=158; spent=4400 (all tx, lumps included in spent).
+    // lumpThreshold = mainTarget × 0.02 = 25000 × 0.02 = 500 (people:[] → mainTarget=25000).
+    // recurring (≤500): tr5(500)+tr6(500)+tr7(200) = €1200. tr1-tr4 exceed threshold → excluded from rates.
+    // recurringYtdRate = 1200/158 ≈ 7.60/d; 60-day window = Apr 8 → Jun 7.
+    // recurring in window: tr5(Apr15=500)+tr6(May15=500)+tr7(Jun1=200) = 1200 → rawTrailing=20/d.
+    // yearWeight = 158/365 ≈ 0.433
+    // blended = 7.60×0.433 + 20×0.567 ≈ 3.29 + 11.34 ≈ 14.63/d (vs old 23.39/d without winsorization)
+    // daysRemaining=207; projNoBuffer ≈ 4400 + 14.63×207 ≈ 7428 (no buffer)
     const tStats = YCalc.computeStats(trailingStore, 2026, new Date('2026-06-07T00:00:00Z'));
     const yearWeight = tStats.doy / 365;
-    const ytdRate = tStats.spent / tStats.doy;
-    const rawTrailing = 1200 / 60;  // 20/d (known from fixture)
-    const expectedBlended = ytdRate * yearWeight + rawTrailing * (1 - yearWeight);
+    const recurringSum = 500 + 500 + 200;  // tr5+tr6+tr7 — only tx at or below the €500 threshold
+    const recurringYtdRate = recurringSum / tStats.doy;
+    const rawTrailing = 1200 / 60;  // 20/d — same transactions (all ≤ threshold, so unchanged)
+    const expectedBlended = recurringYtdRate * yearWeight + rawTrailing * (1 - yearWeight);
     assert('blended: spent === 4400', Math.abs(tStats.spent - 4400) < 0.01, 'got ' + tStats.spent);
     assert('blended: trailingDailyRate ≈ expectedBlended', Math.abs(tStats.trailingDailyRate - expectedBlended) < 0.5, 'got ' + tStats.trailingDailyRate.toFixed(2) + ' expected ' + expectedBlended.toFixed(2));
     assert('blended: daysRemaining === 207', tStats.daysRemaining === 207, 'got ' + tStats.daysRemaining);
