@@ -106,6 +106,32 @@ button, input, select, textarea { font-family: inherit; }
 .pace-mark { position: absolute; top: -4px; width: 1.5px; height: 11px; background: var(--ink); }
 .pace-legend { display: flex; justify-content: space-between; margin-top: 8px; font-family: var(--mono); font-size: 11px; color: var(--muted); }
 
+/* ---- hero v2 (sessions 2–4) ---- */
+.hero-spent {}
+.hero-hr {}
+.bullet {}
+.bullet-svg {}
+.bullet-track {}
+.bullet-fill {}
+.bullet-ext {}
+.bullet-tick {}
+.bullet-tick-major {}
+.bullet-tick-proj {}
+.bullet-doy {}
+.bullet-label {}
+.bullet-hit {}
+.bullet-tip {}
+.bullet-tip-row {}
+.pulse {}
+.pulse-month {}
+.pulse-now {}
+.pulse-cap {}
+.pulse-proj {}
+.pulse-verdict {}
+.pulse-verdict.over {}
+.pulse-verdict.under {}
+.pulse-verdict.tight {}
+
 /* gauge */
 .gauge-wrap { display: grid; place-items: center; padding: 6px 0 2px; }
 .gauge-num { font-size: 34px; font-weight: 600; letter-spacing: -0.03em; }

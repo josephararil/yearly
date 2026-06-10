@@ -538,6 +538,18 @@ function computeStats(store, year, asOfDate) {
     return out;
   }
 
+  // Current-month projected end total (same daily-rate extrapolation as MonthCurve).
+  // For complete/future years returns the recorded month total (projection = actual).
+  function projectedMonthEnd(stats) {
+    const month = stats.asOf.getMonth();
+    if (stats.complete || stats.isFuture) return stats.byMonth[month].amount;
+    const dayOfMonth = stats.asOf.getDate();
+    const daysInMonth = new Date(stats.asOf.getFullYear(), month + 1, 0).getDate();
+    const spentSoFar = stats.byMonth[month].amount;
+    const rate = dayOfMonth > 0 ? spentSoFar / dayOfMonth : 0;
+    return spentSoFar + rate * (daysInMonth - dayOfMonth);
+  }
+
   // Main-budget allowance per remaining month (incl. the current one).
   // Subtracts only PRIOR months' spend so the current month is judged against a stable cap.
   function neededMonthlyCap(stats) {
@@ -551,6 +563,6 @@ function computeStats(store, year, asOfDate) {
     dayOfYear, daysInYear, parseDate, localISO, fmtDateShort, fmtDateLong, yearTxns,
     cumulativeByDay, priorYearCumulative, aggregateByCategory,
     rateForMonth, computeStats, computeFun, projectionAsOf, buildCallouts,
-    requiredDailyToHit, neededMonthlyCap,
+    requiredDailyToHit, neededMonthlyCap, projectedMonthEnd,
   };
 })();
