@@ -136,8 +136,17 @@ own export to `window`**. There are no imports/exports. Two consequences:
   `computeStats` returns: `ceiling`, `mainTarget`, `funPlanAnnual`, `funSpent`, `funProjection`,
   `combinedProjection`, `combinedDelta`, `combinedDeltaPct`, `combinedStatus` plus all existing fields
   (`spent`, `dailyRate` YTD, `trailingDailyRate` blended, `daysRemaining`, `projection`, `delta`,
-  `status`, etc. — all main-budget). `stats.txns` contains main-only tx (fun tx excluded); `stats.upto`
+  `status`, `projLow`, `projHigh`, `bandAmt`, etc. — all main-budget). `stats.txns` contains main-only tx (fun tx excluded); `stats.upto`
   is likewise main-only.
+  **Forecast uncertainty band** (`projLow`/`projHigh`/`bandAmt`): computed from sample std-dev of weekly
+  recurring totals when ≥4 complete weeks are available (current incomplete year only). `bandAmt =
+  sigmaWeek × √weeksRemaining × (1+buffer)`; `projLow = max(spent, projection − bandAmt)`. All three are
+  `null` when data is insufficient (<4 weeks, or complete/future year).
+  **Main status gating**: when the band exists, `status` is "good" if `projection ≤ mainTarget`; "alert"
+  if `projLow > mainTarget` (even the optimistic bound misses); "watch" otherwise. This prevents
+  threshold-flapping: the number only escalates to "alert" when the lower bound of the forecast clears
+  the target. When `bandAmt` is null (<4 weeks), the old static ±8% threshold (`T.WATCH_BAND_CURRENT`)
+  applies unchanged. `combinedStatus` always uses the static thresholds — the band applies to main only.
   `priorCum` (number[366] | null) and `priorSpent` (number | null) — prior year, main tx only.
   Future-year guard: spent 0, projection 0, status "good"; `isFuture` in returned stats.
   `buildCallouts` — 8 detectors; see README for the authoritative spec. Quick index:
@@ -328,7 +337,7 @@ spend, no projection/buffer).
   "Excluded from the spending-trend forecast — still counts in totals. Large amounts are excluded
   automatically." The oneoff flag causes `isLump()` in calc.jsx to exclude the tx from the blended
   rate while keeping it in `spent`.
-  `settings.jsx` — footer shows `APP_VERSION` constant (`'v29'` currently, defined at top of
+  `settings.jsx` — footer shows `APP_VERSION` constant (`'v35'` currently, defined at top of
   IIFE — update it with every release). `TargetSheet` (now labelled "Household ceiling") and `BufferSheet` accept a `year`
   prop (defaults to `store.currentYear`); `TargetSheet` reads/writes `years[y].ceiling`. `BufferSheet`
   computes its own stats internally (unchanged). `YearsSheet` has tappable year rows that drill into a
@@ -535,7 +544,7 @@ The app is a fully installable PWA:
   immediately without waiting for old tabs to close.
   **Install hardening:** the install handler uses individual `fetch({cache:'no-cache'}).catch()` calls instead
   of `cache.addAll` so a single URL failure does not abort the entire SW install, and `no-cache` ensures the install always fetches fresh files (bypassing browser HTTP cache). Same `!response.redirected` guard
-  applied in the install handler as in the fetch handler. Current version: `yearly-v29`.
+  applied in the install handler as in the fetch handler. Current version: `yearly-v35`.
   **Logo caching:** merchant logo requests (`storage.googleapis.com/revolut-prod-apps_merchant-logo/…`)
   are intercepted with a **cache-first** strategy using a dedicated `yearly-logos-v1` cache.
   Once a logo is fetched it is never re-fetched. The logo cache is intentionally NOT deleted on

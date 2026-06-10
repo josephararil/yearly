@@ -23,8 +23,8 @@
   <div id="summary"></div>
 
   <!-- Plain script tags — no Babel needed; these files contain no JSX -->
-  <script src="public/y/data.jsx?v=34"></script>
-  <script src="public/y/calc.jsx?v=34"></script>
+  <script src="public/y/data.jsx?v=35"></script>
+  <script src="public/y/calc.jsx?v=35"></script>
   <script>
     const container = document.getElementById('results');
     let passed = 0, failed = 0;
@@ -866,6 +866,112 @@
     assert('regular: projection diff > 300 (tx enters the rate)',
       projDiffRegular > 300 + 1,
       'diff=' + projDiffRegular.toFixed(2));
+
+    // ---- Phase 21 — uncertainty band (Big Swing 4, part A) ----
+    section('Phase 21 — uncertainty band (computeStats projLow/projHigh/bandAmt + status gating)');
+
+    // Helper: day-of-year to YYYY-MM-DD for 2026 (non-leap)
+    function doyToDate2026(doy) {
+      const d = new Date(2026, 0, doy);
+      return d.getFullYear() + '-' + String(d.getMonth()+1).padStart(2,'0') + '-' + String(d.getDate()).padStart(2,'0');
+    }
+
+    // (a) Steady fixture: all weeks identical → sigmaWeek=0 → bandAmt≈0 → projLow≈projHigh≈projection.
+    //     With projection > mainTarget and a zero-width band, projLow > mainTarget → "alert".
+    //     30 weeks × €495/wk at days 4,11,...,207; asOf=Aug 1 (doy=213, 30 complete weeks).
+    //     ceiling=25000 (lumpThreshold=500); €495 < 500 → recurring.
+    const steadyTxns21 = [];
+    for (let k = 0; k < 30; k++) {
+      steadyTxns21.push({ id:'sa'+k, date:doyToDate2026(4+7*k), description:'Week'+k, amount_eur:495, category:'groceries', source:'manual' });
+    }
+    const steadyStore21 = {
+      currentYear:2026, people:[], wishlist:[],
+      years:{'2026':{ceiling:25000, buffer:0.04}}, density:'balanced', templates:[],
+      transactions: steadyTxns21,
+    };
+    const asOfSteady21 = new Date('2026-08-01T12:00:00Z'); // doy=213
+    const steady21 = YCalc.computeStats(steadyStore21, 2026, asOfSteady21);
+    assert('(a) steady: bandAmt !== null (30 ≥ 4 complete weeks)', steady21.bandAmt !== null, 'got ' + steady21.bandAmt);
+    assert('(a) steady: bandAmt < 1 (sigmaWeek=0)', steady21.bandAmt !== null && steady21.bandAmt < 1, 'got ' + (steady21.bandAmt||0).toFixed(6));
+    assert('(a) steady: projLow ≈ projHigh ≈ projection (zero-width band)',
+      steady21.projLow !== null && Math.abs(steady21.projHigh - steady21.projLow) < 2,
+      'diff=' + (steady21.projLow !== null ? (steady21.projHigh - steady21.projLow).toFixed(4) : 'null'));
+    assert('(a) steady: projection > mainTarget', steady21.projection > steady21.mainTarget,
+      steady21.projection.toFixed(0) + ' > ' + steady21.mainTarget);
+    assert('(a) steady: projLow > mainTarget (tight band, optimistic edge still over)',
+      steady21.projLow !== null && steady21.projLow > steady21.mainTarget,
+      'projLow=' + (steady21.projLow||0).toFixed(0) + ' mainTarget=' + steady21.mainTarget);
+    assert('(a) steady: status === "alert"', steady21.status === 'alert', 'got "' + steady21.status + '"');
+
+    // (b) Volatile fixture: alternating heavy/light weeks → wide band → "watch" when
+    //     projection > mainTarget but projLow < mainTarget.
+    //     ceiling=10000 (lumpThreshold=200); heavy=2×€190=€380/wk, light=1×€20/wk.
+    //     30 alternating weeks at Aug 1 (doy=213, 30 complete weeks).
+    const volatileTxns21 = [];
+    for (let k = 0; k < 30; k++) {
+      if (k % 2 === 0) {
+        volatileTxns21.push({ id:'vha'+k, date:doyToDate2026(4+7*k),   description:'HA'+k, amount_eur:190, category:'groceries', source:'manual' });
+        volatileTxns21.push({ id:'vhb'+k, date:doyToDate2026(4+7*k+2), description:'HB'+k, amount_eur:190, category:'groceries', source:'manual' });
+      } else {
+        volatileTxns21.push({ id:'vl'+k, date:doyToDate2026(4+7*k), description:'L'+k, amount_eur:20, category:'groceries', source:'manual' });
+      }
+    }
+    const volatileStore21 = {
+      currentYear:2026, people:[], wishlist:[],
+      years:{'2026':{ceiling:10000, buffer:0.0}}, density:'balanced', templates:[],
+      transactions: volatileTxns21,
+    };
+    const volatile21 = YCalc.computeStats(volatileStore21, 2026, asOfSteady21); // same Aug 1 asOf
+    assert('(b) volatile: bandAmt !== null', volatile21.bandAmt !== null, 'got ' + volatile21.bandAmt);
+    assert('(b) volatile: projection > mainTarget',
+      volatile21.projection > volatile21.mainTarget,
+      volatile21.projection.toFixed(0) + ' > ' + volatile21.mainTarget);
+    assert('(b) volatile: projLow < mainTarget (wide band, optimistic edge under target)',
+      volatile21.projLow !== null && volatile21.projLow < volatile21.mainTarget,
+      'projLow=' + (volatile21.projLow||0).toFixed(0) + ' mainTarget=' + volatile21.mainTarget);
+    assert('(b) volatile: status === "watch"', volatile21.status === 'watch', 'got "' + volatile21.status + '"');
+
+    // (c) <4 complete weeks → bandAmt/projLow null; status falls back to old 1.08 threshold.
+    //     asOf=Jan 20 (doy=20); Math.floor(19/7)=2 complete weeks < 4.
+    //     3×€490 in Jan; projection≈26 828; mainTarget=25000; 25000<26828<27000=mainTarget×1.08 → "watch".
+    const sparseStore21 = {
+      currentYear:2026, people:[], wishlist:[],
+      years:{'2026':{ceiling:25000, buffer:0.0}}, density:'balanced', templates:[],
+      transactions: [
+        { id:'sp1', date:'2026-01-05', description:'A', amount_eur:490, category:'groceries', source:'manual' },
+        { id:'sp2', date:'2026-01-10', description:'B', amount_eur:490, category:'groceries', source:'manual' },
+        { id:'sp3', date:'2026-01-18', description:'C', amount_eur:490, category:'groceries', source:'manual' },
+      ],
+    };
+    const asOfSparse21 = new Date('2026-01-20T12:00:00Z');
+    const sparse21 = YCalc.computeStats(sparseStore21, 2026, asOfSparse21);
+    assert('(c) sparse: bandAmt === null (<4 complete weeks)', sparse21.bandAmt === null, 'got ' + sparse21.bandAmt);
+    assert('(c) sparse: projLow === null', sparse21.projLow === null, 'got ' + sparse21.projLow);
+    assert('(c) sparse: projection > mainTarget', sparse21.projection > sparse21.mainTarget, sparse21.projection.toFixed(0));
+    assert('(c) sparse: projection < 1.08 × mainTarget (old-threshold watch zone)',
+      sparse21.projection < sparse21.mainTarget * 1.08,
+      sparse21.projection.toFixed(0) + ' < ' + (sparse21.mainTarget * 1.08).toFixed(0));
+    assert('(c) sparse: status === "watch" (old 1.08 threshold)', sparse21.status === 'watch', 'got "' + sparse21.status + '"');
+
+    // (d) projLow never below spent: late-year asOf with one early tx and zero spend since.
+    //     High sigmaWeek (all-in-one-week pattern) × small remaining days → bandAmt > projection−spent.
+    //     projLow = max(spent, projection−bandAmt) must equal spent.
+    //     asOf=Dec 1 (doy=335, daysRemaining=30); 1 tx on Jan 4 of €480 (<lumpThreshold 500).
+    const clampStore21 = {
+      currentYear:2026, people:[], wishlist:[],
+      years:{'2026':{ceiling:25000, buffer:0.04}}, density:'balanced', templates:[],
+      transactions: [
+        { id:'cl1', date:'2026-01-04', description:'OneOff', amount_eur:480, category:'groceries', source:'manual' },
+      ],
+    };
+    const asOfClamp21 = new Date('2026-12-01T12:00:00Z'); // doy=335, daysRemaining=30
+    const clamp21 = YCalc.computeStats(clampStore21, 2026, asOfClamp21);
+    assert('(d) clamp: bandAmt !== null (47 complete weeks)', clamp21.bandAmt !== null, 'got ' + clamp21.bandAmt);
+    assert('(d) clamp: projLow === spent (floor clamp prevents sub-spent lower bound)',
+      clamp21.projLow !== null && Math.abs(clamp21.projLow - clamp21.spent) < 0.01,
+      'projLow=' + (clamp21.projLow||0).toFixed(2) + ' spent=' + clamp21.spent.toFixed(2));
+    assert('(d) clamp: projLow >= spent (invariant)', clamp21.projLow !== null && clamp21.projLow >= clamp21.spent,
+      'projLow=' + (clamp21.projLow||0).toFixed(2) + ' spent=' + clamp21.spent.toFixed(2));
 
     // ---- Summary ----
     const total = passed + failed;

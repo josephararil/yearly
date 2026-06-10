@@ -212,7 +212,31 @@ The buffer uplifts only the extrapolated remainder, so on Dec 31 (`daysRemaining
 
 For a **completed (past) year**: `projection = spent` (no extrapolation, no buffer).
 
+### Forecast uncertainty band
+
+When ≥4 complete ISO-agnostic weeks of recurring data are available (current incomplete year only), `computeStats` computes a ±band from observed spend volatility:
+
+```
+weekIdx(t)      = Math.floor((dayOfYear(t.date) − 1) / 7)   // 0-based, ISO-agnostic
+nCompleteWeeks  = Math.floor((doy − 1) / 7)                 // fully-elapsed weeks
+weekTotals[k]   = Σ recurring.amount_eur where weekIdx = k  // 0 for empty weeks
+sigmaWeek       = sample std-dev of weekTotals (n−1 divisor, zero weeks included)
+weeksRemaining  = daysRemaining / 7
+bandAmt         = sigmaWeek × √weeksRemaining × (1 + buffer)
+projLow         = max(spent, projection − bandAmt)           // floor: never below spent
+projHigh        = projection + bandAmt
+```
+
+`projLow/projHigh/bandAmt` are `null` when: `nCompleteWeeks < 4`, or year is complete/future.
+
 **Main budget status thresholds** (drive green/amber/red on the main budget):
+
+When the band exists (≥4 weeks):
+- `good` if `projection ≤ mainTarget`
+- `alert` if `projLow > mainTarget` (even the optimistic edge of the forecast misses — avoids false alarms from threshold-flapping)
+- `watch` otherwise (projection over, but projLow still within reach)
+
+When the band is null (< 4 weeks elapsed, or complete/future year):
 - Current year: `good` if `projection ≤ mainTarget`; `watch` if `≤ mainTarget × 1.08`; else `alert`.
 - Completed year: `good` if `spent ≤ mainTarget`; `watch` if `≤ mainTarget × 1.03`; else `alert`.
 
