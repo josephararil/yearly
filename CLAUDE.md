@@ -262,19 +262,29 @@ spend, no projection/buffer).
   sans sub-line (over/under ceiling by €N in terra/sage mono 700, `±€X` band suffix when
   `bandAmt != null`); hairline rule; `.hero-spent` row — serif 38px `totalSpent` (or "Final spend"
   for complete years) left-aligned + mono 11px day/year right-aligned.
-  **Zone 2 — Multi-stage bullet bar** (SVG, hidden for future years): 6px-tall horizontal track
-  (`--chart-grid` background); solid terra fill to `totalSpent`; translucent terra fill from spent
-  to `combinedProjection` (current year only); dotted DOY pace marker; ticks at `mainTarget`
-  (ink-2, 14px tall), `ceiling` (ink, 18px tall), `combinedProjection` (terra, when meaningfully ≠
-  ceiling); mono 3.5px labels sorted left-to-right with alternating y-offset for collision avoidance.
-  Transparent 24 vb-unit hit rect enables tap → tooltip: "Remaining €X / Buffer to main €Y" (under
-  ceiling) or "Over ceiling €X / Proj vs main +€Y" (over). Tooltip dismisses on second tap or
-  pointerdown outside. State: `useState({open,x})` local to `StatusHero`.
-  **Zone 3 — Monthly pulse** (current year only): single `display:flex` row — mono month label
-  (e.g. JUNE), `€X so far` (ink), `·`, `cap €Y` (ink), `·`, `projected €Z` (ink-2), verdict
-  right-aligned via `margin-left:auto`. Verdict: `projectedMonthEnd > cap × 1.1` → "Slow down ▲"
-  terra; `> cap × 0.95` → "Tight ●" amber; else "Room to spend ▼" sage. Data: `byMonth[m].amount`,
-  `neededMonthlyCap(stats)`, `projectedMonthEnd(stats)`.
+  **Zone 2 — Multi-stage bullet bar** (HTML/CSS — mirrors the restraint of the original
+  `.pace-rule`; hidden for future years): a 22px `.bullet-wrap` container holds a 4px rail
+  (`.bullet-rail`, `--chart-grid` background) with solid `.bullet-fill-spent` to `totalSpent`
+  and a translucent (0.4 opacity) `.bullet-fill-proj` from spent → `combinedProjection` (current
+  year only). A 1px solid `--muted` `.bullet-doy` marker shows where pace puts you. Absolutely-
+  positioned tick marks: `mainTarget` (14px tall, `--ink-2`), `ceiling` (20px tall, `--ink` —
+  hard stop), `combinedProjection` (14px tall, `--terra`, only when meaningfully ≠ ceiling).
+  Tick labels render in a separate `.bullet-labels` row below the rail (mono 10px `--muted`,
+  e.g. "main €21k") sorted left-to-right with alternating `top` (0 or 13px) to avoid horizontal
+  collision; leftmost/rightmost labels clamp via `left:0` / `right:0` to prevent overflow. The
+  spent figure is not duplicated here (it already appears in `.hero-spent`). The wrap is
+  clickable (`onPointerDown` → `handleTap`); `.bullet-tip` appears above the rail with paper
+  fill + hairline border and shows "Remaining €X / Buffer to main €Y" (under ceiling) or
+  "Over ceiling €X / Proj vs main +€Y" (over). Tooltip x-anchors left/center/right based on
+  `tip.x` to avoid edge overflow. Dismisses on second tap or pointerdown outside.
+  State: `useState({open,x})` local to `StatusHero`.
+  **Zone 3 — Monthly pulse** (current year only): two-row layout. Row 1 (`.pulse-r1`,
+  `display:flex` `justify-content:space-between`) carries the mono month label (e.g. JUNE) on
+  the left and the sans verdict on the right; row 2 (`.pulse-r2`, mono 11.5px) carries
+  `€X so far` (ink) `·` `cap €Y` (ink) `·` `projected €Z` (ink-2). Verdict:
+  `projectedMonthEnd > cap × 1.1` → "Slow down ▲" terra; `> cap × 0.95` → "Tight ●" amber;
+  else "Room to spend ▼" sage. Data: `byMonth[m].amount`, `neededMonthlyCap(stats)`,
+  `projectedMonthEnd(stats)`.
   **`TxRow`** — shows a 24px rounded merchant logo (`t.merchant_logo`) when present; falls back
   to a 24px `cat-ic` category icon (colored square + SVG icon, `CatIcon`-style inline) if
   absent or on load error. `tx-meta` appends `· city` when `t.merchant_city` is set. Both
@@ -357,7 +367,7 @@ spend, no projection/buffer).
   "Excluded from the spending-trend forecast — still counts in totals. Large amounts are excluded
   automatically." The oneoff flag causes `isLump()` in calc.jsx to exclude the tx from the blended
   rate while keeping it in `spent`.
-  `settings.jsx` — footer shows `APP_VERSION` constant (`'v40'` currently, defined at top of
+  `settings.jsx` — footer shows `APP_VERSION` constant (`'v41'` currently, defined at top of
   IIFE — update it with every release). `TargetSheet` (now labelled "Household ceiling") and `BufferSheet` accept a `year`
   prop (defaults to `store.currentYear`); `TargetSheet` reads/writes `years[y].ceiling`. `BufferSheet`
   computes its own stats internally (unchanged). `YearsSheet` has tappable year rows that drill into a
@@ -564,7 +574,7 @@ The app is a fully installable PWA:
   immediately without waiting for old tabs to close.
   **Install hardening:** the install handler uses individual `fetch({cache:'no-cache'}).catch()` calls instead
   of `cache.addAll` so a single URL failure does not abort the entire SW install, and `no-cache` ensures the install always fetches fresh files (bypassing browser HTTP cache). Same `!response.redirected` guard
-  applied in the install handler as in the fetch handler. Current version: `yearly-v40`.
+  applied in the install handler as in the fetch handler. Current version: `yearly-v41`.
   **Logo caching:** merchant logo requests (`storage.googleapis.com/revolut-prod-apps_merchant-logo/…`)
   are intercepted with a **cache-first** strategy using a dedicated `yearly-logos-v1` cache.
   Once a logo is fetched it is never re-fetched. The logo cache is intentionally NOT deleted on

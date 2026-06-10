@@ -105,16 +105,34 @@ button, input, select, textarea { font-family: inherit; }
 .hero-spent { display: flex; align-items: baseline; justify-content: space-between; gap: 16px; }
 .hero-spent .num-big { font-family: var(--serif); font-weight: 300; font-size: 38px; line-height: 1; letter-spacing: -0.02em; color: var(--ink); }
 .hero-spent .meta { font-family: var(--mono); font-size: 11.5px; color: var(--muted); flex-shrink: 0; }
-/* bullet bar — Zone 2 */
-.bullet-svg { display: block; width: 100%; height: auto; overflow: visible; margin-top: 24px; touch-action: manipulation; }
-/* Zone 3 — monthly pulse */
-.pulse { display: flex; flex-wrap: wrap; align-items: baseline; gap: 8px; margin-top: 18px; font-size: 13px; }
-.pulse-month { font-family: var(--mono); font-size: 11px; letter-spacing: 0.15em; color: var(--muted); }
-.pulse-now { font-family: var(--mono); color: var(--ink); }
-.pulse-cap { font-family: var(--mono); color: var(--ink); }
-.pulse-proj { font-family: var(--mono); color: var(--ink-2); }
+
+/* Zone 2 — multi-stage bullet bar (HTML/CSS; mirrors the old .pace-rule restraint) */
+.bullet-wrap { position: relative; height: 22px; margin-top: 24px; cursor: pointer; touch-action: manipulation; }
+.bullet-rail { position: absolute; left: 0; right: 0; top: 9px; height: 4px; border-radius: 2px; background: var(--chart-grid); overflow: hidden; }
+.bullet-fill-spent { position: absolute; left: 0; top: 0; height: 4px; background: var(--terra); }
+.bullet-fill-proj { position: absolute; top: 0; height: 4px; background: var(--terra); opacity: 0.4; }
+.bullet-doy { position: absolute; top: 6px; width: 1px; height: 10px; background: var(--muted); transform: translateX(-50%); pointer-events: none; }
+.bullet-tick { position: absolute; width: 1.5px; transform: translateX(-50%); pointer-events: none; }
+.bullet-tick.main { top: 4px; height: 14px; background: var(--ink-2); }
+.bullet-tick.ceil { top: 1px; height: 20px; background: var(--ink); }
+.bullet-tick.proj { top: 4px; height: 14px; background: var(--terra); }
+.bullet-labels { position: relative; height: 26px; margin-top: 6px; }
+.bullet-label { position: absolute; top: 0; font-family: var(--mono); font-size: 10px; color: var(--muted); white-space: nowrap; }
+.bullet-label.row2 { top: 13px; }
+.bullet-tip { position: absolute; bottom: calc(100% + 6px); background: var(--paper); border: 1px solid var(--hair-strong); border-radius: 4px; padding: 6px 10px; white-space: nowrap; z-index: 5; pointer-events: none; box-shadow: 0 1px 4px rgba(0,0,0,0.04); }
+.bullet-tip-main { font-family: var(--mono); font-size: 11px; color: var(--ink); font-weight: 600; }
+.bullet-tip-sub { font-family: var(--mono); font-size: 10px; color: var(--muted); margin-top: 2px; }
+
+/* Zone 3 — monthly pulse (two deliberate rows) */
+.pulse { margin-top: 20px; }
+.pulse-r1 { display: flex; align-items: baseline; justify-content: space-between; gap: 12px; }
+.pulse-r2 { display: flex; flex-wrap: wrap; align-items: baseline; gap: 6px; margin-top: 4px; font-family: var(--mono); font-size: 11.5px; }
+.pulse-month { font-family: var(--mono); font-size: 11px; letter-spacing: 0.14em; color: var(--muted); }
+.pulse-now { color: var(--ink); }
+.pulse-cap { color: var(--ink); }
+.pulse-proj { color: var(--ink-2); }
 .pulse-sep { color: var(--muted); }
-.pulse-verdict { font-family: var(--sans); font-size: 12px; margin-left: auto; }
+.pulse-verdict { font-family: var(--sans); font-size: 12.5px; }
 .pulse-verdict.over { color: var(--terra); }
 .pulse-verdict.tight { color: var(--amber); }
 .pulse-verdict.under { color: var(--sage); }
