@@ -328,7 +328,7 @@ function computeStats(store, year, asOfDate) {
       out.push({
         id: "trend", severity: worse ? (Math.abs(trendD) > stats.mainTarget * 0.04 ? "alert" : "watch") : "good",
         icon: worse ? "trendingUp" : "trendingDown",
-        text: `Year-end projection has moved ${worse ? "up" : "down"} ${eur0(Math.abs(trendD))} over the last 4 weeks, now ${eur0(stats.projection)}.`,
+        text: `Main budget: Year-end projection has moved ${worse ? "up" : "down"} ${eur0(Math.abs(trendD))} over the last 4 weeks, now ${eur0(stats.projection)}.`,
         drill: { section: "projection" }, mag: Math.abs(trendD) / stats.mainTarget + 0.2,
       });
     }
@@ -344,7 +344,7 @@ function computeStats(store, year, asOfDate) {
       out.push({
         id: "streak", severity: hot ? (ratio14 > 1.35 ? "alert" : "watch") : "good",
         icon: "activity",
-        text: `Last 14 days are running ${signedPct(ratio14 - 1)} ${hot ? "above" : "below"} linear pace — ${eur0(d14)}/day vs ${eur0(linDaily)}/day.`,
+        text: `Main budget: Last 14 days are running ${signedPct(ratio14 - 1)} ${hot ? "above" : "below"} linear pace — ${eur0(d14)}/day vs ${eur0(linDaily)}/day.`,
         drill: { section: "projection" }, mag: Math.abs(ratio14 - 1) + 0.15,
       });
     }
@@ -420,7 +420,7 @@ function computeStats(store, year, asOfDate) {
         id: "reqpace",
         severity: stats.status === "alert" ? "watch" : "info",
         icon: "activity",
-        text: `Spend ≤ ${eur0(reqDaily)}/day from here to finish on main budget target.`,
+        text: `Main budget: Spend ≤ ${eur0(reqDaily)}/day from here to finish on main budget target.`,
         drill: { section: "projection" },
         mag: stats.deltaPct * 0.5 + 0.1,
       });
@@ -437,10 +437,14 @@ function computeStats(store, year, asOfDate) {
         const monthsLeft = Math.max(1, (stats.daysInYear - stats.doy) / 30.4);
         const overBy = stats.combinedProjection - stats.ceiling;
         const trimPer = overBy / monthsLeft;
+        const maxFunTrim = stats.funPlanAnnual / 12;
         const severity = overBy > stats.ceiling * 0.08 ? "alert" : "watch";
+        const ceilText = trimPer <= maxFunTrim
+          ? `Household projects to ${eur0(stats.combinedProjection)} against your ${eur0(stats.ceiling)} ceiling — trim fun spending by ~${eur0(trimPer)}/mo to stay within it.`
+          : `Household projects to ${eur0(stats.combinedProjection)} against your ${eur0(stats.ceiling)} ceiling — even cutting the entire fun budget (${eur0(maxFunTrim)}/mo) won't close it; main spending needs to drop ~${eur0(trimPer - maxFunTrim)}/mo too.`;
         ceilingCallout = {
           id: "ceiling", severity, icon: "trendingUp",
-          text: `Household projects to ${eur0(stats.combinedProjection)} against your ${eur0(stats.ceiling)} ceiling — trim fun spending by ~${eur0(trimPer)}/mo to stay within it.`,
+          text: ceilText,
           drill: { section: "fun" }, mag: 1.0,
         };
       } else if (stats.combinedProjection < stats.ceiling * 0.94) {

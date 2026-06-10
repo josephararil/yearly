@@ -23,8 +23,8 @@
   <div id="summary"></div>
 
   <!-- Plain script tags — no Babel needed; these files contain no JSX -->
-  <script src="public/y/data.jsx"></script>
-  <script src="public/y/calc.jsx"></script>
+  <script src="public/y/data.jsx?v=30"></script>
+  <script src="public/y/calc.jsx?v=30"></script>
   <script>
     const container = document.getElementById('results');
     let passed = 0, failed = 0;
@@ -394,10 +394,16 @@
 
     // ---- ceiling detector — over ceiling ----
     section('ceiling detector');
-    // Small ceiling + large rates → combined projection >> ceiling
+    // Small ceiling + large rates + a fun tx → combined projection >> ceiling.
+    // A fun transaction is required to bypass the blank-store guard
+    // (!(upto.length===0 && funSpent===0)); the fixture design intentionally has no main txns.
     const overCeilingStore = Object.assign({}, store, {
       people: [{ id: 'joseph', name: 'Joseph', rates: [{ from: '2026-01', amount: 2000 }], startMonth: '2026-01' }],
-      years: Object.assign({}, store.years, { '2026': { ceiling: 1000, buffer: 0.04 } }),
+      // ceiling=100 → funProjection (~€226 linear from €100 on day 5) >> ceiling; funSpent>0 bypasses guard
+      years: Object.assign({}, store.years, { '2026': { ceiling: 100, buffer: 0.04 } }),
+      transactions: [
+        { id: 'oc1', date: '2026-01-05', description: 'Fun', amount_eur: 100, category: 'shopping', fun: true, person: 'joseph', source: 'manual' },
+      ],
     });
     const overStats = YCalc.computeStats(overCeilingStore, 2026, asOf2026);
     const overCallouts = YCalc.buildCallouts(overCeilingStore, overStats);
@@ -407,16 +413,69 @@
     assert('ceiling severity watch/alert when over', overCeil && (overCeil.severity === 'watch' || overCeil.severity === 'alert'));
     assert('ceiling drill is fun section', overCeil && overCeil.drill && overCeil.drill.section === 'fun');
 
-    // Well under ceiling → good/info
+    // Well under ceiling → good/info; joseph @ €1/mo, ceiling €200k; fun tx triggers guard
     const underCeilingStore = Object.assign({}, store, {
       people: [{ id: 'joseph', name: 'Joseph', rates: [{ from: '2026-01', amount: 1 }], startMonth: '2026-01' }],
       years: Object.assign({}, store.years, { '2026': { ceiling: 200000, buffer: 0.04 } }),
+      transactions: [
+        { id: 'uc1', date: '2026-01-05', description: 'Fun', amount_eur: 1, category: 'shopping', fun: true, person: 'joseph', source: 'manual' },
+      ],
     });
     const underStats = YCalc.computeStats(underCeilingStore, 2026, asOf2026);
     const underCallouts = YCalc.buildCallouts(underCeilingStore, underStats);
     assert('ceiling detector present when well under', underCallouts.some(c => c.id === 'ceiling'));
     const underCeil = underCallouts.find(c => c.id === 'ceiling');
     assert('ceiling severity good/info when well under', underCeil && (underCeil.severity === 'good' || underCeil.severity === 'info'));
+
+    // §5.6 — over-ceiling text always mentions "ceiling"
+    assert('§5.6: over-ceiling text contains "ceiling"',
+      overCeil && overCeil.text.includes('ceiling'),
+      overCeil ? overCeil.text.substring(0, 80) : 'no callout');
+
+    // §5.6 — clamp: when overBy/monthsLeft >> funPlanAnnual/12, text names "main spending"
+    // joseph @€1/mo → maxFunTrim=€1/mo; 3×€5000 main tx → large overBy → trimPer >> €1/mo
+    const bigOverStore = {
+      currentYear: 2026,
+      people: [{ id: 'joseph', name: 'Joseph', rates: [{ from: '2026-01', amount: 1 }], startMonth: '2026-01' }],
+      wishlist: [],
+      years: { '2026': { ceiling: 1000, buffer: 0.0 } },
+      density: 'balanced',
+      templates: [],
+      transactions: [
+        { id: 'bo1', date: '2026-01-10', description: 'A', amount_eur: 5000, category: 'groceries', source: 'manual' },
+        { id: 'bo2', date: '2026-03-10', description: 'B', amount_eur: 5000, category: 'groceries', source: 'manual' },
+        { id: 'bo3', date: '2026-05-10', description: 'C', amount_eur: 5000, category: 'groceries', source: 'manual' },
+        { id: 'bof', date: '2026-01-05', description: 'F', amount_eur: 1,    category: 'shopping',  fun: true, person: 'joseph', source: 'manual' },
+      ],
+    };
+    const bigOverStats    = YCalc.computeStats(bigOverStore, 2026, asOf2026);
+    const bigOverCallouts = YCalc.buildCallouts(bigOverStore, bigOverStats);
+    const bigOverCeil     = bigOverCallouts.find(c => c.id === 'ceiling');
+    assert('§5.6 clamp: fixture has ceiling callout', bigOverCeil !== undefined,
+      '[' + bigOverCallouts.map(c => c.id).join(', ') + ']');
+    assert('§5.6 clamp: clamped text mentions "main spending"',
+      bigOverCeil && bigOverCeil.text.includes('main spending'),
+      bigOverCeil ? bigOverCeil.text.substring(0, 120) : 'no callout');
+    assert('§5.6 clamp: clamped text still contains "ceiling"',
+      bigOverCeil && bigOverCeil.text.includes('ceiling'));
+
+    // §5.1 — reqpace text prefix (use richCallouts — reqpace is designed to fire there)
+    const reqpaceCallout = richCallouts.find(c => c.id === 'reqpace');
+    assert('§5.1: reqpace text starts with "Main budget:"',
+      reqpaceCallout && reqpaceCallout.text.startsWith('Main budget:'),
+      reqpaceCallout ? reqpaceCallout.text.substring(0, 60) : 'no reqpace callout');
+
+    // §5.1 — trend text prefix (use richCallouts — trend is designed to fire there)
+    const trendCallout = richCallouts.find(c => c.id === 'trend');
+    assert('§5.1: trend text starts with "Main budget:"',
+      trendCallout && trendCallout.text.startsWith('Main budget:'),
+      trendCallout ? trendCallout.text.substring(0, 60) : 'no trend callout');
+
+    // §5.1 — streak text prefix (use richCallouts — streak is designed to fire there)
+    const streakCallout = richCallouts.find(c => c.id === 'streak');
+    assert('§5.1: streak text starts with "Main budget:"',
+      streakCallout && streakCallout.text.startsWith('Main budget:'),
+      streakCallout ? streakCallout.text.substring(0, 60) : 'no streak callout');
 
     // ---- migrateStore ----
     section('migrateStore (idempotent)');
