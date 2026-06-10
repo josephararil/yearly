@@ -417,11 +417,19 @@ function computeStats(store, year, asOfDate) {
     return out;
   }
 
+  // Main-budget allowance per remaining month (incl. the current one).
+  // Subtracts only PRIOR months' spend so the current month is judged against a stable cap.
+  function neededMonthlyCap(stats) {
+    const m = stats.asOf.getMonth();
+    const spentBefore = stats.byMonth.slice(0, m).reduce((a, x) => a + x.amount, 0);
+    return Math.max(0, (stats.mainTarget - spentBefore) / (12 - m));
+  }
+
   window.YCalc = {
     MONTHS, MONTHS_LONG, eur0, eur2, eurAuto, signedEur, pct, signedPct,
     dayOfYear, parseDate, localISO, fmtDateShort, fmtDateLong, yearTxns,
     cumulativeByDay, priorYearCumulative, aggregateByCategory,
     rateForMonth, computeStats, computeFun, projectionAsOf, buildCallouts,
-    requiredDailyToHit,
+    requiredDailyToHit, neededMonthlyCap,
   };
 })();

@@ -64,9 +64,7 @@
     for (let d = 1; d <= daysInMonth; d++) dayCum[d] += dayCum[d - 1];
 
     const spentSoFar = dayCum[dayOfMonth];
-    // Monthly cap: remaining ceiling divided by months left (incl. this one)
-    const monthsRemaining = 12 - month;
-    const neededMonthly = Math.max(0, (stats.ceiling - stats.spent) / monthsRemaining);
+    const neededMonthly = YCalc.neededMonthlyCap(stats);
     const monthlyDailyRate = dayOfMonth > 0 ? spentSoFar / dayOfMonth : 0;
     const projectedEnd = spentSoFar + monthlyDailyRate * (daysInMonth - dayOfMonth);
 
@@ -153,7 +151,7 @@
     const legendItems = [
       { color: "var(--chart-actual)", label: "Actual", desc: "cumulative spend this month, day by day" },
       { color: "var(--chart-pace)", label: "Pace", desc: "ideal linear trajectory to reach the monthly target" },
-      { color: "var(--chart-target)", label: "Target", desc: "avg needed per month to finish the year under ceiling, adjusted for year-to-date spend" },
+      { color: "var(--chart-target)", label: "Target", desc: "main-budget allowance per month to finish the year on target, given prior months' spend" },
       { color: "var(--chart-proj)", label: "Projection", desc: "extrapolated trend from your current daily rate" },
       ...(isPartialMonth ? [{ color: "var(--chart-proj)", label: "Month-end", desc: "estimated total for this month if today's rate continues" }] : []),
       ...(hasPrevData ? [{ color: "var(--amber)", label: prevMonthName, desc: "last month's spending curve for comparison (scaled to same width)" }] : []),
