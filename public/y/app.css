@@ -100,31 +100,15 @@ button, input, select, textarea { font-family: inherit; }
 .bg-alert { background: var(--alert-dim); color: var(--terra); }
 .bg-info { background: var(--paper-tint); color: var(--ink-2); }
 
-/* pace rule — 3px track, terra fill to spent/target, ink marker at day-of-year */
-.pace-rule { position: relative; height: 3px; border-radius: 2px; background: var(--chart-grid); margin-top: 22px; }
-.pace-fill { position: absolute; left: 0; top: 0; height: 3px; border-radius: 2px; background: var(--terra); }
-.pace-mark { position: absolute; top: -4px; width: 1.5px; height: 11px; background: var(--ink); }
-.pace-legend { display: flex; justify-content: space-between; margin-top: 8px; font-family: var(--mono); font-size: 11px; color: var(--muted); }
-
 /* ---- hero v2 (sessions 2–4) ---- */
 .hero-hr { height: 1px; background: var(--hair); margin: 18px 0 14px; }
 .hero-spent { display: flex; align-items: baseline; justify-content: space-between; gap: 16px; }
 .hero-spent .num-big { font-family: var(--serif); font-weight: 300; font-size: 38px; line-height: 1; letter-spacing: -0.02em; color: var(--ink); }
 .hero-spent .meta { font-family: var(--mono); font-size: 11.5px; color: var(--muted); flex-shrink: 0; }
-.bullet {}
-.bullet-svg {}
-.bullet-track {}
-.bullet-fill {}
-.bullet-ext {}
-.bullet-tick {}
-.bullet-tick-major {}
-.bullet-tick-proj {}
-.bullet-doy {}
-.bullet-label {}
-.bullet-hit {}
-.bullet-tip {}
-.bullet-tip-row {}
-.pulse {}
+/* bullet bar — Zone 2 */
+.bullet-svg { display: block; width: 100%; height: auto; overflow: visible; margin-top: 24px; touch-action: manipulation; }
+/* Zone 3 placeholder — min-height reserves space for Session 4 pulse line */
+.pulse { min-height: 24px; }
 .pulse-month {}
 .pulse-now {}
 .pulse-cap {}
