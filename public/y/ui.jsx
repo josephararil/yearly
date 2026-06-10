@@ -52,15 +52,10 @@
     const near = Math.abs(stats.combinedDelta) < stats.ceiling * 0.005;
     const totalSpent = stats.spent + stats.funSpent;
 
-    // bullet bar — % positions along the rail (xMax leaves 4% breathing room on the right)
-    const xMax = Math.max(stats.ceiling, stats.combinedProjection, 1) * 1.04;
-    const pct = (v) => (v / xMax) * 100;
-    const spentPct = pct(totalSpent);
-    const projPct  = pct(stats.combinedProjection);
-    const mainPct  = pct(stats.mainTarget);
-    const ceilPct  = pct(stats.ceiling);
-    const doyPct   = pct((stats.doy / 365) * stats.ceiling);
-    const showProjTick = !near && !stats.complete;
+    // bullet bar coordinate system (viewBox 0 0 100 60)
+    const xMax = Math.max(stats.ceiling, stats.combinedProjection, 1) * 1.02;
+    const scaleX = (v) => (v / xMax) * 100;
+    const showProjTick = !near;
 
     // compact label formatter: €21.4k, €25k, €500
     const eurK = (v) => {
@@ -69,17 +64,21 @@
       return eur0(v);
     };
 
-    // tick labels (spent is already shown above in .hero-spent, so excluded here)
+    // labels sorted left-to-right; alternating y=44/52 prevents collision
     const labelSet = [
-      { id: 'main', x: mainPct, text: 'main ' + eurK(stats.mainTarget) },
-      { id: 'ceil', x: ceilPct, text: 'ceiling ' + eurK(stats.ceiling) },
-      ...(showProjTick ? [{ id: 'proj', x: projPct, text: 'proj ' + eurK(stats.combinedProjection) }] : []),
+      { id: 'spent', x: scaleX(totalSpent), text: eurK(totalSpent) + ' spt' },
+      { id: 'main',  x: scaleX(stats.mainTarget), text: eurK(stats.mainTarget) + ' main' },
+      { id: 'ceil',  x: scaleX(stats.ceiling), text: eurK(stats.ceiling) + ' ceil' },
+      ...(showProjTick
+        ? [{ id: 'proj', x: scaleX(stats.combinedProjection), text: eurK(stats.combinedProjection) + ' proj' }]
+        : []),
     ].sort((a, b) => a.x - b.x);
 
     const handleTap = (e) => {
       e.stopPropagation();
-      const wrap = e.currentTarget;
-      const rect = wrap.getBoundingClientRect();
+      const svg = e.currentTarget.closest('svg');
+      if (!svg) return;
+      const rect = svg.getBoundingClientRect();
       const rawX = ((e.clientX - rect.left) / rect.width) * 100;
       const tapX = Math.max(0, Math.min(100, rawX));
       setTip((t) => t.open ? { open: false, x: 0 } : { open: true, x: tapX });
@@ -92,10 +91,9 @@
       return () => document.removeEventListener('pointerdown', dismiss);
     }, [tip.open]);
 
-    // tooltip position — left/center/right anchor avoids viewport overflow
-    const tipStyle = tip.x < 25 ? { left: 0 }
-                    : tip.x > 75 ? { right: 0 }
-                    : { left: tip.x + '%', transform: 'translateX(-50%)' };
+    // tooltip geometry
+    const tipBW = 50;
+    const tipX = Math.max(tipBW / 2, Math.min(100 - tipBW / 2, tip.x)) - tipBW / 2;
     const remaining  = Math.max(0, stats.ceiling - stats.combinedProjection);
     const bufferMain = Math.max(0, stats.mainTarget - stats.projection);
     const overBy     = Math.max(0, stats.combinedProjection - stats.ceiling);
@@ -136,50 +134,91 @@
               </span>
             </div>
 
-            {/* Zone 2 — multi-stage bullet bar (HTML; restrained like the original .pace-rule) */}
-            <div className="bullet-wrap" onPointerDown={handleTap}>
-              <div className="bullet-rail">
-                <div className="bullet-fill-spent" style={{ width: spentPct + '%' }} />
-                {!stats.complete && stats.combinedProjection > totalSpent && (
-                  <div className="bullet-fill-proj"
-                    style={{ left: spentPct + '%', width: Math.max(0, projPct - spentPct) + '%' }} />
-                )}
-              </div>
+            {/* Zone 2 — multi-stage bullet bar */}
+            <svg className="bullet-svg" viewBox="0 0 100 60">
+              {/* track background */}
+              <rect x="0" y="23" width="100" height="6" fill="var(--chart-grid)" />
+              {/* solid fill: actual spent */}
+              <rect x="0" y="23" height="6" width={scaleX(totalSpent)} fill="var(--terra)" />
+              {/* projection extension (current year, translucent) */}
+              {!stats.complete && stats.combinedProjection > totalSpent && (
+                <rect
+                  x={scaleX(totalSpent)} y="23" height="6"
+                  width={Math.max(0, scaleX(stats.combinedProjection) - scaleX(totalSpent))}
+                  fill="var(--terra)" opacity="0.45"
+                />
+              )}
+              {/* DOY pace marker (current year only) */}
               {!stats.complete && (
-                <div className="bullet-doy" style={{ left: doyPct + '%' }} />
+                <line
+                  x1={scaleX((stats.doy / 365) * stats.ceiling)} y1="20"
+                  x2={scaleX((stats.doy / 365) * stats.ceiling)} y2="27"
+                  stroke="var(--muted)" strokeWidth="1" strokeDasharray="1 1"
+                />
               )}
-              <div className="bullet-tick main" style={{ left: mainPct + '%' }} />
-              <div className="bullet-tick ceil" style={{ left: ceilPct + '%' }} />
+              {/* tick: main target */}
+              <line
+                x1={scaleX(stats.mainTarget)} y1="18"
+                x2={scaleX(stats.mainTarget)} y2="33"
+                stroke="var(--ink-2)" strokeWidth="1.5"
+              />
+              {/* tick: ceiling (taller = hard stop) */}
+              <line
+                x1={scaleX(stats.ceiling)} y1="15"
+                x2={scaleX(stats.ceiling)} y2="35"
+                stroke="var(--ink)" strokeWidth="1.5"
+              />
+              {/* tick: projection end (only when meaningfully different from ceiling) */}
               {showProjTick && (
-                <div className="bullet-tick proj" style={{ left: projPct + '%' }} />
+                <line
+                  x1={scaleX(stats.combinedProjection)} y1="18"
+                  x2={scaleX(stats.combinedProjection)} y2="33"
+                  stroke="var(--terra)" strokeWidth="1.5"
+                />
               )}
+              {/* labels: sorted left-to-right, alternating y-offset avoids collision */}
+              {labelSet.map((l, i) => (
+                <text
+                  key={l.id}
+                  x={l.x} y={i % 2 === 0 ? 44 : 52}
+                  textAnchor="middle" fontSize="3.5"
+                  fontFamily="var(--mono)" fill="var(--muted)"
+                >{l.text}</text>
+              ))}
+              {/* transparent hit area — 24 vb-units tall (~40px) for mobile */}
+              <rect
+                x="0" y="10" width="100" height="24"
+                fill="transparent"
+                style={{ pointerEvents: 'all', cursor: 'pointer' }}
+                onPointerDown={handleTap}
+              />
+              {/* tooltip */}
               {tip.open && (
-                <div className="bullet-tip" style={tipStyle}>
-                  <div className="bullet-tip-main">
-                    {over ? `Over ceiling ${eur0(overBy)}` : `Remaining ${eur0(remaining)}`}
-                  </div>
-                  <div className="bullet-tip-sub">
-                    {over ? `Proj vs main +${eur0(projVsMain)}` : `Buffer to main ${eur0(bufferMain)}`}
-                  </div>
-                </div>
+                <g className="bullet-tip">
+                  <rect
+                    x={tipX} y="1" width={tipBW} height="19"
+                    rx="1.5" fill="var(--paper)"
+                    stroke="var(--hair-strong)" strokeWidth="0.5"
+                  />
+                  <text
+                    x={tipX + tipBW / 2} y="9"
+                    textAnchor="middle" fontSize="3.8"
+                    fontFamily="var(--mono)" fontWeight="600" fill="var(--ink)"
+                  >
+                    {over ? `Over ceiling  ${eur0(overBy)}` : `Remaining  ${eur0(remaining)}`}
+                  </text>
+                  <text
+                    x={tipX + tipBW / 2} y="16"
+                    textAnchor="middle" fontSize="3.3"
+                    fontFamily="var(--mono)" fill="var(--muted)"
+                  >
+                    {over ? `Proj vs main  +${eur0(projVsMain)}` : `Buffer to main  ${eur0(bufferMain)}`}
+                  </text>
+                </g>
               )}
-            </div>
-            <div className="bullet-labels">
-              {labelSet.map((l, i) => {
-                const isLeft = l.x < 10;
-                const isRight = l.x > 90;
-                const style = isLeft ? { left: 0 }
-                            : isRight ? { right: 0 }
-                            : { left: l.x + '%', transform: 'translateX(-50%)' };
-                return (
-                  <span key={l.id}
-                    className={'bullet-label' + (i % 2 === 1 ? ' row2' : '')}
-                    style={style}>{l.text}</span>
-                );
-              })}
-            </div>
+            </svg>
 
-            {/* Zone 3 — monthly pulse (two deliberate rows; current year only) */}
+            {/* Zone 3 — monthly pulse (current year only) */}
             {!stats.complete && (() => {
               const month = stats.asOf.getMonth();
               const monthLabel = stats.asOf.toLocaleDateString('en', { month: 'long' }).toUpperCase();
@@ -192,17 +231,13 @@
                                     { cls: 'under', text: 'Room to spend ▼' };
               return (
                 <div className="pulse">
-                  <div className="pulse-r1">
-                    <span className="pulse-month">{monthLabel}</span>
-                    <span className={`pulse-verdict ${verdict.cls}`}>{verdict.text}</span>
-                  </div>
-                  <div className="pulse-r2">
-                    <span className="pulse-now">{eur0(now)} so far</span>
-                    <span className="pulse-sep">·</span>
-                    <span className="pulse-cap">cap {eur0(cap)}</span>
-                    <span className="pulse-sep">·</span>
-                    <span className="pulse-proj">projected {eur0(proj)}</span>
-                  </div>
+                  <span className="pulse-month">{monthLabel}</span>
+                  <span className="pulse-now">{eur0(now)} so far</span>
+                  <span className="pulse-sep">·</span>
+                  <span className="pulse-cap">cap {eur0(cap)}</span>
+                  <span className="pulse-sep">·</span>
+                  <span className="pulse-proj">projected {eur0(proj)}</span>
+                  <span className={`pulse-verdict ${verdict.cls}`}>{verdict.text}</span>
                 </div>
               );
             })()}
