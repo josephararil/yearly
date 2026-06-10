@@ -421,9 +421,9 @@
     let trend90 = null, trend90Color = "var(--ink)";
     if (stats.isCurrent && stats.doy >= 90) {
       const d45 = new Date(stats.asOf); d45.setDate(d45.getDate() - 45);
-      const d45str = d45.toISOString().slice(0, 10);
+      const d45str = YCalc.localISO(d45);
       const d90 = new Date(stats.asOf); d90.setDate(d90.getDate() - 90);
-      const d90str = d90.toISOString().slice(0, 10);
+      const d90str = YCalc.localISO(d90);
       const recent45 = stats.upto.filter((t) => t.date > d45str).reduce((a, t) => a + t.amount_eur, 0) / 45;
       const prior45 = stats.upto.filter((t) => t.date > d90str && t.date <= d45str).reduce((a, t) => a + t.amount_eur, 0) / 45;
       if (prior45 > 0) {

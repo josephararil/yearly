@@ -17,6 +17,9 @@
     return Math.floor((d - start) / 86400000);
   }
   function parseDate(s) { return new Date(s + "T00:00:00"); }
+  function localISO(d) {
+    return d.getFullYear() + "-" + String(d.getMonth() + 1).padStart(2, "0") + "-" + String(d.getDate()).padStart(2, "0");
+  }
   function fmtDateShort(s) { const d = parseDate(s); return MONTHS[d.getMonth()] + " " + d.getDate(); }
   function fmtDateLong(s) { const d = parseDate(s); return d.getDate() + " " + MONTHS[d.getMonth()] + " " + d.getFullYear(); }
 
@@ -103,7 +106,7 @@ function computeStats(store, year, asOfDate) {
       asOf = new Date(Number(year), 11, 31);
       doy = 365;
     }
-    const asOfStr = asOf.toISOString().slice(0, 10);
+    const asOfStr = localISO(asOf);
 
     // Split main (non-fun) vs fun transactions for this year
     const mainTxns = txns.filter((t) => !t.fun);
@@ -118,7 +121,7 @@ function computeStats(store, year, asOfDate) {
     let trailingDailyRate = dailyRate;
     if (!isFuture && !complete && doy >= 1) {
       const w60 = new Date(asOf); w60.setDate(w60.getDate() - 60);
-      const w60str = w60.toISOString().slice(0, 10);
+      const w60str = localISO(w60);
       const windowDays = Math.min(60, doy);
       const last60 = upto.filter((t) => t.date > w60str).reduce((a, t) => a + t.amount_eur, 0);
       const rawTrailing = last60 / windowDays;
@@ -183,11 +186,11 @@ function computeStats(store, year, asOfDate) {
   // projection as-of a past offset (days back) — for trend detection
   function projectionAsOf(stats, daysBack) {
     const ref = new Date(stats.asOf); ref.setDate(ref.getDate() - daysBack);
-    const refStr = ref.toISOString().slice(0, 10);
+    const refStr = localISO(ref);
     const refDoy = Math.max(1, dayOfYear(ref));
     const refSpent = stats.txns.filter((t) => t.date <= refStr).reduce((a, t) => a + t.amount_eur, 0);
     const w60 = new Date(ref); w60.setDate(w60.getDate() - 60);
-    const w60str = w60.toISOString().slice(0, 10);
+    const w60str = localISO(w60);
     const windowDays = Math.min(60, refDoy);
     const last60 = stats.txns.filter((t) => t.date > w60str && t.date <= refStr).reduce((a, t) => a + t.amount_eur, 0);
     const ytdRate = refDoy > 0 ? refSpent / refDoy : 0;
@@ -210,7 +213,7 @@ function computeStats(store, year, asOfDate) {
   // asOfDate defaults to new Date(). Balance is all-time (from each person's startMonth to asOf).
   function computeFun(store, asOfDate) {
     const asOf = asOfDate || new Date();
-    const asOfStr = asOf.toISOString().slice(0, 10);
+    const asOfStr = localISO(asOf);
     const currentYM = asOfStr.slice(0, 7);
     const year = Number(store.currentYear);
     const doy = Math.max(1, dayOfYear(asOf));
@@ -283,7 +286,7 @@ function computeStats(store, year, asOfDate) {
 
     // 2. recent 14-day pace streak
     const ref14 = new Date(stats.asOf); ref14.setDate(ref14.getDate() - 14);
-    const r14 = ref14.toISOString().slice(0, 10);
+    const r14 = localISO(ref14);
     const last14 = stats.upto.filter((t) => t.date > r14).reduce((a, t) => a + t.amount_eur, 0);
     const d14 = last14 / 14;
     const ratio14 = d14 / linDaily;
@@ -416,7 +419,7 @@ function computeStats(store, year, asOfDate) {
 
   window.YCalc = {
     MONTHS, MONTHS_LONG, eur0, eur2, eurAuto, signedEur, pct, signedPct,
-    dayOfYear, parseDate, fmtDateShort, fmtDateLong, yearTxns,
+    dayOfYear, parseDate, localISO, fmtDateShort, fmtDateLong, yearTxns,
     cumulativeByDay, priorYearCumulative, aggregateByCategory,
     rateForMonth, computeStats, computeFun, projectionAsOf, buildCallouts,
     requiredDailyToHit,
