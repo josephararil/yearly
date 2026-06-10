@@ -83,6 +83,31 @@
     return rate;
   }
 
+// Linear fun extrapolation, capped by what the allowance system permits this year:
+// YTD fun spend + positive carryover balances + accruals still to come through December.
+function funProjectionFor(store, year, doy, funSpentYTD, asOfStr) {
+  const linear = doy > 0 ? (funSpentYTD / doy) * 365 : 0;
+  const currentYM = asOfStr.slice(0, 7);
+  let balances = 0, futureAccruals = 0;
+  for (const p of store.people || []) {
+    let accrued = 0, ym = p.startMonth;
+    while (ym <= currentYM) {
+      accrued += rateForMonth(p, ym);
+      const [y, m] = ym.split("-").map(Number);
+      ym = m === 12 ? (y + 1) + "-01" : y + "-" + String(m + 1).padStart(2, "0");
+    }
+    const spentAll = (store.transactions || [])
+      .filter((t) => t.fun && t.person === p.id && t.date <= asOfStr)
+      .reduce((a, t) => a + t.amount_eur, 0);
+    balances += accrued - spentAll + (p.balanceAdjustment || 0);
+    for (let m = 1; m <= 12; m++) {
+      const ymm = String(year) + "-" + String(m).padStart(2, "0");
+      if (ymm > currentYM) futureAccruals += rateForMonth(p, ymm);
+    }
+  }
+  return Math.min(linear, funSpentYTD + Math.max(0, balances) + futureAccruals);
+}
+
 function computeStats(store, year, asOfDate) {
     const real = asOfDate || new Date();
     const currentYear = Number(store.currentYear);
@@ -169,8 +194,8 @@ function computeStats(store, year, asOfDate) {
     // Fun figures for the combined (ceiling-level) verdict
     const funUpto = isFuture ? [] : txns.filter((t) => t.fun && t.date <= asOfStr);
     const funSpent = funUpto.reduce((a, t) => a + t.amount_eur, 0);
-    // Linear fun projection is approximate — fun spend is lumpy
-    const funProjection = isFuture ? 0 : complete ? funSpent : (doy > 0 ? funSpent / doy * 365 : 0);
+    // Fun projection capped by the allowance system (accruals + carryover balances)
+    const funProjection = isFuture ? 0 : complete ? funSpent : funProjectionFor(store, year, doy, funSpent, asOfStr);
     const combinedProjection = projection + funProjection;
     const combinedDelta = combinedProjection - ceiling;
     const combinedDeltaPct = ceiling > 0 ? combinedDelta / ceiling : 0;
@@ -259,8 +284,8 @@ function computeStats(store, year, asOfDate) {
     const isCurrent = year === realYear;
     const complete = year < realYear;
     const isFuture = year > realYear;
-    // Linear fun projection is approximate — fun spend is lumpy
-    const funProjection = isFuture ? 0 : complete ? funSpentYTD : (doy > 0 ? funSpentYTD / doy * 365 : 0);
+    // Fun projection capped by the allowance system (accruals + carryover balances)
+    const funProjection = isFuture ? 0 : complete ? funSpentYTD : funProjectionFor(store, year, doy, funSpentYTD, asOfStr);
 
     const { catList: funCatList } = aggregateByCategory(funYearTxns, funSpentYTD);
 
