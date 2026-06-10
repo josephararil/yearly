@@ -116,7 +116,7 @@ button, input, select, textarea { font-family: inherit; }
 .bullet-tick.main { top: 4px; height: 14px; background: var(--ink-2); }
 .bullet-tick.ceil { top: 1px; height: 20px; background: var(--ink); }
 .bullet-tick.proj { top: 4px; height: 14px; background: var(--terra); }
-.bullet-labels { position: relative; height: 26px; margin-top: 6px; }
+.bullet-labels { position: relative; height: 18px; }
 .bullet-label { position: absolute; top: 0; font-family: var(--mono); font-size: 8.5px; color: var(--muted); white-space: nowrap; }
 .bullet-label.row2 { top: 13px; }
 .bullet-tip { position: absolute; bottom: calc(100% + 6px); background: var(--paper); border: 1px solid var(--hair-strong); border-radius: 4px; padding: 6px 10px; white-space: nowrap; z-index: 5; pointer-events: none; box-shadow: 0 1px 4px rgba(0,0,0,0.04); }
