@@ -97,10 +97,13 @@
     if (!s.density) s.density = "balanced";
     // normalize transaction categories (Revolut stores title-case labels like "Groceries")
     if (Array.isArray(s.transactions)) {
+      const unknowns = [];
       s.transactions = s.transactions.map((t) => {
         const nc = normalizeCategory(t.category);
+        if (nc === 'general' && String(t.category || '').toLowerCase() !== 'general') unknowns.push(t.category);
         return nc === t.category ? t : { ...t, category: nc };
       });
+      if (unknowns.length) console.warn('Yearly: unknown categories bucketed into General:', [...new Set(unknowns)]);
     }
     return s;
   }

@@ -47,13 +47,24 @@
     };
   }
 
+  // Unknown-category tracker: warns once per session per distinct raw value.
+  const _warnedCategories = new Set();
+
   function rowToTx(row) {
+    const nc = YData.normalizeCategory(row.category);
+    if (nc === 'general' && String(row.category || '').toLowerCase() !== 'general') {
+      const raw = row.category;
+      if (!_warnedCategories.has(raw)) {
+        _warnedCategories.add(raw);
+        console.warn('Yearly: unknown category bucketed into General:', raw);
+      }
+    }
     const tx = {
       id: row.id,
       date: row.date,
       description: row.description,
       amount_eur: row.amount_eur,
-      category: YData.normalizeCategory(row.category),
+      category: nc,
       source: row.source || 'manual',
     };
     if (row.note)              tx.note              = row.note;
