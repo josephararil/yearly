@@ -49,6 +49,35 @@
     );
   }
 
+  // One-off toggle — marks a transaction as excluded from the spending-trend forecast.
+  function OneOffField({ oneOff, setOneOff }) {
+    return (
+      <div className="field">
+        <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 4 }}>
+          <label style={{ margin: 0 }}>One-off</label>
+          <button
+            onClick={() => setOneOff((v) => !v)}
+            style={{
+              width: 40, height: 22, borderRadius: 11, border: "none", cursor: "pointer",
+              background: oneOff ? "var(--terra)" : "var(--hair)",
+              position: "relative", flexShrink: 0, transition: "background 0.15s",
+            }}
+            aria-checked={oneOff} role="switch">
+            <span style={{
+              position: "absolute", top: 2, left: oneOff ? 20 : 2,
+              width: 18, height: 18, borderRadius: "50%",
+              background: "var(--paper)", transition: "left 0.15s",
+              boxShadow: "0 1px 3px rgba(0,0,0,0.18)",
+            }} />
+          </button>
+        </div>
+        <p style={{ margin: 0, fontSize: 11, color: "var(--ink-2)", lineHeight: 1.4 }}>
+          Excluded from the spending-trend forecast — still counts in totals. Large amounts are excluded automatically.
+        </p>
+      </div>
+    );
+  }
+
   // Fun budget toggle + owner picker, used in both AddSheet and EditSheet.
   function FunFields({ funOn, setFunOn, funPerson, setFunPerson, store }) {
     const people = (store && store.people) || [];
@@ -127,9 +156,10 @@
     const defaultPerson = () => (store.people && store.people[0] && store.people[0].id) || "marti";
     const [funOn, setFunOn] = React.useState(false);
     const [funPerson, setFunPerson] = React.useState(defaultPerson());
+    const [oneOff, setOneOff] = React.useState(false);
 
     React.useEffect(() => {
-      if (open) { setMode("Quick"); setStep("grid"); setTpl(null); setAmount(""); setDraft(blank()); setFunOn(false); setFunPerson(defaultPerson()); }
+      if (open) { setMode("Quick"); setStep("grid"); setTpl(null); setAmount(""); setDraft(blank()); setFunOn(false); setFunPerson(defaultPerson()); setOneOff(false); }
     }, [open]);
 
     const commit = (t) => {
@@ -139,6 +169,7 @@
         note: t.note || undefined, source: "manual",
       };
       if (funOn) { tx.fun = true; tx.person = funPerson; }
+      if (oneOff) tx.oneoff = true;
       onSave(tx);
       onClose();
     };
@@ -204,6 +235,7 @@
         <div>
           <TxForm draft={draft} set={set} />
           <FunFields funOn={funOn} setFunOn={setFunOn} funPerson={funPerson} setFunPerson={setFunPerson} store={store} />
+          <OneOffField oneOff={oneOff} setOneOff={setOneOff} />
           <Button variant="primary" block disabled={!valid} onClick={() => commit(draft)}>
             Add expense
           </Button>
@@ -225,11 +257,13 @@
     const defaultPerson = () => (store && store.people && store.people[0] && store.people[0].id) || "marti";
     const [funOn, setFunOn] = React.useState(false);
     const [funPerson, setFunPerson] = React.useState(defaultPerson());
+    const [oneOff, setOneOff] = React.useState(false);
     React.useEffect(() => {
       if (txn) {
         setDraft({ description: txn.description, amount: String(txn.amount_eur), category: txn.category, date: txn.date, note: txn.note || "" });
         setFunOn(!!txn.fun);
         setFunPerson(txn.person || defaultPerson());
+        setOneOff(!!txn.oneoff);
       }
     }, [txn]);
     const set = (patch) => setDraft((d) => ({ ...d, ...patch }));
@@ -239,6 +273,7 @@
       <Sheet open={open} onClose={onClose} title="Edit expense">
         <TxForm draft={draft} set={set} />
         <FunFields funOn={funOn} setFunOn={setFunOn} funPerson={funPerson} setFunPerson={setFunPerson} store={store || {}} />
+        <OneOffField oneOff={oneOff} setOneOff={setOneOff} />
         <div style={{ display: "flex", gap: 10 }}>
           <Button variant="secondary" onClick={() => { onDelete(txn.id); onClose(); }} icon={<window.Icon name="trash" size={16} />}>Delete</Button>
           <div style={{ flex: 1 }}>
@@ -246,6 +281,7 @@
               onClick={() => {
                 const updated = { ...txn, description: draft.description, amount_eur: Math.round(parseFloat(draft.amount) * 100) / 100, category: draft.category, date: draft.date, note: draft.note || undefined };
                 if (funOn) { updated.fun = true; updated.person = funPerson; } else { delete updated.fun; delete updated.person; }
+                if (oneOff) { updated.oneoff = true; } else { delete updated.oneoff; }
                 onSave(updated); onClose();
               }}>
               Save changes

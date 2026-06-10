@@ -33,6 +33,7 @@ function rowToTx(row) {
     tx_type:           row.tx_type,
     e_commerce:        row.e_commerce,
     fee_eur:           row.fee_eur,
+    oneoff:            row.oneoff,
   };
 }
 
@@ -60,6 +61,7 @@ function txToBinds(tx, now) {
     tx.tx_type           ?? null,
     tx.e_commerce        ? 1 : 0,
     tx.fee_eur           ?? null,
+    tx.oneoff       ? 1 : 0,
     now,
   ];
 }
@@ -120,8 +122,8 @@ export default {
              original_amount,original_currency,deleted,
              revolut_category,merchant_mcc,merchant_city,merchant_country,
              merchant_logo,card_label,tx_type,e_commerce,fee_eur,
-             updated_at)
-          VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)
+             oneoff,updated_at)
+          VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)
           ON CONFLICT(id) DO UPDATE SET
             date=excluded.date, description=excluded.description,
             amount_eur=excluded.amount_eur, category=excluded.category,
@@ -139,6 +141,7 @@ export default {
             tx_type=excluded.tx_type,
             e_commerce=excluded.e_commerce,
             fee_eur=excluded.fee_eur,
+            oneoff=excluded.oneoff,
             updated_at=excluded.updated_at
         `;
 

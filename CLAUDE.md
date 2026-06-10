@@ -165,6 +165,7 @@ own export to `window`**. There are no imports/exports. Two consequences:
     dated rate schedule per person. `balanceAdjustment` is an additive offset to the computed balance (set via "Correct balance" in Settings → Fun budget); 0 when absent. Default: Joseph €100/mo, Marti €200/mo.
   - `store.wishlist`: `[{id, owner, name, price, note?, createdMonth}]` — per-person wishlist items.
   - Transaction fields: optional `fun:true` and `person:"joseph"|"marti"` (only on fun tx).
+    Optional `oneoff:true` — excludes the tx from the blended rate used in projection (still counts in `spent`). Always absent on Revolut import (defaults to 0); toggled in-app via Manual add / edit sheet.
     Optional Revolut-sourced fields: `merchant_logo` (URL string), `merchant_city` (string).
   - `years[y].ceiling` — renamed from `years[y].target` (sacred household ceiling, never derived).
   `buildSeed()` — returns a blank store: `transactions: []`, `wishlist: []`, default year ceilings
@@ -317,10 +318,16 @@ spend, no projection/buffer).
   category filter chips now show **all** categories with spend (`stats.catList`, not capped at 8);
   a "Sort" label + 6 pill buttons (Newest · Oldest · € High · € Low · A→Z · Z→A) appear below
   the category chips; active sort uses `--terra` border/background; default sort is Newest.
-  `addflow.jsx` — both `AddSheet` and `EditSheet` expose a **Fun budget toggle** (pill switch, off by
-  default). When on, a Chip owner picker (Joseph/Marti) appears. `commit()`/`save()` write `fun:true`
-  + `person` when the toggle is on; EditSheet pre-populates toggle state from `txn.fun`/`txn.person`.
-  `EditSheet` now accepts a `store` prop for reading `store.people`.
+  `addflow.jsx` — both `AddSheet` and `EditSheet` (Manual mode only; not Quick keypad) expose a
+  **Fun budget toggle** (pill switch, off by default). When on, a Chip owner picker (Joseph/Marti)
+  appears. `commit()`/`save()` write `fun:true` + `person` when the toggle is on; EditSheet
+  pre-populates toggle state from `txn.fun`/`txn.person`. `EditSheet` accepts a `store` prop for
+  reading `store.people`. Both Manual AddSheet and EditSheet also expose a **One-off toggle** (same
+  pill switch style, below the Fun toggle). When on, `oneoff:true` is written to the transaction; off
+  omits the key (matching the `fun` pattern). EditSheet pre-populates from `txn.oneoff`. Caption:
+  "Excluded from the spending-trend forecast — still counts in totals. Large amounts are excluded
+  automatically." The oneoff flag causes `isLump()` in calc.jsx to exclude the tx from the blended
+  rate while keeping it in `spent`.
   `settings.jsx` — footer shows `APP_VERSION` constant (`'v29'` currently, defined at top of
   IIFE — update it with every release). `TargetSheet` (now labelled "Household ceiling") and `BufferSheet` accept a `year`
   prop (defaults to `store.currentYear`); `TargetSheet` reads/writes `years[y].ceiling`. `BufferSheet`
@@ -380,12 +387,15 @@ transactions(id TEXT PK, date TEXT NOT NULL, description TEXT,
 -- merchant_country TEXT, merchant_logo TEXT, card_label TEXT,
 -- tx_type TEXT, e_commerce INTEGER NOT NULL DEFAULT 0, fee_eur REAL
 
+-- Phase 17 migration (applied via Cloudflare dashboard)
+-- oneoff INTEGER NOT NULL DEFAULT 0  (always 0 on Revolut import; toggled in-app)
+
 settings(id INTEGER PK CHECK(id=1), blob TEXT, updated_at INTEGER)
 -- single row; blob is a JSON-serialised settings object
 ```
 
-`amount_eur` is stored as `REAL` (mirrors the JS field directly). `fun`, `deleted`, and
-`e_commerce` are `0`/`1` integers. `updated_at` is a **server-stamped ms epoch** on every write.
+`amount_eur` is stored as `REAL` (mirrors the JS field directly). `fun`, `deleted`,
+`e_commerce`, and `oneoff` are `0`/`1` integers. `updated_at` is a **server-stamped ms epoch** on every write.
 `"migrations_dir": "migrations"` is set in `wrangler.jsonc`'s `d1_databases[0]`.
 
 ### API endpoints (`src/index.js`)
@@ -404,7 +414,7 @@ All under `/api/*`. Server clock is authoritative; every write stamps `updated_a
 Key implementation notes:
 - `GET /api/sync` uses `>=` (not `>`) to avoid dropping a write on the same-ms boundary.
 - `POST /api/transactions` coerces absent/falsy `deleted` → `0` explicitly (reliable un-delete).
-- `fun` boolean → `0/1` on write; client reconstructs `fun:true`/omit on read.
+- `fun` and `oneoff` booleans → `0/1` on write; client reconstructs `fun:true`/`oneoff:true`/omit on read.
 - Body validation: array required, each item must have a string `id`; returns 400 otherwise.
 - Uses `env.DB.batch([...])` for the upsert array.
 

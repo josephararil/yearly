@@ -23,8 +23,8 @@
   <div id="summary"></div>
 
   <!-- Plain script tags — no Babel needed; these files contain no JSX -->
-  <script src="public/y/data.jsx?v=33"></script>
-  <script src="public/y/calc.jsx?v=33"></script>
+  <script src="public/y/data.jsx?v=34"></script>
+  <script src="public/y/calc.jsx?v=34"></script>
   <script>
     const container = document.getElementById('results');
     let passed = 0, failed = 0;
@@ -814,6 +814,58 @@
     assert('§7.2: catList sorted by amount descending',
       ccStats.catList[0].id === 'groceries' && ccStats.catList[1].id === 'transport',
       ccStats.catList.map(c => c.id + ':' + c.amount).join(', '));
+
+    // ---- Phase 17: oneoff flag excludes tx from rate but keeps it in spent ----
+    section('Phase 17 — oneoff flag: included in spent, excluded from rate');
+    // Fixture: ceiling 25000 (lumpThreshold=500), buffer=0.04.
+    // A €300 tx is BELOW the auto-threshold (500), so without oneoff it enters the rate.
+    // With oneoff:true it must be excluded from the rate (like a lump), but still add to spent.
+    const oneoffBase = {
+      currentYear: 2026,
+      people: [],
+      wishlist: [],
+      years: { '2026': { ceiling: 25000, buffer: 0.04 } },
+      density: 'balanced',
+      templates: [],
+      transactions: [
+        { id: 'ob1', date: '2026-01-10', description: 'R1', amount_eur: 400, category: 'groceries', source: 'manual' },
+        { id: 'ob2', date: '2026-02-10', description: 'R2', amount_eur: 400, category: 'groceries', source: 'manual' },
+        { id: 'ob3', date: '2026-03-10', description: 'R3', amount_eur: 400, category: 'groceries', source: 'manual' },
+        { id: 'ob4', date: '2026-04-10', description: 'R4', amount_eur: 400, category: 'groceries', source: 'manual' },
+        { id: 'ob5', date: '2026-05-10', description: 'R5', amount_eur: 400, category: 'groceries', source: 'manual' },
+      ],
+    };
+    const asOf17 = new Date('2026-06-07T12:00:00Z');
+    // Store WITH oneoff:true €300 tx (amount well below lumpThreshold=500)
+    const oneoffWith = Object.assign({}, oneoffBase, {
+      transactions: oneoffBase.transactions.concat([
+        { id: 'oo1', date: '2026-03-15', description: 'Gift', amount_eur: 300, category: 'shopping', source: 'manual', oneoff: true },
+      ]),
+    });
+    // Store WITH a regular (non-oneoff) €300 tx
+    const oneoffRegular = Object.assign({}, oneoffBase, {
+      transactions: oneoffBase.transactions.concat([
+        { id: 'oo2', date: '2026-03-15', description: 'Gift', amount_eur: 300, category: 'shopping', source: 'manual' },
+      ]),
+    });
+    const baseStats    = YCalc.computeStats(oneoffBase,    2026, asOf17);
+    const withStats    = YCalc.computeStats(oneoffWith,    2026, asOf17);
+    const regularStats = YCalc.computeStats(oneoffRegular, 2026, asOf17);
+
+    // oneoff tx is included in spent
+    assert('oneoff: spent(with) = spent(base) + 300',
+      Math.abs(withStats.spent - baseStats.spent - 300) < 0.01,
+      'diff=' + (withStats.spent - baseStats.spent).toFixed(0));
+    // oneoff tx does NOT enter the rate → projection diff = exactly 300 (the addition to spent)
+    const projDiffOneoff = withStats.projection - baseStats.projection;
+    assert('oneoff: projection diff = 300 exactly (not extrapolated)',
+      Math.abs(projDiffOneoff - 300) < 0.5,
+      'diff=' + projDiffOneoff.toFixed(2));
+    // A regular (non-flagged) €300 tx below lumpThreshold DOES enter the rate → projection diff > 300
+    const projDiffRegular = regularStats.projection - baseStats.projection;
+    assert('regular: projection diff > 300 (tx enters the rate)',
+      projDiffRegular > 300 + 1,
+      'diff=' + projDiffRegular.toFixed(2));
 
     // ---- Summary ----
     const total = passed + failed;
