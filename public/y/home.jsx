@@ -64,9 +64,9 @@
     for (let d = 1; d <= daysInMonth; d++) dayCum[d] += dayCum[d - 1];
 
     const spentSoFar = dayCum[dayOfMonth];
-    // Monthly cap: remaining main budget divided by months left (incl. this one)
+    // Monthly cap: remaining ceiling divided by months left (incl. this one)
     const monthsRemaining = 12 - month;
-    const neededMonthly = Math.max(0, (stats.mainTarget - stats.spent) / monthsRemaining);
+    const neededMonthly = Math.max(0, (stats.ceiling - stats.spent) / monthsRemaining);
     const monthlyDailyRate = dayOfMonth > 0 ? spentSoFar / dayOfMonth : 0;
     const projectedEnd = spentSoFar + monthlyDailyRate * (daysInMonth - dayOfMonth);
 
