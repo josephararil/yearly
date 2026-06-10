@@ -70,6 +70,18 @@
         </div>
         {!stats.isFuture && (
           <>
+            <div className="hero-hr" />
+            <div className="hero-spent">
+              <span>
+                {stats.complete
+                  ? <>Final spend <span className="num-big">{eur0(stats.combinedProjection)}</span></>
+                  : <><span className="num-big">{eur0(stats.spent + stats.funSpent)}</span> spent</>
+                }
+              </span>
+              <span className="meta">
+                {stats.complete ? stats.year : `day ${stats.doy} / 365`}
+              </span>
+            </div>
             <div className="pace-rule">
               <div className="pace-fill" style={{ width: fillPct + "%" }} />
               {!stats.complete && <div className="pace-mark" style={{ left: markPct + "%" }} />}
