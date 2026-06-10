@@ -103,9 +103,11 @@ There is **no build, no package manager, no tests, no linter**. The app is a sin
 HTML file that loads React + Babel from CDN and transpiles the `y/*.jsx` modules in the
 browser.
 
-- Serve the directory over HTTP and open `index.html` (e.g. `python -m http.server` then
-  visit `http://localhost:8000/`). It will **not** work over `file://` — the `type="text/babel" src=`
-  scripts require HTTP.
+- Serve over HTTP and open `public/index.html`. Two valid approaches:
+  - **From repo root:** `python -m http.server 8766` → visit `http://localhost:8766/public/`
+    (preferred for Claude Code preview — see "Claude Code preview" section in Regression test)
+  - **From `public/`:** `python -m http.server --directory public 8002` → visit `http://localhost:8002/`
+  It will **not** work over `file://` — the `type="text/babel" src=` scripts require HTTP.
 - State persists to `localStorage` under `yearly:store:v1`; on first load `buildSeed`
   creates a blank store (no transactions, no wishlist) with default year settings, people,
   and templates. To reset to a blank store, clear that key.
@@ -620,7 +622,82 @@ python -m http.server 8003
 ```
 All rows should show PASS.
 
-**Claude Code preview caveat:** if you accidentally navigate the preview browser to a URL
-that doesn't exist (e.g. `/calc.test.html` on the `--directory public` server), it lands on
-`chrome-error://chromewebdata/`. From that page, `window.location` assignments are silently
-ignored — the only recovery is `preview_stop` + `preview_start` to reset the browser state.
+**Claude Code preview — how to deploy locally for testing:**
+
+The app lives inside `public/`, but the Python server must be started from the **repo root**
+(not `--directory public`). This is the setup that reliably works:
+
+**`.claude/launch.json` (already configured):**
+```json
+{
+  "version": "0.0.1",
+  "configurations": [
+    {
+      "name": "yearly",
+      "runtimeExecutable": "cmd",
+      "runtimeArgs": ["/c", "python", "-m", "http.server", "8766"],
+      "port": 8766,
+      "autoPort": true
+    }
+  ]
+}
+```
+
+**Why `cmd /c` wrapper?** On Windows, `python -m http.server` must be launched via `cmd /c`
+for `preview_start` to detect it properly. Direct `python` as `runtimeExecutable` does not
+always work reliably.
+
+**Why serve from repo root (not `--directory public`)?** This is the critical insight:
+- If you serve from `public/` (the old config), the server's root IS the app — the browser
+  auto-navigates to `http://localhost:PORT/` which tries to load `index.html` directly. If
+  anything goes wrong (wrong port, 404, redirect), the browser lands on
+  `chrome-error://chromewebdata/`. **From that error page, `window.location` assignments are
+  silently ignored** — the preview browser is permanently stuck and the only escape is
+  `preview_stop` → `preview_start` (fresh, `reused: false`). This costs many tokens.
+- If you serve from the **repo root**, the server's root is the directory listing. The browser
+  auto-navigates to `http://localhost:PORT/` and gets a valid directory listing page (not an
+  error). From a valid page, you CAN redirect the browser to `/public/` via eval.
+
+**Step-by-step sequence:**
+```
+1. preview_start("yearly")
+   → returns serverId and actual port (e.g. 54321)
+
+2. preview_eval: window.location.href
+   → should return "http://localhost:54321/" (not chrome-error — if it IS chrome-error,
+     do preview_stop + preview_start again before proceeding)
+
+3. preview_eval: window.location.href = 'http://localhost:54321/public/';
+   → browser navigates to the app
+
+4. preview_console_logs (level: all) — React DevTools info + Babel transformer warn are normal.
+   Any ERROR lines mean something broke; fix before taking screenshots.
+
+5. preview_screenshot to verify the app renders.
+```
+
+**Port conflicts:** Ports 8000, 8002, 8003, 8765 are often already in use by the user's own
+servers. Port 8766 tends to be free, and `autoPort: true` will find the next available port
+if it isn't. The actual assigned port is always returned in the `preview_start` result — use
+that port in the `/public/` URL in step 3, not the configured port.
+
+**After every code change:** the app uses a service worker (PWA). Changes are NOT reflected
+on a simple reload. You must bump `CACHE_NAME` in `public/sw.js` (e.g. `yearly-v19` →
+`yearly-v20`) AND do a hard-refresh. In the preview browser, run:
+```js
+// preview_eval:
+(async () => {
+  const regs = await navigator.serviceWorker.getRegistrations();
+  for (const r of regs) await r.unregister();
+  const keys = await caches.keys();
+  for (const k of keys) await caches.delete(k);
+  location.reload();
+})()
+```
+If `navigator.serviceWorker` is unavailable in the eval context (it sometimes is), just bump
+the cache version constant and reload — the new SW activates on the next page load.
+
+**chrome-error recovery:** if `preview_eval: window.location.href` returns
+`"chrome-error://chromewebdata/"`, do NOT attempt further evals or navigation — they all
+silently no-op. Run `preview_stop` → `preview_start` to get a fresh browser, then repeat
+the sequence above from step 1.
