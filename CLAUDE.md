@@ -96,6 +96,7 @@ own export to `window`**. There are no imports/exports. Two consequences:
 - `y/calc.jsx` (`window.YCalc`) — **all numbers come from here.** `computeStats(store, year, asOfDate?)`
   (damped-blend projection + per-year buffer uplift + status thresholds; `asOfDate` defaults to `new Date()`)
   and `buildCallouts(store, stats)` (the ranked detector engine — 8 detectors). Pure functions, no UI deps.
+  All magic-number thresholds are named in the `T` constants object at the top of the IIFE — see README §Callout detectors threshold table for the full rationale.
   Also exports `cumulativeByDay(txns)` → `number[366]` (shared with `analysis.jsx`),
   `priorYearCumulative(store, year, asOfDate)` → number (prior year spend at same day-of-year),
   `rateForMonth(person, ym)` → number (latest applicable rate for a person in a "YYYY-MM"; 0 before startMonth),
@@ -557,6 +558,8 @@ The app is a fully installable PWA:
   framework or class generator beyond `app.css` and the Aperture tokens.
 
 ## Regression test
+
+Verify: /calc.test.html — ALL rows PASS.
 
 **`calc.test.html`** (repo root) — a standalone HTML page that loads `y/data.jsx` +
 `y/calc.jsx` as plain `<script>` tags (no Babel needed; neither file has JSX). Serves as

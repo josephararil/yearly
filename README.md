@@ -300,6 +300,28 @@ single neutral line ("Projection steady at €X … nothing notable in the data"
 **Completed years:** a single review callout comparing `spent + funSpent` vs `ceiling` ("Finished over/under the ceiling by €X — €Y against a €Z ceiling."). The combined figure (not just main spend) is the verdict for complete years.
 **Future years:** a single "hasn't started yet" callout.
 
+**Threshold table** — all constants live in the `T` object at the top of `calc.jsx`'s IIFE:
+
+| Constant | Value | Rationale |
+|---|---|---|
+| `WATCH_BAND_CURRENT` | 1.08 | Forecast uncertainty mid-year: within +8% of mainTarget/ceiling = watch, beyond = alert |
+| `WATCH_BAND_COMPLETE` | 1.03 | Settled fact: tighter +3% band for finished years |
+| `CEILING_COMFORT` | 0.94 | Below 94% of ceiling = comfortable, room to raise fun |
+| `CEILING_ALERT` | 0.08 | Combined projection > ceiling × (1+8%) → alert severity |
+| `TREND_NOTABLE` | 0.012 | Projection moved > 1.2% of mainTarget in 4 weeks = worth a callout |
+| `TREND_ALERT` | 0.04 | > 4% of mainTarget move → alert severity |
+| `STREAK_HOT` | 1.15 | 14d daily pace > 115% of linear pace → spending streak |
+| `STREAK_ALERT` | 1.35 | 14d pace > 135% → alert severity |
+| `STREAK_COOL` | 0.70 | 14d pace < 70% → under-pace (good) |
+| `SHARE_NOTABLE` | 0.26 | Top category > 26% of YTD spend = worth surfacing |
+| `SHARE_WATCH` | 0.34 | Top category > 34% → watch severity |
+| `MOVER_MIN_EUR` | €60 | MoM category change must exceed €60 to be a "mover" |
+| `MOVER_MIN_BASE` | €50 | Category must have ≥ €50 in the last full month to be eligible |
+| `BUFFER_EXPLAIN_MIN` | 0.01 | Explain the buffer only when it adds > 1% of mainTarget |
+| `LUMP_PCT` | 0.02 | Transactions > 2% of mainTarget excluded from extrapolated rate (winsorization) |
+| `DAYS_PER_MONTH` | 30.4 | Average month length for "months remaining" arithmetic |
+| `YOY_WATCH` | 0.08 | YTD spend > prior year same point by > 8% of mainTarget → watch |
+
 **Overview density** (a Tweak): `minimal` = top ≤2 hot callouts (or 1 calm), `balanced`
 = top 4, `all` = everything.
 
