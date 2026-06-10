@@ -430,7 +430,8 @@
     }
 
     const numPeople = (store && store.people && store.people.length) || 1;
-    const targetFunPerMo = Math.max(0, stats.ceiling - stats.projection) / 12 / numPeople;
+    const monthsLeft = Math.max(1, stats.daysRemaining / 30.4);
+    const targetFunPerMo = Math.max(0, stats.ceiling - stats.combinedProjection) / monthsLeft / numPeople;
     const firePortfolio = stats.combinedProjection / 0.04;
 
     return (
@@ -485,7 +486,7 @@
                 label="Target fun/mo"
                 value={eur0(targetFunPerMo)}
                 sub="per person"
-                color={stats.projection >= stats.ceiling ? "var(--terra)" : "var(--sage)"}
+                color={targetFunPerMo === 0 ? "var(--terra)" : "var(--sage)"}
               />
             )}
             {!stats.isFuture && <StatCard label="FIRE portfolio" value={eurK(firePortfolio)} sub="at 4% rule" />}

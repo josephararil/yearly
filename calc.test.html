@@ -23,8 +23,8 @@
   <div id="summary"></div>
 
   <!-- Plain script tags — no Babel needed; these files contain no JSX -->
-  <script src="public/y/data.jsx?v=30"></script>
-  <script src="public/y/calc.jsx?v=30"></script>
+  <script src="public/y/data.jsx?v=32"></script>
+  <script src="public/y/calc.jsx?v=32"></script>
   <script>
     const container = document.getElementById('results');
     let passed = 0, failed = 0;
@@ -705,6 +705,79 @@
     assert('§6.2: funProjection < linear extrapolation',
       funCapStats.funProjection < funLinear,
       funCapStats.funProjection.toFixed(0) + ' < ' + funLinear.toFixed(0));
+
+    // ---- §6.1 regression: pre-startMonth fun tx ignored in balance ----
+    section('§6.1 regression — fun tx before startMonth excluded from balance');
+    // A fun tx dated before a person's startMonth must not subtract from their balance.
+    // Before the fix, allFunTxns was not filtered by startMonth, so a pre-start tx would
+    // subtract with no matching accrual, producing a negative balance incorrectly.
+    const preStartStore = {
+      currentYear: 2026,
+      people: [
+        // Joseph starts in March 2026 at €100/mo
+        { id: 'joseph', name: 'Joseph', rates: [{ from: '2026-03', amount: 100 }], startMonth: '2026-03' },
+      ],
+      wishlist: [],
+      years: { '2026': { ceiling: 25000, buffer: 0.04 } },
+      density: 'balanced',
+      templates: [],
+      transactions: [
+        // This tx is dated before Joseph's startMonth (2026-03-01) — must be ignored
+        { id: 'ps1', date: '2026-01-15', description: 'Pre-start fun', amount_eur: 200, category: 'shopping', fun: true, person: 'joseph', source: 'manual' },
+        // This tx is after startMonth and should count
+        { id: 'ps2', date: '2026-04-10', description: 'Post-start fun', amount_eur: 50, category: 'shopping', fun: true, person: 'joseph', source: 'manual' },
+      ],
+    };
+    // asOf = Jun 7: accrued Mar+Apr+May+Jun = 4×100 = 400; only ps2 counts (ps1 pre-start ignored); balance = 350
+    const preStartResult = YCalc.computeFun(preStartStore, new Date('2026-06-07T12:00:00Z'));
+    assert('§6.1: pre-start tx excluded — balance = 350 (not 150)',
+      Math.abs(preStartResult.people[0].balance - 350) < 0.01,
+      'got ' + preStartResult.people[0].balance);
+    assert('§6.1: spentAllTime = 50 (pre-start tx not counted)',
+      Math.abs(preStartResult.people[0].spentAllTime - 50) < 0.01,
+      'got ' + preStartResult.people[0].spentAllTime);
+
+    // Also verify via computeStats: funProjectionFor must also exclude the pre-start tx
+    const preStartStats = YCalc.computeStats(preStartStore, 2026, new Date('2026-06-07T12:00:00Z'));
+    // funSpent in stats = fun txns for year up to asOf. Pre-start tx IS in 2026 but before startMonth.
+    // The fix applies to the per-person spentAll in funProjectionFor (cap calculation), not funSpent directly.
+    // funProjection cap = funSpentYTD + max(0, balance) + futureAccruals; balance uses filtered spend.
+    // balance = 350; futureAccruals Jul–Dec = 6×100=600; cap = 50 + 350 + 600 = 1000
+    // linear = funSpentYTD(250) / 158 × 365 ≈ 577.5 < cap 1000 → funProjection ≈ linear
+    // But main check: if pre-start tx were included, balance would be 150, cap = 50 + 150 + 600 = 800
+    // Both cap values > linear so funProjection ≈ linear regardless — test balance directly instead.
+    assert('§6.1: computeStats funSpent counts pre-start tx (it is in 2026)',
+      Math.abs(preStartStats.funSpent - 250) < 0.01,
+      'got ' + preStartStats.funSpent.toFixed(2));
+
+    // ---- §6.4 regression: computeFun asOf-relative year classification ----
+    section('§6.4 regression — computeFun uses asOfDate for year classification');
+    // Before the fix: `realYear = new Date().getFullYear()` (wall clock) → passing a historical
+    // asOfDate still used the real current year, misclassifying the target year as complete.
+    // Fix: `realYear = asOf.getFullYear()` → year is classified relative to asOf.
+    // Test: pass asOf = mid-2024 with currentYear=2024. 2024 < asOf.getFullYear() is false,
+    // and 2024 === asOf.getFullYear() is true → isCurrent → funProjectionFor path (not complete path).
+    // A complete-year path returns funSpentYTD directly, producing funProjection === funSpentYTD.
+    // The current-year (linear/cap) path returns funProjection > funSpentYTD when doy < daysInYear.
+    const hist2024Store = {
+      currentYear: 2024,
+      people: [
+        { id: 'joseph', name: 'Joseph', rates: [{ from: '2024-01', amount: 100 }], startMonth: '2024-01' },
+      ],
+      wishlist: [],
+      years: { '2024': { ceiling: 25000, buffer: 0.04 } },
+      density: 'balanced',
+      templates: [],
+      transactions: [
+        { id: 'h1', date: '2024-03-15', description: 'Fun 2024', amount_eur: 80, category: 'shopping', fun: true, person: 'joseph', source: 'manual' },
+      ],
+    };
+    // asOf = 2024-06-15 (mid-year); doy=167 (well before Dec 31) → current-year path → funProjection > funSpentYTD
+    const hist2024AsOf   = new Date('2024-06-15T12:00:00Z');
+    const hist2024Result = YCalc.computeFun(hist2024Store, hist2024AsOf);
+    assert('§6.4: historical asOf (mid-2024) → funProjection > funSpentYTD (current-year path)',
+      hist2024Result.funProjection > hist2024Result.funSpentYTD,
+      'funProjection=' + hist2024Result.funProjection.toFixed(0) + ' funSpentYTD=' + hist2024Result.funSpentYTD.toFixed(0));
 
     // ---- Summary ----
     const total = passed + failed;
