@@ -181,12 +181,14 @@ function computeStats(store, year, asOfDate) {
     }
     const mainTarget = ceiling - funPlanAnnual;
 
-    // Lump-sum winsorization: transactions above T.LUMP_PCT of mainTarget count in `spent` but are
-    // excluded from the RATE that gets extrapolated over daysRemaining. A single large
-    // transaction counts once as money spent; it does not inflate the year-end projection
-    // by 4× its own size by being multiplied over the remaining days.
+    // Lump-sum winsorization: transactions above T.LUMP_PCT of mainTarget, or explicitly
+    // flagged oneoff:true, count in `spent` but are excluded from the RATE that gets
+    // extrapolated over daysRemaining. A single large transaction counts once as money spent;
+    // it does not inflate the year-end projection by multiplying over remaining days.
+    // oneoff:true takes precedence — it excludes smaller one-offs the auto threshold can't catch.
     const lumpThreshold = mainTarget > 0 ? mainTarget * T.LUMP_PCT : Infinity;
-    const recurring = upto.filter((t) => t.amount_eur <= lumpThreshold);
+    const isLump = (t) => !!t.oneoff || t.amount_eur > lumpThreshold;
+    const recurring = upto.filter((t) => !isLump(t));
 
     // Trailing 60-day rate: de-weights front-loaded lump sums once they leave the window.
     // Falls back to recurring-YTD rate when fewer than 60 days have elapsed.
@@ -260,7 +262,8 @@ function computeStats(store, year, asOfDate) {
     const windowDays = Math.min(60, refDoy);
     // Lump-sum winsorization — must match computeStats so the trend comparison is apples-to-apples.
     const lumpThreshold = stats.mainTarget > 0 ? stats.mainTarget * T.LUMP_PCT : Infinity;
-    const refRecurring = stats.txns.filter((t) => t.date <= refStr && t.amount_eur <= lumpThreshold);
+    const isLump = (t) => !!t.oneoff || t.amount_eur > lumpThreshold;
+    const refRecurring = stats.txns.filter((t) => t.date <= refStr && !isLump(t));
     const recurringSum = refRecurring.reduce((a, t) => a + t.amount_eur, 0);
     const ytdRate = refDoy > 0 ? recurringSum / refDoy : 0;
     const last60 = refRecurring.filter((t) => t.date > w60str).reduce((a, t) => a + t.amount_eur, 0);
