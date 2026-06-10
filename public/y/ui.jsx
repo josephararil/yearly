@@ -63,7 +63,8 @@
           ) : (
             <>
               {over ? "Over" : "Under"} your <span className="num">{eur0(stats.ceiling)}</span> ceiling by{" "}
-              <span className={"hero-emph " + (over ? "over" : "under")}>{eur0(Math.abs(stats.combinedDelta))}</span>.
+              <span className={"hero-emph " + (over ? "over" : "under")}>{eur0(Math.abs(stats.combinedDelta))}</span>
+              {stats.bandAmt != null && <span style={{ fontFamily: "var(--mono)", color: "var(--muted)", fontSize: "0.85em", marginLeft: 4 }}>±{eur0(stats.bandAmt)}</span>}.
             </>
           )}
         </div>
