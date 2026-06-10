@@ -216,10 +216,43 @@ function computeStats(store, year, asOfDate) {
     const delta = projection - mainTarget;
     const deltaPct = mainTarget > 0 ? delta / mainTarget : 0;
 
+    // Forecast uncertainty band — current incomplete year only, requires ≥4 complete weeks of
+    // recurring (non-lump) data. sigmaWeek = sample std-dev of weekly recurring totals (zero
+    // weeks counted). bandAmt = sigmaWeek × √weeksRemaining × (1+buffer). All null when
+    // insufficient data. projLow is floored at spent so the optimistic bound never understates
+    // what was actually logged.
+    let projLow = null, projHigh = null, bandAmt = null;
+    if (!isFuture && !complete) {
+      const nCompleteWeeks = Math.floor((doy - 1) / 7);
+      if (nCompleteWeeks >= 4) {
+        const weekTotals = Array(nCompleteWeeks).fill(0);
+        recurring.forEach((t) => {
+          const wk = Math.floor((dayOfYear(parseDate(t.date)) - 1) / 7);
+          if (wk < nCompleteWeeks) weekTotals[wk] += t.amount_eur;
+        });
+        const n = nCompleteWeeks;
+        const mean = weekTotals.reduce((a, v) => a + v, 0) / n;
+        const sigmaWeek = Math.sqrt(weekTotals.reduce((a, v) => a + (v - mean) ** 2, 0) / (n - 1));
+        const weeksRemaining = daysRemaining / 7;
+        bandAmt = sigmaWeek * Math.sqrt(weeksRemaining) * (1 + buffer);
+        projLow = Math.max(spent, projection - bandAmt);
+        projHigh = projection + bandAmt;
+      }
+    }
+
+    // Main budget status — gated on the lower bound of the band when data is sufficient.
+    // "alert" only when even the optimistic scenario (projLow) misses mainTarget; otherwise
+    // "watch" until the band exists and the lower bound clears. When band is null (<4 weeks),
+    // fall back to the static ±8% threshold so early-year behaviour is unchanged.
     let status;
     if (isFuture) status = "good";
     else if (complete) status = projection <= mainTarget ? "good" : projection <= mainTarget * T.WATCH_BAND_COMPLETE ? "watch" : "alert";
-    else status = projection <= mainTarget ? "good" : projection <= mainTarget * T.WATCH_BAND_CURRENT ? "watch" : "alert";
+    else if (bandAmt !== null) {
+      status = projection <= mainTarget ? "good" : (projLow > mainTarget ? "alert" : "watch");
+    } else {
+      // Sparse data (<4 weeks): use static threshold (T.WATCH_BAND_CURRENT = 1.08)
+      status = projection <= mainTarget ? "good" : (projection <= mainTarget * T.WATCH_BAND_CURRENT ? "watch" : "alert");
+    }
 
     const { byCat, catList } = aggregateByCategory(upto, spent);
     const { byMonth, catMonth } = aggregateByMonth(upto);
@@ -245,7 +278,7 @@ function computeStats(store, year, asOfDate) {
     return {
       year: Number(year), ceiling, mainTarget, funPlanAnnual, buffer, isCurrent, complete, isFuture,
       asOf, asOfStr, doy, daysInYear: diy, spent, dailyRate, trailingDailyRate, daysRemaining, projection, projNoBuffer, bufferAmt,
-      pace, delta, deltaPct, status, txns: mainTxns, upto, byCat, catList, byMonth, catMonth,
+      pace, delta, deltaPct, status, projLow, projHigh, bandAmt, txns: mainTxns, upto, byCat, catList, byMonth, catMonth,
       priorCum, priorSpent,
       funSpent, funProjection, combinedProjection, combinedDelta, combinedDeltaPct, combinedStatus,
     };
