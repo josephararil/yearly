@@ -139,12 +139,12 @@
 
         <div className="scroll" ref={scrollRef}>
           {route === "home" && (
-            <YHome.HomeScreen stats={stats} callouts={callouts} density={store.density || "balanced"}
-              onCallout={onCallout} fun={fun} store={store} onOpenFun={onOpenFun} />
+            <YHome.HomeScreen stats={stats} fun={fun} store={store} onOpenFun={onOpenFun} />
           )}
           {route === "analysis" && (
             <YAnalysis.AnalysisScreen stats={stats} focus={analysisFocus} onEditTx={openEdit}
-              fun={fun} store={store} setStore={setStore} addTx={addTx} />
+              fun={fun} store={store} setStore={setStore} addTx={addTx}
+              callouts={callouts} onCallout={onCallout} />
           )}
           {route === "settings" && (
             <YSettings.SettingsScreen store={store} setStore={setStore} stats={stats} />

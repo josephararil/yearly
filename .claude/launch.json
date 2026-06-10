@@ -3,9 +3,9 @@
   "configurations": [
     {
       "name": "yearly",
-      "runtimeExecutable": "python",
-      "runtimeArgs": ["-m", "http.server", "--directory", "public"],
-      "port": 8002,
+      "runtimeExecutable": "cmd",
+      "runtimeArgs": ["/c", "python", "-m", "http.server", "8766"],
+      "port": 8766,
       "autoPort": true
     }
   ]

@@ -103,9 +103,11 @@ There is **no build, no package manager, no tests, no linter**. The app is a sin
 HTML file that loads React + Babel from CDN and transpiles the `y/*.jsx` modules in the
 browser.
 
-- Serve the directory over HTTP and open `index.html` (e.g. `python -m http.server` then
-  visit `http://localhost:8000/`). It will **not** work over `file://` — the `type="text/babel" src=`
-  scripts require HTTP.
+- Serve over HTTP and open `public/index.html`. Two valid approaches:
+  - **From repo root:** `python -m http.server 8766` → visit `http://localhost:8766/public/`
+    (preferred for Claude Code preview — see "Claude Code preview" section in Regression test)
+  - **From `public/`:** `python -m http.server --directory public 8002` → visit `http://localhost:8002/`
+  It will **not** work over `file://` — the `type="text/babel" src=` scripts require HTTP.
 - State persists to `localStorage` under `yearly:store:v1`; on first load `buildSeed`
   creates a blank store (no transactions, no wishlist) with default year settings, people,
   and templates. To reset to a blank store, clear that key.
@@ -298,10 +300,7 @@ spend, no projection/buffer).
   to a 24px `cat-ic` category icon (colored square + SVG icon, `CatIcon`-style inline) if
   absent or on load error. `tx-meta` appends `· city` when `t.merchant_city` is set. Both
   fields are populated by `rowToTx` in `sync.jsx` from the Revolut D1 columns.
-  **`SpendCurve`** (Overview chart) — H=228, viewBox 360×228. Shows all 12 month initials
-  along the x-axis. Y-axis uses dynamically computed nice-round gridlines (~5 levels based on
-  maxY). Ceiling label sits **above** its line; target label sits **below** its line so they
-  never overlap. `maxY` scales to `max(mainTarget, ceiling, projection) × 1.08`.
+  **`SpendCurve`** has been removed (replaced by `MonthCurve` in `y/home.jsx`). The Overview now shows an interactive monthly chart (`MonthCurve`) for the current month — day-by-day cumulative actual spend, pace diagonal (0→mainTarget/12), dashed projection to month-end, and a target reference line. Toggle chips: Pace / Projection / Target. For past/future years it shows a plain text fallback. `MonthCurve` is defined locally in `y/home.jsx` (not exported from `y/ui.jsx`), using the same SVG/pointer pattern as `ProjectionChart`.
   `Toast({ open, message, actionLabel, onAction, onDismiss })` — transient bottom-anchored
   banner (above nav, z-index 30), auto-dismisses after 5 s via `onDismiss`, optional action button.
   `GaugeHero`, `PaceBar`, and `ProjSpark` have been removed (dead since hero is fixed to numerals).
@@ -323,7 +322,7 @@ spend, no projection/buffer).
     year + matching normalised category. The catbar-row `borderBottom` is suppressed when transactions
     follow; the transaction block carries the hairline instead.
   Internal: `WishlistAddSheet` (name + price + owner Chip picker), `PersonCard` (stats + wishlist).
-- Screens: `y/home.jsx` (Overview — hero + callouts + FunStrip + spend curve),
+- Screens: `y/home.jsx` (Overview — hero + FunStrip + `MonthCurve` monthly chart; no callouts),
   `y/analysis.jsx` (Projection/Categories/Activity/Fun tabs; charts are hand-built SVG that
   double as the Recharts spec), `y/settings.jsx`
   (ceiling/buffer/years/fun-budget/density/templates/CSV import-export/JSON backup-restore/clear),
@@ -347,7 +346,8 @@ spend, no projection/buffer).
   sub-label. Hovered bar gets full opacity + stroke highlight; hovered month label bolds. Hidden for
   future years. `LegendItem` helper renders bar and line swatches; defined in the same IIFE above
   `MonthlyBarsChart`.
-  **"In numbers" section** (`ProjectionTab`) — appears below the two charts with a `section-h` title.
+  **"What's happening" section** (`ProjectionTab`) — callouts from `buildCallouts` rendered between `MonthlyBarsChart` and "In numbers". Shows all callouts (no density filtering). Receives `callouts` and `onCallout` props threaded from `AnalysisScreen` → `App`. Clicking a callout still drills to the appropriate tab via `onCallout`. Hidden when `callouts` is empty.
+  **"In numbers" section** (`ProjectionTab`) — appears below "What's happening" with a `section-h` title.
   Receives `fun` and `store` props (passed from `AnalysisScreen`). Stat cards present:
   - Spent YTD, On-pace by today, Blended rate, Buffer adds (existing).
   - **Avg spend/mo** (average over completed months) + sub-line "need ≤€X/mo" coloured sage/terra;
@@ -370,7 +370,7 @@ spend, no projection/buffer).
   default). When on, a Chip owner picker (Joseph/Marti) appears. `commit()`/`save()` write `fun:true`
   + `person` when the toggle is on; EditSheet pre-populates toggle state from `txn.fun`/`txn.person`.
   `EditSheet` now accepts a `store` prop for reading `store.people`.
-  `settings.jsx` — footer shows `APP_VERSION` constant (`'v18'` currently, defined at top of
+  `settings.jsx` — footer shows `APP_VERSION` constant (`'v19'` currently, defined at top of
   IIFE — update it with every release). `TargetSheet` (now labelled "Household ceiling") and `BufferSheet` accept a `year`
   prop (defaults to `store.currentYear`); `TargetSheet` reads/writes `years[y].ceiling`. `BufferSheet`
   computes its own stats internally (unchanged). `YearsSheet` has tappable year rows that drill into a
@@ -574,7 +574,7 @@ The app is a fully installable PWA:
   immediately without waiting for old tabs to close.
   **Install hardening:** the install handler uses individual `fetch({cache:'no-cache'}).catch()` calls instead
   of `cache.addAll` so a single URL failure does not abort the entire SW install, and `no-cache` ensures the install always fetches fresh files (bypassing browser HTTP cache). Same `!response.redirected` guard
-  applied in the install handler as in the fetch handler. Current version: `yearly-v18`.
+  applied in the install handler as in the fetch handler. Current version: `yearly-v19`.
   **Logo caching:** merchant logo requests (`storage.googleapis.com/revolut-prod-apps_merchant-logo/…`)
   are intercepted with a **cache-first** strategy using a dedicated `yearly-logos-v1` cache.
   Once a logo is fetched it is never re-fetched. The logo cache is intentionally NOT deleted on
@@ -622,7 +622,82 @@ python -m http.server 8003
 ```
 All rows should show PASS.
 
-**Claude Code preview caveat:** if you accidentally navigate the preview browser to a URL
-that doesn't exist (e.g. `/calc.test.html` on the `--directory public` server), it lands on
-`chrome-error://chromewebdata/`. From that page, `window.location` assignments are silently
-ignored — the only recovery is `preview_stop` + `preview_start` to reset the browser state.
+**Claude Code preview — how to deploy locally for testing:**
+
+The app lives inside `public/`, but the Python server must be started from the **repo root**
+(not `--directory public`). This is the setup that reliably works:
+
+**`.claude/launch.json` (already configured):**
+```json
+{
+  "version": "0.0.1",
+  "configurations": [
+    {
+      "name": "yearly",
+      "runtimeExecutable": "cmd",
+      "runtimeArgs": ["/c", "python", "-m", "http.server", "8766"],
+      "port": 8766,
+      "autoPort": true
+    }
+  ]
+}
+```
+
+**Why `cmd /c` wrapper?** On Windows, `python -m http.server` must be launched via `cmd /c`
+for `preview_start` to detect it properly. Direct `python` as `runtimeExecutable` does not
+always work reliably.
+
+**Why serve from repo root (not `--directory public`)?** This is the critical insight:
+- If you serve from `public/` (the old config), the server's root IS the app — the browser
+  auto-navigates to `http://localhost:PORT/` which tries to load `index.html` directly. If
+  anything goes wrong (wrong port, 404, redirect), the browser lands on
+  `chrome-error://chromewebdata/`. **From that error page, `window.location` assignments are
+  silently ignored** — the preview browser is permanently stuck and the only escape is
+  `preview_stop` → `preview_start` (fresh, `reused: false`). This costs many tokens.
+- If you serve from the **repo root**, the server's root is the directory listing. The browser
+  auto-navigates to `http://localhost:PORT/` and gets a valid directory listing page (not an
+  error). From a valid page, you CAN redirect the browser to `/public/` via eval.
+
+**Step-by-step sequence:**
+```
+1. preview_start("yearly")
+   → returns serverId and actual port (e.g. 54321)
+
+2. preview_eval: window.location.href
+   → should return "http://localhost:54321/" (not chrome-error — if it IS chrome-error,
+     do preview_stop + preview_start again before proceeding)
+
+3. preview_eval: window.location.href = 'http://localhost:54321/public/';
+   → browser navigates to the app
+
+4. preview_console_logs (level: all) — React DevTools info + Babel transformer warn are normal.
+   Any ERROR lines mean something broke; fix before taking screenshots.
+
+5. preview_screenshot to verify the app renders.
+```
+
+**Port conflicts:** Ports 8000, 8002, 8003, 8765 are often already in use by the user's own
+servers. Port 8766 tends to be free, and `autoPort: true` will find the next available port
+if it isn't. The actual assigned port is always returned in the `preview_start` result — use
+that port in the `/public/` URL in step 3, not the configured port.
+
+**After every code change:** the app uses a service worker (PWA). Changes are NOT reflected
+on a simple reload. You must bump `CACHE_NAME` in `public/sw.js` (e.g. `yearly-v19` →
+`yearly-v20`) AND do a hard-refresh. In the preview browser, run:
+```js
+// preview_eval:
+(async () => {
+  const regs = await navigator.serviceWorker.getRegistrations();
+  for (const r of regs) await r.unregister();
+  const keys = await caches.keys();
+  for (const k of keys) await caches.delete(k);
+  location.reload();
+})()
+```
+If `navigator.serviceWorker` is unavailable in the eval context (it sometimes is), just bump
+the cache version constant and reload — the new SW activates on the next page load.
+
+**chrome-error recovery:** if `preview_eval: window.location.href` returns
+`"chrome-error://chromewebdata/"`, do NOT attempt further evals or navigation — they all
+silently no-op. Run `preview_stop` → `preview_start` to get a fresh browser, then repeat
+the sequence above from step 1.
