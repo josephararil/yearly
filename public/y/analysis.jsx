@@ -35,7 +35,7 @@
     const x0 = padL, x1 = W - padR, y0 = padT, y1 = H - padB;
     const priorCum = stats.priorCum;
     const priorMax = priorCum ? priorCum[Math.min(365, stats.doy)] : 0;
-    const maxY = Math.max(stats.mainTarget, stats.ceiling, stats.projection, priorMax) * 1.1;
+    const maxY = Math.max(stats.mainTarget, stats.ceiling, stats.projection, priorMax, stats.projHigh || 0) * 1.1;
     const sx = (d) => x0 + (d / 365) * (x1 - x0);
     const sy = (v) => y1 - (v / maxY) * (y1 - y0);
     const cum = YCalc.cumulativeByDay(stats.upto);
@@ -131,6 +131,13 @@
           {/* actual area + line */}
           <polygon points={areaPts} fill={`url(#${uid})`} />
           <polyline points={actLine} fill="none" stroke="var(--chart-actual)" strokeWidth="2.6" strokeLinecap="round" strokeLinejoin="round" />
+          {/* uncertainty band — rendered beneath the projection line */}
+          {showProj && !stats.complete && !stats.isFuture && stats.projLow != null && (
+            <polygon
+              points={`${sx(stats.doy)},${sy(stats.spent)} ${sx(365)},${sy(stats.projHigh)} ${sx(365)},${sy(stats.projLow)}`}
+              fill="var(--chart-proj)" opacity="0.10" stroke="none"
+            />
+          )}
           {/* projected */}
           {showProj && !stats.complete && !stats.isFuture && (
             <>
@@ -164,15 +171,20 @@
   }
 
   function ChartLegend({ stats }) {
-    const Item = ({ c, dash, label }) => (
+    const Item = ({ c, dash, rect, label }) => (
       <span style={{ display: "inline-flex", alignItems: "center", gap: 6, fontSize: 11, color: "var(--muted)", fontFamily: "var(--mono)" }}>
-        <svg width="18" height="6"><line x1="0" y1="3" x2="18" y2="3" stroke={c} strokeWidth="2.4" strokeDasharray={dash || "0"} strokeLinecap="round" /></svg>{label}
+        {rect
+          ? <svg width="14" height="10"><rect x="0" y="2" width="14" height="6" rx="1.5" fill={c} opacity="0.30" /></svg>
+          : <svg width="18" height="6"><line x1="0" y1="3" x2="18" y2="3" stroke={c} strokeWidth="2.4" strokeDasharray={dash || "0"} strokeLinecap="round" /></svg>
+        }
+        {label}
       </span>
     );
     return (
       <div style={{ display: "flex", gap: 14, flexWrap: "wrap", marginTop: 10, justifyContent: "center" }}>
         <Item c="var(--chart-actual)" label="Actual" />
         {!stats.complete && <Item c="var(--chart-proj)" dash="6 5" label="Projected" />}
+        {!stats.complete && !stats.isFuture && stats.projLow != null && <Item c="var(--chart-proj)" rect label="Range" />}
         <Item c="var(--chart-pace)" dash="2 4" label="Linear pace" />
         {stats.priorCum && <Item c="var(--chart-target)" dash="3 4" label={`${stats.year - 1}`} />}
       </div>

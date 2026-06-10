@@ -255,7 +255,8 @@ spend, no projection/buffer).
   `Toast`, and `rich` (renders numbers inside text in the mono `.num` style).
   **`StatusHero`** leads with the sacred combined household number: headline =
   `combinedProjection` (current/complete) or `ceiling` (future); sub-line = over/under
-  ceiling by €N (coloured by `combinedStatus`); pace rule fills to `combinedProjection/ceiling`
+  ceiling by €N (coloured by `combinedStatus`) — when `stats.bandAmt != null` a muted mono
+  `±€X` suffix is appended; pace rule fills to `combinedProjection/ceiling`
   with a day-of-year marker; a decomposition line shows `main €A / €mainTarget` (coloured by
   `stats.status`) and `fun €B` (ink-2). For complete years all projections equal spent.
   **`TxRow`** — shows a 24px rounded merchant logo (`t.merchant_logo`) when present; falls back
@@ -296,7 +297,10 @@ spend, no projection/buffer).
   (€ value + month/day label); on the projected portion the tooltip dot switches to `--chart-proj`.
   `ToggleChip` component (defined above `ProjectionChart` in the IIFE) renders small toggle buttons
   that show/hide individual series — Pace, Projection (incomplete year only), Ceiling, and prior-year
-  (when `priorCum` is present). `maxY` scales to `max(mainTarget, ceiling, projection, priorMax) × 1.1`.
+  (when `priorCum` is present). `maxY` scales to `max(mainTarget, ceiling, projection, priorMax, projHigh) × 1.1`.
+  When `stats.projLow != null` and Projection is on, a semi-transparent triangular band (vertices:
+  today→projHigh year-end→projLow year-end, `--chart-proj` at 10% opacity) is drawn beneath the dashed
+  line; `ChartLegend` shows a "Range" rect swatch for it.
   **MonthlyBarsChart** — interactive bar chart below the line chart in `ProjectionTab`. One bar per
   calendar month (terra, full opacity for complete months; 55% opacity for the current partial month;
   absent for future months). Three toggleable reference lines via `ToggleChip`s (reused from
