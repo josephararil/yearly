@@ -27,6 +27,8 @@
     const [showPace, setShowPace] = React.useState(true);
     const [showProj, setShowProj] = React.useState(true);
     const [showTarget, setShowTarget] = React.useState(true);
+    const [showMonthEnd, setShowMonthEnd] = React.useState(true);
+    const [showPrev, setShowPrev] = React.useState(false);
 
     if (stats.complete) {
       return (
@@ -48,6 +50,7 @@
     const month = asOf.getMonth();
     const dayOfMonth = asOf.getDate();
     const daysInMonth = new Date(year, month + 1, 0).getDate();
+    const isPartialMonth = dayOfMonth < daysInMonth;
 
     const monthStr = String(year) + "-" + String(month + 1).padStart(2, "0");
     const monthTxns = stats.upto.filter((t) => t.date.startsWith(monthStr));
@@ -61,22 +64,52 @@
     for (let d = 1; d <= daysInMonth; d++) dayCum[d] += dayCum[d - 1];
 
     const spentSoFar = dayCum[dayOfMonth];
-    const monthlyTarget = stats.mainTarget / 12;
+    // Monthly cap: remaining main budget divided by months left (incl. this one)
+    const monthsRemaining = 12 - month;
+    const neededMonthly = Math.max(0, (stats.mainTarget - stats.spent) / monthsRemaining);
     const monthlyDailyRate = dayOfMonth > 0 ? spentSoFar / dayOfMonth : 0;
     const projectedEnd = spentSoFar + monthlyDailyRate * (daysInMonth - dayOfMonth);
 
-    const maxY = Math.max(monthlyTarget, projectedEnd, spentSoFar, 1) * 1.12;
+    // Previous month cumulative (same year only; skipped for January)
+    let hasPrevData = false, prevDaysInMonth = 30, prevDayCum = null;
+    if (month > 0) {
+      const pm = month - 1;
+      const pmStr = String(year) + "-" + String(pm + 1).padStart(2, "0");
+      prevDaysInMonth = new Date(year, pm + 1, 0).getDate();
+      const pmTxns = stats.upto.filter((t) => t.date.startsWith(pmStr));
+      if (pmTxns.length > 0) {
+        const pdc = Array(prevDaysInMonth + 1).fill(0);
+        pmTxns.forEach((t) => {
+          const d = new Date(t.date + "T00:00:00").getDate();
+          if (d >= 1 && d <= prevDaysInMonth) pdc[d] += t.amount_eur;
+        });
+        for (let d = 1; d <= prevDaysInMonth; d++) pdc[d] += pdc[d - 1];
+        prevDayCum = pdc;
+        hasPrevData = true;
+      }
+    }
+    const prevTotal = hasPrevData ? prevDayCum[prevDaysInMonth] : 0;
+
+    const maxY = Math.max(neededMonthly, projectedEnd, spentSoFar, prevTotal, 1) * 1.12;
     const x0 = padL, x1 = W - padR, y0 = padT, y1 = H - padB;
     const sx = (d) => x0 + ((d - 1) / Math.max(1, daysInMonth - 1)) * (x1 - x0);
+    // Prev month scaled proportionally to the same x-range regardless of day count diff
+    const sxPrev = (d) => x0 + ((d - 1) / Math.max(1, prevDaysInMonth - 1)) * (x1 - x0);
     const sy = (v) => y1 - (v / maxY) * (y1 - y0);
 
-    // Actual line: all days 1→dayOfMonth
+    // Actual line points
     const actPts = [];
     for (let d = 1; d <= dayOfMonth; d++) actPts.push([sx(d), sy(dayCum[d])]);
     const actLine = actPts.map((p) => p.join(",")).join(" ");
     const areaPts = actPts.length > 0
       ? `${x0},${y1} ${actLine} ${actPts[actPts.length - 1][0]},${y1}`
       : "";
+
+    // Previous month line points
+    const prevPts = hasPrevData
+      ? Array.from({ length: prevDaysInMonth }, (_, i) => [sxPrev(i + 1), sy(prevDayCum[i + 1])])
+      : [];
+    const prevLine = prevPts.map((p) => p.join(",")).join(" ");
 
     // Nice round Y-axis gridlines
     const roughStep = maxY / 4;
@@ -115,12 +148,25 @@
     };
     const handleEnd = () => setHover(null);
 
+    const prevMonthName = month > 0 ? MONTHS_SHORT[month - 1] : "";
+
+    const legendItems = [
+      { color: "var(--chart-actual)", label: "Actual", desc: "cumulative spend this month, day by day" },
+      { color: "var(--chart-pace)", label: "Pace", desc: "ideal linear trajectory to reach the monthly target" },
+      { color: "var(--chart-target)", label: "Target", desc: "avg needed per month to finish the year under ceiling, adjusted for year-to-date spend" },
+      { color: "var(--chart-proj)", label: "Projection", desc: "extrapolated trend from your current daily rate" },
+      ...(isPartialMonth ? [{ color: "var(--chart-proj)", label: "Month-end", desc: "estimated total for this month if today's rate continues" }] : []),
+      ...(hasPrevData ? [{ color: "var(--amber)", label: prevMonthName, desc: "last month's spending curve for comparison (scaled to same width)" }] : []),
+    ];
+
     return (
       <div>
         <div style={{ display: "flex", gap: 6, flexWrap: "wrap", marginBottom: 10 }}>
-          <ToggleChip label="Pace" active={showPace} color="var(--chart-pace)" onClick={() => setShowPace(!showPace)} />
-          <ToggleChip label="Projection" active={showProj} color="var(--chart-proj)" onClick={() => setShowProj(!showProj)} />
-          <ToggleChip label="Target" active={showTarget} color="var(--chart-target)" onClick={() => setShowTarget(!showTarget)} />
+          <ToggleChip label="Pace" active={showPace} color="var(--chart-pace)" onClick={() => setShowPace((s) => !s)} />
+          <ToggleChip label="Projection" active={showProj} color="var(--chart-proj)" onClick={() => setShowProj((s) => !s)} />
+          <ToggleChip label="Target" active={showTarget} color="var(--chart-target)" onClick={() => setShowTarget((s) => !s)} />
+          {isPartialMonth && <ToggleChip label="Month-end" active={showMonthEnd} color="var(--chart-proj)" onClick={() => setShowMonthEnd((s) => !s)} />}
+          {hasPrevData && <ToggleChip label={prevMonthName} active={showPrev} color="var(--amber)" onClick={() => setShowPrev((s) => !s)} />}
         </div>
         <svg ref={svgRef} viewBox={`0 0 ${W} ${H}`} width="100%"
           style={{ display: "block", overflow: "visible", touchAction: "none", cursor: "crosshair" }}
@@ -132,35 +178,65 @@
               <stop offset="100%" stopColor="var(--chart-actual)" stopOpacity="0" />
             </linearGradient>
           </defs>
+
+          {/* Y-axis grid + labels */}
           {yTicks.map((v, i) => (
             <g key={i}>
               <line x1={x0} y1={sy(v)} x2={x1} y2={sy(v)} stroke="var(--chart-grid)" strokeWidth="1" />
               <text x={x0 - 6} y={sy(v) + 3} textAnchor="end" fontSize="9" fill="var(--chart-axis)" fontFamily="var(--mono)">{eurK(v)}</text>
             </g>
           ))}
+
+          {/* X-axis day labels */}
           {xLabels.map((d) => (
             <text key={d} x={sx(d)} y={H - 8} textAnchor="middle" fontSize="9"
               fill={d === dayOfMonth ? "var(--ink)" : "var(--chart-axis)"}
               fontFamily="var(--mono)">{d}</text>
           ))}
+
+          {/* Prev month overlay — behind everything else */}
+          {showPrev && prevPts.length > 1 && (
+            <polyline points={prevLine} fill="none" stroke="var(--amber)"
+              strokeWidth="1.4" strokeLinecap="round" strokeLinejoin="round" opacity="0.38" />
+          )}
+
+          {/* Target line — monthly cap needed to finish under ceiling */}
           {showTarget && (
             <>
-              <line x1={x0} y1={sy(monthlyTarget)} x2={x1} y2={sy(monthlyTarget)}
+              <line x1={x0} y1={sy(neededMonthly)} x2={x1} y2={sy(neededMonthly)}
                 stroke="var(--chart-target)" strokeWidth="1.2" strokeDasharray="4 4" />
-              <text x={x1} y={sy(monthlyTarget) - 5} textAnchor="end" fontSize="9"
-                fill="var(--chart-target)" fontFamily="var(--mono)">target {eurK(monthlyTarget)}</text>
+              <text x={x1} y={sy(neededMonthly) - 4} textAnchor="end" fontSize="9"
+                fill="var(--chart-target)" fontFamily="var(--mono)">target {eurK(neededMonthly)}</text>
             </>
           )}
+
+          {/* Projected month-end — horizontal line at where projection lands */}
+          {showMonthEnd && isPartialMonth && (
+            <>
+              <line x1={x0} y1={sy(projectedEnd)} x2={x1} y2={sy(projectedEnd)}
+                stroke="var(--chart-proj)" strokeWidth="1" strokeDasharray="2 5" opacity="0.5" />
+              <text x={x1} y={sy(projectedEnd) + 10} textAnchor="end" fontSize="9"
+                fill="var(--chart-proj)" fontFamily="var(--mono)">est. {eurK(projectedEnd)}</text>
+            </>
+          )}
+
+          {/* Pace line */}
           {showPace && (
-            <line x1={sx(1)} y1={sy(0)} x2={sx(daysInMonth)} y2={sy(monthlyTarget)}
+            <line x1={sx(1)} y1={sy(0)} x2={sx(daysInMonth)} y2={sy(neededMonthly)}
               stroke="var(--chart-pace)" strokeWidth="1" strokeDasharray="2 4" opacity="0.6" />
           )}
+
+          {/* Actual area fill */}
           {areaPts && <polygon points={areaPts} fill={`url(#${uid})`} />}
+
+          {/* Actual line */}
           {actPts.length > 1 && (
             <polyline points={actLine} fill="none" stroke="var(--chart-actual)"
               strokeWidth="2.6" strokeLinecap="round" strokeLinejoin="round" />
           )}
-          {showProj && dayOfMonth < daysInMonth && (
+
+          {/* Projection line */}
+          {showProj && isPartialMonth && (
             <>
               <line x1={sx(dayOfMonth)} y1={sy(spentSoFar)}
                 x2={sx(daysInMonth)} y2={sy(projectedEnd)}
@@ -170,6 +246,8 @@
                 fill="var(--chart-actual)" stroke="var(--paper)" strokeWidth="1.5" />
             </>
           )}
+
+          {/* Hover crosshair + tooltip */}
           {hover && (
             <>
               <line x1={hover.x} y1={y0} x2={hover.x} y2={y1}
@@ -197,6 +275,21 @@
             </>
           )}
         </svg>
+
+        {/* Legend */}
+        <div style={{ marginTop: 14, borderTop: "1px solid var(--hair)", paddingTop: 10 }}>
+          {legendItems.map(({ color, label, desc }) => (
+            <div key={label} style={{ display: "flex", gap: 8, alignItems: "flex-start", marginBottom: 6 }}>
+              <span style={{
+                display: "inline-block", marginTop: 4, width: 7, height: 7,
+                borderRadius: "50%", background: color, flexShrink: 0,
+              }} />
+              <span style={{ fontSize: 11, fontFamily: "var(--mono)", color: "var(--muted)", lineHeight: 1.5 }}>
+                <span style={{ color: "var(--ink)", fontWeight: 600 }}>{label}</span>{" — "}{desc}
+              </span>
+            </div>
+          ))}
+        </div>
       </div>
     );
   }
