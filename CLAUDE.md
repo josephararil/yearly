@@ -140,13 +140,16 @@ own export to `window`**. There are no imports/exports. Two consequences:
   `priorCum` (number[366] | null) and `priorSpent` (number | null) — prior year, main tx only.
   Future-year guard: spent 0, projection 0, status "good"; `isFuture` in returned stats.
   `buildCallouts` — 8 detectors; see README for the authoritative spec. Quick index:
-  #1 trend (doy>28 guard, 4-week projection change), #2 streak (14-day pace vs baseline),
+  #1 trend (doy>28 guard, 4-week projection change) — text prefixed "Main budget: ",
+  #2 streak (14-day pace vs baseline) — text prefixed "Main budget: ",
   #3 mover (MoM category change), #4 share (top category % of spend), #5 buffer explanation,
-  #6 yoy (main spent vs prior year at same doy), #7 reqpace (when projection > mainTarget),
+  #6 yoy (main spent vs prior year at same doy),
+  #7 reqpace (when projection > mainTarget) — text prefixed "Main budget: ",
   #8 ceiling (sacred combined verdict, always first).
-  Ceiling callout states: `combinedProjection > ceiling` → watch/alert; between 0.94×–1× →
-  `info` "tight but on course"; < 0.94× → good/info "room to raise fun budget". Always
-  prepended first; replaces the calm fallback.
+  Ceiling callout states: `combinedProjection > ceiling` → watch/alert — text "trim fun ~€Z/mo"
+  when overBy/monthsLeft ≤ funPlanAnnual/12, else "even cutting entire fun budget won't close it;
+  main spending needs to drop ~€W/mo too"; between 0.94×–1× → `info` "tight but on course";
+  < 0.94× → good/info "room to raise fun budget". Always prepended first; replaces calm fallback.
   Complete year: single `{id:"final"}` callout compares `spent + funSpent` vs `ceiling` (not
   just main spend vs mainTarget). Future year: single `{id:"future"}` callout.
   `computeFun(store, asOfDate?)` — exported, uses `store.currentYear` for YTD figures. Returns:

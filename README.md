@@ -263,12 +263,12 @@ Tapping a callout navigates to Analysis and focuses the relevant section/categor
 1. **Projection trend** — only fires when `doy > 28` (suppressed in January: before day 28,
    the 28-day-ago reference falls in the prior year with zero current-year spend, producing a
    spurious "projection shot up" alert). Recompute projection as of 28 days ago (using only
-   main txns up to then); if it moved > 1.2% of mainTarget, emit "Year-end projection has
-   moved up/down €X over the last 4 weeks, now €Y." (`alert` if worsened > 4% of mainTarget,
-   else `watch`/`good`).
+   main txns up to then); if it moved > 1.2% of mainTarget, emit "**Main budget:** Year-end
+   projection has moved up/down €X over the last 4 weeks, now €Y." (`alert` if worsened >
+   4% of mainTarget, else `watch`/`good`).
 2. **14-day pace streak** — last-14-day daily rate vs linear daily (`mainTarget/365`); if
-   > 1.15× or < 0.7×, emit "Last 14 days are running +N% above/below linear pace — €X/day
-   vs €Y/day." (`alert` if > 1.35×).
+   > 1.15× or < 0.7×, emit "**Main budget:** Last 14 days are running +N% above/below linear
+   pace — €X/day vs €Y/day." (`alert` if > 1.35×).
 3. **Category month-over-month mover** — biggest change between last *full* month and the
    month before (only categories with > €50 that month, change > €60): "Restaurants: €340
    in May, +60% vs April."
@@ -277,12 +277,17 @@ Tapping a callout navigates to Analysis and focuses the relevant section/categor
 5. **Buffer explanation** (info) — see *Projection math*.
 6. **Year-over-year** (current year, when prior year has main data) — "Spending is €X (+N%)
    higher/lower than the same point in [year−1]." (`watch` if higher by > 8% of mainTarget).
-7. **Required daily pace** (current year, when projection > mainTarget) — "Spend ≤ €X/day
-   from here to finish on main budget target." (`watch` if status is alert, else `info`).
+7. **Required daily pace** (current year, when projection > mainTarget) — "**Main budget:**
+   Spend ≤ €X/day from here to finish on main budget target." (`watch` if status is alert,
+   else `info`).
 8. **Ceiling verdict** (current year, **always top**, replaces calm fallback) —
-   - `combinedProjection > ceiling`: "Household projects to €X against your €Y ceiling —
-     trim fun spending by ~€Z/mo to stay within it." (`alert` if over by > 8% of ceiling,
-     else `watch`). Drill → Fun tab.
+   - `combinedProjection > ceiling` — two sub-cases based on `trimPer = overBy / monthsLeft`:
+     - If `trimPer ≤ funPlanAnnual / 12`: "Household projects to €X against your €Y ceiling —
+       trim fun spending by ~€Z/mo to stay within it."
+     - Else (main spending must also fall): "Household projects to €X against your €Y ceiling —
+       even cutting the entire fun budget (€Z/mo) won't close it; main spending needs to drop
+       ~€W/mo too."
+     Both: (`alert` if over by > 8% of ceiling, else `watch`). Drill → Fun tab.
    - `combinedProjection < ceiling × 0.94`: "You're tracking €X under your €Y ceiling —
      room to raise the fun budget by ~€Z/mo if you want." (`good`). Drill → Fun tab.
    - Between 0.94× and 1×: "Tracking €X under your €Y ceiling — tight but on course." (`info`).
