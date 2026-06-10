@@ -147,11 +147,73 @@
     assert('blended: spent === 4400', Math.abs(tStats.spent - 4400) < 0.01, 'got ' + tStats.spent);
     assert('blended: trailingDailyRate ≈ expectedBlended', Math.abs(tStats.trailingDailyRate - expectedBlended) < 0.5, 'got ' + tStats.trailingDailyRate.toFixed(2) + ' expected ' + expectedBlended.toFixed(2));
     assert('blended: daysRemaining === 207', tStats.daysRemaining === 207, 'got ' + tStats.daysRemaining);
-    const expectedProj = tStats.spent + expectedBlended * tStats.daysRemaining;
-    assert('blended: projection ≈ spent + blended×remaining', Math.abs(tStats.projection - expectedProj) < 5, 'got ' + tStats.projection.toFixed(0));
+    // New formula: projection = spent + blended×remaining×(1+buffer). buffer=0 here so no change.
+    const expectedProj = tStats.spent + expectedBlended * tStats.daysRemaining * (1 + 0);
+    assert('blended: projection ≈ spent + blended×remaining×(1+buffer)', Math.abs(tStats.projection - expectedProj) < 5, 'got ' + tStats.projection.toFixed(0));
     // Must be less than the old pure-YTD formula (4400/158×365 ≈ 10165) — front-loading de-weighted
     const oldLinear = tStats.spent / tStats.doy * 365;
     assert('blended < old linear for front-loaded spend', tStats.projection < oldLinear, tStats.projection.toFixed(0) + ' < ' + oldLinear.toFixed(0));
+
+    // ---- Buffer on extrapolated portion only ----
+    section('Buffer applies to extrapolated portion only (§1.3)');
+
+    // (a) Dec 31: daysRemaining=0 → extrapolated=0 → projection must equal spent exactly
+    const dec31Store = {
+      currentYear: 2026,
+      people: [],
+      wishlist: [],
+      years: { '2026': { ceiling: 25000, buffer: 0.04 } },
+      density: 'balanced',
+      templates: [],
+      transactions: [
+        { id: 'd1', date: '2026-03-15', description: 'A', amount_eur: 500, category: 'groceries', source: 'manual' },
+        { id: 'd2', date: '2026-09-20', description: 'B', amount_eur: 800, category: 'groceries', source: 'manual' },
+      ],
+    };
+    // asOf = Dec 31 local time, passed via T12:00:00Z so both UTC and UTC+ map to Dec 31
+    const dec31Stats = YCalc.computeStats(dec31Store, 2026, new Date('2026-12-31T12:00:00Z'));
+    assert('Dec31: daysRemaining === 0', dec31Stats.daysRemaining === 0, 'got ' + dec31Stats.daysRemaining);
+    assert('Dec31: projection === spent (buffer ignored when daysRemaining=0)',
+      Math.abs(dec31Stats.projection - dec31Stats.spent) < 0.001,
+      'projection=' + dec31Stats.projection.toFixed(2) + ' spent=' + dec31Stats.spent.toFixed(2));
+    assert('Dec31: spent > 0 (fixture not empty)', dec31Stats.spent > 0, 'got ' + dec31Stats.spent);
+
+    // (b) Mid-year with nonzero buffer: projection = spent + blended×remaining×(1+buffer)
+    const midYearStore = {
+      currentYear: 2026,
+      people: [],
+      wishlist: [],
+      years: { '2026': { ceiling: 25000, buffer: 0.04 } },
+      density: 'balanced',
+      templates: [],
+      transactions: [
+        { id: 'm1', date: '2026-01-15', description: 'A', amount_eur: 300, category: 'groceries', source: 'manual' },
+        { id: 'm2', date: '2026-02-15', description: 'B', amount_eur: 300, category: 'groceries', source: 'manual' },
+        { id: 'm3', date: '2026-03-15', description: 'C', amount_eur: 300, category: 'groceries', source: 'manual' },
+      ],
+    };
+    // asOf = Jun 7 (doy=158); spent=900; all tx ≤ 25000×0.02=500 → recurringYtdRate=900/158
+    // 60-day window (Apr 8→Jun 7): no tx → rawTrailing=0; yearWeight=158/365
+    // blended = (900/158)×(158/365) + 0×(1−158/365) = 900/365
+    const midStats = YCalc.computeStats(midYearStore, 2026, new Date('2026-06-07T00:00:00Z'));
+    const midExpectedBlended = midStats.trailingDailyRate;
+    const midExpectedProj = midStats.spent + midExpectedBlended * midStats.daysRemaining * 1.04;
+    assert('mid-year buffer: projection = spent + blended×remaining×1.04',
+      Math.abs(midStats.projection - midExpectedProj) < 0.5,
+      'got ' + midStats.projection.toFixed(2) + ' expected ' + midExpectedProj.toFixed(2));
+    // Sanity: projection must be > spent (we are mid-year with daysRemaining > 0)
+    assert('mid-year buffer: projection > spent', midStats.projection > midStats.spent,
+      midStats.projection.toFixed(2) + ' > ' + midStats.spent.toFixed(2));
+    // projNoBuffer = spent + blended×remaining (no buffer)
+    const midExpectedNoBuffer = midStats.spent + midExpectedBlended * midStats.daysRemaining;
+    assert('mid-year buffer: projNoBuffer = spent + blended×remaining',
+      Math.abs(midStats.projNoBuffer - midExpectedNoBuffer) < 0.5,
+      'got ' + midStats.projNoBuffer.toFixed(2));
+    // bufferAmt = extrapolated × buffer (not whole-sum × buffer)
+    const midExtrapolated = midExpectedBlended * midStats.daysRemaining;
+    assert('mid-year buffer: bufferAmt ≈ extrapolated × 0.04',
+      Math.abs(midStats.bufferAmt - midExtrapolated * 0.04) < 0.5,
+      'got ' + midStats.bufferAmt.toFixed(2) + ' expected ' + (midExtrapolated * 0.04).toFixed(2));
 
     // ---- rateForMonth boundaries ----
     section('rateForMonth');
