@@ -300,7 +300,7 @@ spend, no projection/buffer).
   to a 24px `cat-ic` category icon (colored square + SVG icon, `CatIcon`-style inline) if
   absent or on load error. `tx-meta` appends `· city` when `t.merchant_city` is set. Both
   fields are populated by `rowToTx` in `sync.jsx` from the Revolut D1 columns.
-  **`SpendCurve`** has been removed (replaced by `MonthCurve` in `y/home.jsx`). The Overview now shows an interactive monthly chart (`MonthCurve`) for the current month — day-by-day cumulative actual spend, pace diagonal (0→mainTarget/12), dashed projection to month-end, and a target reference line. Toggle chips: Pace / Projection / Target. For past/future years it shows a plain text fallback. `MonthCurve` is defined locally in `y/home.jsx` (not exported from `y/ui.jsx`), using the same SVG/pointer pattern as `ProjectionChart`.
+  **`SpendCurve`** has been removed (replaced by `MonthCurve` in `y/home.jsx`). The Overview now shows an interactive monthly chart (`MonthCurve`) for the current month. Features: day-by-day cumulative actual spend (terra line + area fill); Pace diagonal (0 → neededMonthly, faint dashed); dashed Projection line from today to month-end; horizontal Target line at `max(0, ceiling − spent) / (12 − month)` (ceiling-based, accounts for YTD spend); horizontal Month-end line at `projectedEnd` (where this month will land); faint amber Prev-month overlay (previous month's cumulative curve, scaled proportionally to the same x-width, same-year only — not shown for January); explanatory legend below the chart (colored dot + label + description for each series). Toggle chips: Pace / Projection / Target / Month-end / Prev-month (prev month chip only shown when prior-month data exists; Month-end only shown for incomplete months). For past/future years it shows a plain text fallback. `MonthCurve` is defined locally in `y/home.jsx` (not exported from `y/ui.jsx`), using the same SVG/pointer pattern as `ProjectionChart`.
   `Toast({ open, message, actionLabel, onAction, onDismiss })` — transient bottom-anchored
   banner (above nav, z-index 30), auto-dismisses after 5 s via `onDismiss`, optional action button.
   `GaugeHero`, `PaceBar`, and `ProjSpark` have been removed (dead since hero is fixed to numerals).
@@ -338,9 +338,9 @@ spend, no projection/buffer).
   **MonthlyBarsChart** — interactive bar chart below the line chart in `ProjectionTab`. One bar per
   calendar month (terra, full opacity for complete months; 55% opacity for the current partial month;
   absent for future months). Three toggleable reference lines via `ToggleChip`s (reused from
-  `ProjectionChart`): monthly average (`--chart-pace` dashed), peak month (`--amber` dotted, only when
-  > avg × 1.1), and — for incomplete years — the required monthly average to reach `stats.projection`
-  (`--chart-proj` dashed, drawn from the current-month slot forward). Pointer/touch events show a
+  `ProjectionChart`): monthly average (`--chart-pace` dashed, label at left), peak month (`--amber` dotted, only when
+  > avg × 1.1, label at right), and — for incomplete current years — the ceiling-based required monthly average
+  `max(0, ceiling − spent) / (12 − curMonth)` (`--chart-proj` dashed, drawn from the current-month slot forward, label at right). Each reference line carries an inline text label showing its value (e.g. "avg €1.9k", "peak €2.3k", "needed €1.7k"). Pointer/touch events show a
   vertical crosshair, a dot anchored to the hovered bar (or the needed/mo line for future months), and
   a floating tooltip with the month name and amount; future-month tooltips add an "est. needed/mo"
   sub-label. Hovered bar gets full opacity + stroke highlight; hovered month label bolds. Hidden for
@@ -351,7 +351,7 @@ spend, no projection/buffer).
   Receives `fun` and `store` props (passed from `AnalysisScreen`). Stat cards present:
   - Spent YTD, On-pace by today, Blended rate, Buffer adds (existing).
   - **Avg spend/mo** (average over completed months) + sub-line "need ≤€X/mo" coloured sage/terra;
-    `neededMonthly = max(0, mainTarget − spent) / monthsRemaining`. Hidden for future years / no data.
+    `neededMonthly = max(0, ceiling − spent) / monthsRemaining`. Hidden for future years / no data.
   - **90d trend** — compares last-45d daily rate to prior-45d rate; `↑ Increasing` (terra),
     `↓ Decreasing` (sage), or `→ Constant`. Only shown for current year with ≥ 90 days of data.
   - **Total fun budget** — `funPlanAnnual` per year with per-month sub.
@@ -370,7 +370,7 @@ spend, no projection/buffer).
   default). When on, a Chip owner picker (Joseph/Marti) appears. `commit()`/`save()` write `fun:true`
   + `person` when the toggle is on; EditSheet pre-populates toggle state from `txn.fun`/`txn.person`.
   `EditSheet` now accepts a `store` prop for reading `store.people`.
-  `settings.jsx` — footer shows `APP_VERSION` constant (`'v19'` currently, defined at top of
+  `settings.jsx` — footer shows `APP_VERSION` constant (`'v20'` currently, defined at top of
   IIFE — update it with every release). `TargetSheet` (now labelled "Household ceiling") and `BufferSheet` accept a `year`
   prop (defaults to `store.currentYear`); `TargetSheet` reads/writes `years[y].ceiling`. `BufferSheet`
   computes its own stats internally (unchanged). `YearsSheet` has tappable year rows that drill into a
@@ -574,7 +574,7 @@ The app is a fully installable PWA:
   immediately without waiting for old tabs to close.
   **Install hardening:** the install handler uses individual `fetch({cache:'no-cache'}).catch()` calls instead
   of `cache.addAll` so a single URL failure does not abort the entire SW install, and `no-cache` ensures the install always fetches fresh files (bypassing browser HTTP cache). Same `!response.redirected` guard
-  applied in the install handler as in the fetch handler. Current version: `yearly-v19`.
+  applied in the install handler as in the fetch handler. Current version: `yearly-v20`.
   **Logo caching:** merchant logo requests (`storage.googleapis.com/revolut-prod-apps_merchant-logo/…`)
   are intercepted with a **cache-first** strategy using a dedicated `yearly-logos-v1` cache.
   Once a logo is fetched it is never re-fetched. The logo cache is intentionally NOT deleted on
@@ -682,8 +682,8 @@ if it isn't. The actual assigned port is always returned in the `preview_start` 
 that port in the `/public/` URL in step 3, not the configured port.
 
 **After every code change:** the app uses a service worker (PWA). Changes are NOT reflected
-on a simple reload. You must bump `CACHE_NAME` in `public/sw.js` (e.g. `yearly-v19` →
-`yearly-v20`) AND do a hard-refresh. In the preview browser, run:
+on a simple reload. You must bump `CACHE_NAME` in `public/sw.js` (e.g. `yearly-v20` →
+`yearly-v21`) AND do a hard-refresh. In the preview browser, run:
 ```js
 // preview_eval:
 (async () => {
