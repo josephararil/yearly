@@ -187,8 +187,11 @@ funPlanAnnual  = Σ over people of Σ over months 1..12 of rateForMonth(person, 
 mainTarget     = ceiling − funPlanAnnual               // derived, never stored
 buffer         = years[year].buffer                   // fraction
 spent          = sum(amount_eur) for NON-FUN txns in year, date <= asOf
-dailyRate      = spent / doy
-blendedRate    = YTD_rate × (doy/365) + trailing_60d_rate × (1 − doy/365)
+lumpThreshold  = mainTarget × 0.02                    // tx above this are winsorized out of rates
+recurring      = NON-FUN txns with amount_eur ≤ lumpThreshold (still counted in spent)
+recurringRate  = sum(recurring.amount_eur) / doy      // YTD rate, lump-insensitive
+trailing60Rate = sum(recurring where date > asOf-60d) / 60
+blendedRate    = recurringRate × (doy/365) + trailing60Rate × (1 − doy/365)
 projNoBuffer   = spent + blendedRate × daysRemaining   // raw extrapolation, no buffer
 projection     = spent + blendedRate × daysRemaining × (1 + buffer)
 bufferAmt      = projection - projNoBuffer
@@ -196,6 +199,14 @@ pace           = (doy / 365) * mainTarget              // on-pace benchmark
 delta          = projection - mainTarget
 deltaPct       = delta / mainTarget
 ```
+
+**Date convention:** all "as of" date strings use `localISO(d)` — `d.getFullYear()/getMonth()/getDate()`.
+Never `toISOString()`, which shifts dates backward in UTC+ timezones (EET = UTC+2/+3), silently
+dropping Dec 31 transactions from completed years.
+
+**Lump-sum winsorization:** transactions larger than 2% of `mainTarget` are excluded from the
+blended rate calculation (but included in `spent`). This prevents a single holiday purchase
+from inflating the year-end projection by ~4× the purchase price.
 
 The buffer uplifts only the extrapolated remainder, so on Dec 31 (`daysRemaining = 0`) projection equals `spent` exactly; `funProjection` carries no buffer by design. All day counts use the actual year length; leap years (366 days) are supported.
 
@@ -214,7 +225,10 @@ the N% buffer lifts that to €Y."
 
 ```
 funSpent       = sum(amount_eur) for FUN txns in year, date <= asOf
-funProjection  = funSpent / doy * 365    // current year (linear — approximate, lumpy)
+funLinear      = funSpent / doy * 365
+funCap         = funSpent + max(0, Σ person balances as of asOf) + futureAccruals
+               // futureAccruals = Σ rateForMonth(p, m) for each person p, each remaining month m
+funProjection  = min(funLinear, funCap)  // current year: capped at what the allowance system permits
                = funSpent               // completed year
                = 0                     // future year
 combinedProjection = projection + funProjection
@@ -224,9 +238,11 @@ combinedStatus = good if combinedProjection ≤ ceiling
                  alert otherwise        (completed year uses × 1.03)
 ```
 
-> **Lumpiness caveat:** fun spend is often lumpy (one big purchase rather than a steady
-> monthly drip). The linear fun projection is an accepted v1 approximation; the ceiling
-> callout text uses "~" to signal it is advisory.
+> **Why cap funProjection?** Fun spend is often lumpy (one big purchase rather than a steady
+> monthly drip). Without the cap, a single €2k purchase in January extrapolates linearly to
+> ~€22k, inflating `combinedProjection` by far more than the allowance system could ever
+> produce. The cap `funSpent + max(0, Σbalances) + futureAccruals` reflects the maximum
+> plausible fun spend given current balances and remaining accruals.
 
 **Combined verdict is the sacred number** — the hero always leads with `combinedProjection`
 vs `ceiling`. The main budget figures are a decomposition, not the primary verdict.
@@ -244,9 +260,12 @@ Tapping a callout navigates to Analysis and focuses the relevant section/categor
 
 **Detectors** (current year, main budget — detectors 1–7; combined verdict — detector 8):
 
-1. **Projection trend** — recompute projection as of 28 days ago (using only main txns up to
-   then); if it moved > 1.2% of mainTarget, emit "Year-end projection has moved up/down €X
-   over the last 4 weeks, now €Y." (`alert` if worsened > 4% of mainTarget, else `watch`/`good`).
+1. **Projection trend** — only fires when `doy > 28` (suppressed in January: before day 28,
+   the 28-day-ago reference falls in the prior year with zero current-year spend, producing a
+   spurious "projection shot up" alert). Recompute projection as of 28 days ago (using only
+   main txns up to then); if it moved > 1.2% of mainTarget, emit "Year-end projection has
+   moved up/down €X over the last 4 weeks, now €Y." (`alert` if worsened > 4% of mainTarget,
+   else `watch`/`good`).
 2. **14-day pace streak** — last-14-day daily rate vs linear daily (`mainTarget/365`); if
    > 1.15× or < 0.7×, emit "Last 14 days are running +N% above/below linear pace — €X/day
    vs €Y/day." (`alert` if > 1.35×).
@@ -266,13 +285,14 @@ Tapping a callout navigates to Analysis and focuses the relevant section/categor
      else `watch`). Drill → Fun tab.
    - `combinedProjection < ceiling × 0.94`: "You're tracking €X under your €Y ceiling —
      room to raise the fun budget by ~€Z/mo if you want." (`good`). Drill → Fun tab.
-   - Between 0.94× and 1×: no ceiling callout; calm fallback applies if no hot detectors.
+   - Between 0.94× and 1×: "Tracking €X under your €Y ceiling — tight but on course." (`info`).
+     Drill → Fun tab. Replaces the calm fallback.
 
 **Ranking:** by severity (`alert > watch > info > good`), then by `mag`. Detector #8 is
 always prepended first when present.
 **Calm state:** if nothing reaches `watch`/`alert` *and* no ceiling callout, prepend a
 single neutral line ("Projection steady at €X … nothing notable in the data").
-**Completed years:** a single review callout ("Finished under/over main budget by €X …").
+**Completed years:** a single review callout comparing `spent + funSpent` vs `ceiling` ("Finished over/under the ceiling by €X — €Y against a €Z ceiling."). The combined figure (not just main spend) is the verdict for complete years.
 **Future years:** a single "hasn't started yet" callout.
 
 **Overview density** (a Tweak): `minimal` = top ≤2 hot callouts (or 1 calm), `balanced`
