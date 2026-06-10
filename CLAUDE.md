@@ -598,6 +598,23 @@ python -m http.server 8003
 ```
 All rows should show PASS.
 
+**Node.js shortcut (faster, no browser needed):** `calc.jsx` and `data.jsx` contain no JSX and run in Node.js as-is with a two-line shim. Write a temp script and run it:
+```js
+// _tmp_test.js (delete after use)
+global.window = global;
+global.crypto = { randomUUID: () => Math.random().toString(36).slice(2) };
+const fs = require('fs');
+eval(fs.readFileSync('./public/y/data.jsx', 'utf8'));
+eval(fs.readFileSync('./public/y/calc.jsx', 'utf8'));
+// paste assertions here, or a quick sanity check:
+const s = YCalc.computeStats(YData.buildSeed(), 2026, new Date('2026-06-07T12:00:00Z'));
+console.log(s.mainTarget === 21400 ? 'PASS' : 'FAIL');
+```
+```
+node _tmp_test.js
+```
+Use this whenever a browser isn't available (e.g. CLI-only Claude Code sessions where `preview_start` / `preview_eval` / `preview_screenshot` don't exist — those are IDE/desktop-only tools).
+
 **Claude Code preview — how to deploy locally for testing:**
 
 The app lives inside `public/`, but the Python server must be started from the **repo root**
