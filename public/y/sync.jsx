@@ -121,7 +121,6 @@
           body:    JSON.stringify(chunk),
         });
         if (!result) return; // offline or reload triggered
-        if (result.now) setCursor(result.now);
       }
       // Remove only the ids we captured — new mutations added during the POST survive
       setOutbox(getOutbox().filter(x => !sentIds.has(x.id)));
@@ -142,7 +141,6 @@
         return;
       }
       if (result.updated_at) setAppliedAt(result.updated_at);
-      if (result.now)        setCursor(result.now);
     }
   }
 
@@ -223,7 +221,6 @@
           body:    JSON.stringify(chunk),
         });
         if (!r) return;
-        if (r.now) setCursor(r.now);
       }
       const { transactions: _t, ...settings } = store;
       const sr = await syncFetch('/api/settings', {
@@ -233,7 +230,6 @@
       });
       if (!sr) return;
       if (sr.updated_at) setAppliedAt(sr.updated_at);
-      if (sr.now)        setCursor(sr.now);
     }
 
     localStorage.setItem(BOOT_KEY, '1');
