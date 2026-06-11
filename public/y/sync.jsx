@@ -226,6 +226,55 @@
     setCursor(result.now);
   }
 
+  // ---- public: reconcile ----
+  // Compares server aggregate (count + sum_eur_cents + settings_updated_at) against local store.
+  // If they differ, triggers a force pull to recover. Runs on every app start after bootstrap+pull.
+  // Catches the class of bug where rows land on the server with a stale/malformed updated_at
+  // (e.g. seconds instead of milliseconds) and are permanently skipped by cursor-based sync.
+  // Note: _getStore() reads storeRef which React updates after render; if pull() just applied
+  // new rows the ref may be stale, producing a harmless spurious force-pull. The recovery
+  // outcome is the same either way — the store ends up consistent with the server.
+  async function reconcile() {
+    const serverCheck = await syncFetch('/api/sync/check');
+    if (!serverCheck) return { ok: true, recovered: false }; // offline — silent no-op
+
+    const store = _getStore ? _getStore() : { transactions: [] };
+    const txns  = (store.transactions || []).filter(t => !t.deleted);
+    const localCount    = txns.length;
+    const localSumCents = Math.round(txns.reduce((s, t) => s + t.amount_eur, 0) * 100);
+    const localAppliedAt = getAppliedAt();
+
+    const before = { tx_count: localCount, sum_eur_cents: localSumCents, settings_updated_at: localAppliedAt };
+
+    const mismatch =
+      localCount    !== serverCheck.tx_count ||
+      localSumCents !== serverCheck.sum_eur_cents ||
+      localAppliedAt !== serverCheck.settings_updated_at;
+
+    if (!mismatch) return { ok: true, before, after: before, recovered: false };
+
+    await pull({ force: true });
+
+    // Verify once more — a still-mismatching second check indicates a deeper bug.
+    const afterServer = await syncFetch('/api/sync/check');
+    const store2 = _getStore ? _getStore() : { transactions: [] };
+    const txns2  = (store2.transactions || []).filter(t => !t.deleted);
+    const after  = {
+      tx_count:            txns2.length,
+      sum_eur_cents:       Math.round(txns2.reduce((s, t) => s + t.amount_eur, 0) * 100),
+      settings_updated_at: getAppliedAt(),
+    };
+
+    if (afterServer &&
+        (after.tx_count    !== afterServer.tx_count ||
+         after.sum_eur_cents !== afterServer.sum_eur_cents)) {
+      console.warn('Yearly: reconcile still mismatches after force-pull — possible deeper sync bug',
+        { after, server: afterServer });
+    }
+
+    return { ok: false, before, after, recovered: true };
+  }
+
   // ---- public: bootstrap ----
   async function bootstrap() {
     if (localStorage.getItem(BOOT_KEY)) return;
@@ -302,5 +351,5 @@
     });
   }
 
-  window.YSync = { init, enqueueTx, markSettingsDirty, flush, pull, bootstrap, start };
+  window.YSync = { init, enqueueTx, markSettingsDirty, flush, pull, reconcile, bootstrap, start };
 })();

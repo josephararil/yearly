@@ -205,6 +205,9 @@ Backend API contract is in [BACKEND.md](BACKEND.md).
 - `YSync.pull()` — calls `flush()` first (prevents golden-source pull from clobbering unsynced
   writes), then `GET /api/sync?since=cursor`, merges tx by id (deleted rows are removed), applies
   settings only when `updated_at > appliedAt`, updates cursor.
+- `YSync.reconcile()` — compares `GET /api/sync/check` aggregate against the local store; triggers
+  `pull({ force: true })` on any mismatch. Returns `{ ok, before, after, recovered }`. Offline-safe
+  (no-ops when `syncFetch` returns null).
 - `YSync.bootstrap()` — called once on mount. Flushes the outbox first so offline-created
   transactions reach the server before the since=0 pull decides adopt vs seed path. If server has
   data, adopts it (second-device path); if empty, seeds it (first-device path). Sets
@@ -220,7 +223,9 @@ or local-dev issues, not auth expiry. Auth-expiry reloads are throttled to one p
 `safeReload()` (sessionStorage key `yearly:lastReload`) so a persistent transient error never
 becomes a reload loop.
 
-**Pull triggers:** on every mount (unconditional `bootstrap().then(() => pull())` in `app.jsx`),
+**Reconciliation path (`YSync.reconcile()`):** called once on every mount, after `bootstrap().then(() => pull())` resolves. It fetches `GET /api/sync/check` (server aggregate: `tx_count`, `sum_eur_cents`, `settings_updated_at`) and compares against the local store. If any field mismatches it calls `pull({ force: true })` to refetch the full dataset, then queries `/api/sync/check` a second time; a still-mismatching second result is surfaced as a `console.warn`. The invariant it enforces: after every app start, the client's transaction count and EUR sum must equal the server's. This is what catches the class of bug where rows land on the server with a malformed `updated_at` (e.g. seconds instead of milliseconds) and are permanently skipped by the cursor-based incremental sync. Returns `{ ok, before, after, recovered }` — callers log a one-liner when `recovered: true`.
+
+**Pull triggers:** on every mount (unconditional `bootstrap().then(() => pull()).then(() => reconcile())` in `app.jsx`),
 on `visibilitychange` → visible, and before `EditSheet` opens (freshness pull via `openEdit`
 wrapper in `app.jsx`). The `focus` event triggers `flush()` only (no full pull). `pull()` always
 flushes first so local changes are never overwritten by a server pull. On already-bootstrapped

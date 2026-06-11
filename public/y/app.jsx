@@ -73,7 +73,9 @@
     React.useEffect(() => {
       YSync.init({ getStore: () => storeRef.current, applyServer: setStore });
       YSync.start();
-      YSync.bootstrap().then(() => YSync.pull());
+      YSync.bootstrap().then(() => YSync.pull()).then(() => YSync.reconcile()).then(r => {
+        if (r && r.recovered) console.log('Yearly: auto-recovered from sync divergence', r);
+      });
     }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
     const stats = React.useMemo(() => YCalc.computeStats(store, viewYear), [store, viewYear]);

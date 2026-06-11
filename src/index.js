@@ -103,6 +103,30 @@ export default {
         return json({ now, transactions: (txRows.results ?? []).map(rowToTx), settings });
       }
 
+      // GET /api/sync/check — cheap aggregate the client uses to detect silent divergence
+      if (request.method === "GET" && url.pathname === "/api/sync/check") {
+        const txRow = await env.DB
+          .prepare(`
+            SELECT COUNT(*) AS tx_count,
+                   CAST(ROUND(COALESCE(SUM(amount_eur), 0) * 100) AS INTEGER) AS sum_eur_cents,
+                   COALESCE(MAX(updated_at), 0) AS max_updated_at
+              FROM transactions
+             WHERE deleted = 0
+          `)
+          .first();
+
+        const settingsRow = await env.DB
+          .prepare("SELECT updated_at FROM settings WHERE id = 1")
+          .first();
+
+        return json({
+          tx_count:            txRow?.tx_count            ?? 0,
+          sum_eur_cents:       txRow?.sum_eur_cents       ?? 0,
+          max_updated_at:      txRow?.max_updated_at      ?? 0,
+          settings_updated_at: settingsRow?.updated_at    ?? 0,
+        });
+      }
+
       // POST /api/transactions
       if (request.method === "POST" && url.pathname === "/api/transactions") {
         let body;
