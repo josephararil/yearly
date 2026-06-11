@@ -62,6 +62,7 @@
     const [yearOpen, setYearOpen] = React.useState(false);
     const [deletedTx, setDeletedTx] = React.useState(null);
     const [showToast, setShowToast] = React.useState(false);
+    const [showSyncToast, setShowSyncToast] = React.useState(false);
     const scrollRef = React.useRef(null);
     // Stable ref so sync callbacks always see the current store without re-init
     const storeRef = React.useRef(store);
@@ -74,7 +75,7 @@
       YSync.init({ getStore: () => storeRef.current, applyServer: setStore });
       YSync.start();
       YSync.bootstrap().then(() => YSync.pull()).then(() => YSync.reconcile()).then(r => {
-        if (r && r.recovered) console.log('Yearly: auto-recovered from sync divergence', r);
+        if (r && r.recovered) setShowSyncToast(true);
       });
     }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
@@ -154,6 +155,7 @@
         </div>
 
         <Toast open={showToast} message="Deleted" actionLabel="Undo" onAction={undoDelete} onDismiss={() => setShowToast(false)} />
+        <Toast open={showSyncToast} message="Data synced" onDismiss={() => setShowSyncToast(false)} />
         <NavBar route={route} onRoute={setRoute} onAdd={() => setAddOpen(true)} />
 
         <YAdd.AddSheet open={addOpen} onClose={() => setAddOpen(false)} store={store} onSave={addTx} />
