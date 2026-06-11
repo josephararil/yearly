@@ -21,7 +21,7 @@
   }
 
   function MonthCurve({ stats }) {
-    const W = 340, H = 200, padL = 40, padR = 14, padT = 14, padB = 24;
+    const W = 340, H = 280, padL = 40, padR = 14, padT = 14, padB = 24;
     const svgRef = React.useRef(null);
     const [hover, setHover] = React.useState(null);
     const [showPace, setShowPace] = React.useState(true);
@@ -125,6 +125,9 @@
 
     const uid = "mc" + year + month;
 
+    // Label collision avoidance: if target and month-end lines are close, flip est label to left
+    const estLabelLeft = showMonthEnd && isPartialMonth && Math.abs(sy(projectedEnd) - sy(neededMonthly)) < 18;
+
     const handlePointer = (e) => {
       const svg = svgRef.current;
       if (!svg) return;
@@ -149,12 +152,12 @@
     const prevMonthName = month > 0 ? MONTHS_SHORT[month - 1] : "";
 
     const legendItems = [
-      { color: "var(--chart-actual)", label: "Actual", desc: "cumulative spend this month, day by day" },
+      { color: "var(--chart-actual)", label: `Actual (${eurK(spentSoFar)})`, desc: "cumulative spend this month, day by day" },
       { color: "var(--chart-pace)", label: "Pace", desc: "ideal linear trajectory to reach the monthly target" },
-      { color: "var(--chart-target)", label: "Target", desc: "main-budget allowance per month to finish the year on target, given prior months' spend" },
+      { color: "var(--chart-target)", label: `Target (${eurK(neededMonthly)})`, desc: "main-budget allowance per month to finish the year on target, given prior months' spend" },
       { color: "var(--chart-proj)", label: "Projection", desc: "extrapolated trend from your current daily rate" },
-      ...(isPartialMonth ? [{ color: "var(--chart-proj)", label: "Month-end", desc: "estimated total for this month if today's rate continues" }] : []),
-      ...(hasPrevData ? [{ color: "var(--amber)", label: prevMonthName, desc: "last month's spending curve for comparison (scaled to same width)" }] : []),
+      ...(isPartialMonth ? [{ color: "var(--chart-proj)", label: `Month-end (${eurK(projectedEnd)})`, desc: "estimated total for this month if today's rate continues" }] : []),
+      ...(hasPrevData ? [{ color: "var(--amber)", label: `${prevMonthName} (${eurK(prevTotal)})`, desc: "last month's spending curve for comparison (scaled to same width)" }] : []),
     ];
 
     return (
@@ -213,8 +216,11 @@
             <>
               <line x1={x0} y1={sy(projectedEnd)} x2={x1} y2={sy(projectedEnd)}
                 stroke="var(--chart-proj)" strokeWidth="1" strokeDasharray="2 5" opacity="0.5" />
-              <text x={x1} y={sy(projectedEnd) + 10} textAnchor="end" fontSize="9"
-                fill="var(--chart-proj)" fontFamily="var(--mono)">est. {eurK(projectedEnd)}</text>
+              <text
+                x={estLabelLeft ? x0 : x1}
+                y={estLabelLeft ? sy(projectedEnd) - 4 : sy(projectedEnd) + 10}
+                textAnchor={estLabelLeft ? "start" : "end"}
+                fontSize="9" fill="var(--chart-proj)" fontFamily="var(--mono)">est. {eurK(projectedEnd)}</text>
             </>
           )}
 
