@@ -275,15 +275,24 @@ def cmd_push(json_path: Path | None = None):
         save_state(state)
         print(f"\n✓ State updated. Latest transaction date: {latest_date}")
 
-    # Archive raw JSON and CSV to batches/, clean up working files
+# Archive raw JSON and CSV to batches/, clean up working files
     BATCHES_DIR.mkdir(exist_ok=True)
     date_stem = datetime.now().strftime("%Y-%m-%d")
     archive_json = BATCHES_DIR / json_path.name
     archive_csv  = BATCHES_DIR / f"revolut_{date_stem}.csv"
+    
     shutil.move(str(json_path), archive_json)
+    
     if csv_file.exists():
-        shutil.move(str(csv_file), archive_csv)
-        print(f"✓ CSV archived to batches/revolut_{date_stem}.csv")
+        while True:
+            try:
+                shutil.move(str(csv_file), archive_csv)
+                print(f"✓ CSV archived to batches/revolut_{date_stem}.csv")
+                break  # Exit the retry loop on success
+            except PermissionError:
+                # Prompt the user and wait for Enter before looping again
+                input(f"⚠️ Permission denied. Please close '{csv_file.name}' (e.g., in Excel) and press Enter to retry...")
+
     work_json.unlink(missing_ok=True)
     sql_file.unlink(missing_ok=True)
     print(f"✓ Raw JSON archived to batches/{json_path.name}")
