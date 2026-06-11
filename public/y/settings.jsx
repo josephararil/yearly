@@ -1,6 +1,6 @@
 // settings.jsx — target, buffer, years, templates, CSV import/export, clear.
 (function () {
-  const APP_VERSION = 'v44';
+  const APP_VERSION = 'v45';
   const { YData, YCalc, YUI } = window;
   const { eur0, signedPct, computeStats } = YCalc;
   const { Sheet, DeltaChip } = YUI;
@@ -455,14 +455,24 @@
     );
   }
 
-  function ClearSheet({ open, onClose, setStore }) {
+  function ClearSheet({ open, onClose }) {
     const [v, setV] = React.useState("");
     React.useEffect(() => { if (open) setV(""); }, [open]);
+    const doClear = async () => {
+      if (window.caches) {
+        const names = await caches.keys();
+        await Promise.all(names.map((n) => caches.delete(n)));
+      }
+      localStorage.removeItem('yearly:store:v1');
+      window.location.reload();
+    };
     return (
       <Sheet open={open} onClose={onClose} title="Clear all data">
-        <p className="muted" style={{ fontSize: 13.5, marginTop: 0, lineHeight: 1.5 }}>This permanently deletes every transaction. Targets and templates are kept. Type <b style={{ color: "var(--alert)" }}>DELETE</b> to confirm.</p>
+        <p className="muted" style={{ fontSize: 13.5, marginTop: 0, lineHeight: 1.5 }}>
+          Clears all local data and the app cache. <b>Server data is preserved</b> — everything will be re-fetched on next load. Type <b style={{ color: "var(--alert)" }}>DELETE</b> to confirm.
+        </p>
         <input className="inp" value={v} onChange={(e) => setV(e.target.value)} placeholder="DELETE" style={{ marginBottom: 16, textAlign: "center", letterSpacing: "0.1em" }} />
-        <Button variant="primary" block disabled={v !== "DELETE"} onClick={() => { setStore((s) => ({ ...s, transactions: [] })); onClose(); }}>Delete everything</Button>
+        <Button variant="primary" block disabled={v !== "DELETE"} onClick={doClear}>Clear local data &amp; reload</Button>
       </Sheet>
     );
   }
@@ -578,7 +588,7 @@
         <DensitySheet open={sub === "density"} onClose={() => setSub(null)} store={store} setStore={setStore} />
         <TemplatesSheet open={sub === "templates"} onClose={() => setSub(null)} store={store} setStore={setStore} />
         <ImportSheet open={sub === "import"} onClose={() => setSub(null)} store={store} setStore={setStore} />
-        <ClearSheet open={sub === "clear"} onClose={() => setSub(null)} setStore={setStore} />
+        <ClearSheet open={sub === "clear"} onClose={() => setSub(null)} />
         <FunConfigSheet open={!!funPersonOpen} onClose={() => setFunPersonSub(null)} person={funPersonOpen} store={store} setStore={setStore} stats={stats} />
       </div>
     );

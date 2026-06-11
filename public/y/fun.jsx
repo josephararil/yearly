@@ -311,16 +311,19 @@
                   </div>
                   {catTxns.length > 0 && (
                     <div style={{ padding: "4px 4px 10px 32px", borderBottom: "1px solid var(--hair)" }}>
-                      {catTxns.map((t) => (
+                      {catTxns.map((t) => {
+                        const personName = t.person ? ((people.find((p) => p.id === t.person) || {}).name) : null;
+                        return (
                         <div key={t.id} style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline", padding: "2px 0" }}>
                           <span style={{ fontFamily: "var(--sans)", fontSize: 11, color: "var(--ink-2)", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", flex: 1, marginRight: 8 }}>
-                            {t.description}
+                            {t.description}{personName ? <span style={{ color: "var(--muted)" }}>{" (" + personName + ")"}</span> : null}
                           </span>
                           <span style={{ fontFamily: "var(--mono)", fontSize: 11, color: "var(--muted)", flexShrink: 0 }}>
                             {eur0(t.amount_eur)}
                           </span>
                         </div>
-                      ))}
+                        );
+                      })}
                     </div>
                   )}
                 </div>
