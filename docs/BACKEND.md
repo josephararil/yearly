@@ -44,13 +44,13 @@ All under `/api/*`. Server clock is authoritative; every write stamps `updated_a
 |--------|------|-------------|
 | `GET` | `/api/health` | `{ok:true,db:true}` — DB connectivity check |
 | `GET` | `/api/sync?since=<ms>` | Pull: `{now, transactions:[rows with updated_at>=since], settings:row|null}` |
-| `GET` | `/api/sync/check` | Aggregate check: `{tx_count, sum_eur_cents, max_updated_at, settings_updated_at}` — used by client reconciliation |
+| `GET` | `/api/sync/check` | Aggregate check: `{tx_count, sum_eur_cents, settings_updated_at}` — used by client reconciliation |
 | `POST` | `/api/transactions` | Batch upsert array of tx records; returns `{now, count}` |
 | `GET` | `/api/settings` | `{blob:{…}, updated_at}` or `{blob:null}` |
 | `PUT` | `/api/settings` | Upsert settings blob; returns `{now, updated_at}` |
 | `GET` | `/api/export` | Full dump: `{exported_at, transactions:[all incl. deleted], settings}` |
 
-`GET /api/sync/check` returns a cheap one-round-trip aggregate: `tx_count` (COUNT WHERE deleted=0), `sum_eur_cents` (SUM(amount_eur)*100 rounded to INTEGER to avoid float drift), `max_updated_at` (MAX across all rows including deletes), `settings_updated_at` (settings row's `updated_at` or 0). Runs on every app open; intended to be fast (full table scan is acceptable at current scale).
+`GET /api/sync/check` returns a cheap one-round-trip aggregate: `tx_count` (COUNT WHERE deleted=0), `sum_eur_cents` (SUM(amount_eur)*100 rounded to INTEGER to avoid float drift), `settings_updated_at` (settings row's `updated_at` or 0). Runs on every app open; intended to be fast (full table scan is acceptable at current scale).
 
 Key implementation notes:
 - `GET /api/sync` uses `>=` (not `>`) to avoid dropping a write on the same-ms boundary.

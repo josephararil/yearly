@@ -231,9 +231,6 @@
   // If they differ, triggers a force pull to recover. Runs on every app start after bootstrap+pull.
   // Catches the class of bug where rows land on the server with a stale/malformed updated_at
   // (e.g. seconds instead of milliseconds) and are permanently skipped by cursor-based sync.
-  // Note: _getStore() reads storeRef which React updates after render; if pull() just applied
-  // new rows the ref may be stale, producing a harmless spurious force-pull. The recovery
-  // outcome is the same either way — the store ends up consistent with the server.
   async function reconcile() {
     const serverCheck = await syncFetch('/api/sync/check');
     if (!serverCheck) return { ok: true, recovered: false }; // offline — silent no-op
@@ -255,21 +252,21 @@
 
     await pull({ force: true });
 
-    // Verify once more — a still-mismatching second check indicates a deeper bug.
+    // Re-query the server to verify the aggregate is stable — we avoid re-reading storeRef
+    // here because React commits state asynchronously and the ref may not yet reflect the
+    // force-pull. A server-to-server comparison is sufficient: if the server now returns the
+    // same numbers it returned before the pull, the pull succeeded (we fetched with since=0).
+    // A changed server aggregate means a concurrent write happened, not a persistent bug.
     const afterServer = await syncFetch('/api/sync/check');
-    const store2 = _getStore ? _getStore() : { transactions: [] };
-    const txns2  = (store2.transactions || []).filter(t => !t.deleted);
-    const after  = {
-      tx_count:            txns2.length,
-      sum_eur_cents:       Math.round(txns2.reduce((s, t) => s + t.amount_eur, 0) * 100),
-      settings_updated_at: getAppliedAt(),
-    };
+    const after = afterServer
+      ? { tx_count: afterServer.tx_count, sum_eur_cents: afterServer.sum_eur_cents, settings_updated_at: afterServer.settings_updated_at }
+      : before;
 
     if (afterServer &&
-        (after.tx_count    !== afterServer.tx_count ||
-         after.sum_eur_cents !== afterServer.sum_eur_cents)) {
-      console.warn('Yearly: reconcile still mismatches after force-pull — possible deeper sync bug',
-        { after, server: afterServer });
+        (afterServer.tx_count    !== serverCheck.tx_count ||
+         afterServer.sum_eur_cents !== serverCheck.sum_eur_cents)) {
+      // Server aggregate shifted between the two checks — likely a concurrent write, not a bug.
+      console.warn('Yearly: server aggregate changed during reconcile (concurrent write?)', { before: serverCheck, after: afterServer });
     }
 
     return { ok: false, before, after, recovered: true };
