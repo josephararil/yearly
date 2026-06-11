@@ -102,8 +102,8 @@ pushing.
 
 Uses `https://api.frankfurter.app/{YYYY-MM-DD}?from={CURRENCY}&to=EUR`. Results are cached
 in-memory per currency+date for the run. **TRY (Turkish lira) is unsupported** — Frankfurter dropped
-it in 2018; affected rows get `amount_eur = original_amount` (wrong). Fix manually in the CSV or SQL
-before pushing.
+it in 2018. If a lookup fails (TRY or otherwise), the row is **dropped** and listed at the end of the
+clean step — add it manually in the app rather than letting `amount_eur` go in wrong.
 
 ## `.sync_state.json`
 
@@ -120,7 +120,7 @@ not delete this file.
 
 ## Known issues
 
-- **TRY**: Frankfurter doesn't support Turkish lira. Fix `amount_eur` manually before pushing.
+- **TRY**: Frankfurter doesn't support Turkish lira. The row is dropped — add manually in the app.
 - **Cyrillic merchant names**: Revolut's XLSX export garbles them; JSON export is clean. Always use
   JSON.
 - **PENDING transactions**: skipped (`state != "COMPLETED"`). Small discrepancies vs Revolut's
@@ -129,3 +129,16 @@ not delete this file.
   wrangler login` from `scripts/`.
 - **D1 no transaction support**: SQL uses bare `INSERT OR REPLACE` statements with no `BEGIN
   TRANSACTION` wrapper.
+- **`INSERT OR REPLACE` overwrites manual edits**: re-pushing a transaction that you've already
+  edited in the app (category, fun flag, note) will silently revert those edits. Mitigated by the
+  pipeline only re-fetching the last `BUFFER_DAYS=5` of data, but still a known footgun — to be
+  reworked into `INSERT … ON CONFLICT DO UPDATE` with field-level merging.
+
+## `updated_at` units — must be milliseconds
+
+The Revolut pipeline writes `updated_at = int(time.time() * 1000)` (milliseconds). The worker
+(`src/index.js`) stamps writes with `Date.now()` (ms) and the client cursor lives in ms. If a row
+is ever inserted with a seconds value (~10 digits), the `WHERE updated_at >= ?` filter in
+`/api/sync` will exclude it from incremental sync **forever** (cursor in ms is ~1000× larger). Any
+new direct-to-D1 write path must use milliseconds. Migration `0004_fix_updated_at_seconds.sql`
+retroactively fixed the legacy seconds rows.

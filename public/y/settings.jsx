@@ -1,6 +1,6 @@
 // settings.jsx — target, buffer, years, templates, CSV import/export, clear.
 (function () {
-  const APP_VERSION = 'v42';
+  const APP_VERSION = 'v43';
   const { YData, YCalc, YUI } = window;
   const { eur0, signedPct, computeStats } = YCalc;
   const { Sheet, DeltaChip } = YUI;
@@ -546,8 +546,23 @@
               });
             }} />
           <Row icon="upload" title="Restore (JSON)" sub="replace all data from a backup" onClick={() => document.getElementById("jsonfile").click()} />
-          <Row icon="activity" title={syncing ? "Syncing…" : "Sync now"} sub="fetch latest data from server"
-            onClick={async () => { setSyncing(true); await window.YSync.pull(); setSyncing(false); }} />
+          <Row icon="activity" title={syncing ? "Resyncing…" : "Force resync from server"}
+            sub="refetches every row (escape hatch if the app looks out of date)"
+            onClick={async () => {
+              const before = store.transactions.length;
+              setSyncing(true);
+              await window.YSync.pull({ force: true });
+              setSyncing(false);
+              // Snapshot count after pull: setStore is async, so read from the latest store via a ref isn't trivial here.
+              // We rely on the next render to reflect the merged state; the alert quotes the before/after delta from localStorage.
+              try {
+                const raw = localStorage.getItem('yearly:store:v1');
+                const after = raw ? (JSON.parse(raw).transactions || []).length : before;
+                const delta = after - before;
+                if (delta === 0) alert(`Resync complete — no new transactions (${after} total).`);
+                else             alert(`Resync complete — ${delta > 0 ? '+' : ''}${delta} transactions (${after} total).`);
+              } catch { /* swallow display errors */ }
+            }} />
         </div>
 
         <div className="section-h"><h2>Danger zone</h2></div>

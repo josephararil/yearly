@@ -118,13 +118,20 @@ SKIP_TYPES = {"TOPUP", "EXCHANGE"}
 # ---------------------------------------------------------------------------
 
 _fx_cache: dict = {}
+# Tracks (currency, date) pairs that failed FX lookup, so callers can skip those rows
+# instead of silently falling back to rate=1.0 (which would massively misstate spending
+# for high-rate currencies like TRY).
+_fx_failures: set = set()
 
-def get_eur_rate(currency: str, date_str: str) -> float:
+def get_eur_rate(currency: str, date_str: str):
+    """Return EUR rate, or None if the lookup failed. Callers must drop rows with None."""
     if currency == "EUR":
         return 1.0
     key = f"{currency}_{date_str}"
     if key in _fx_cache:
         return _fx_cache[key]
+    if key in _fx_failures:
+        return None
     try:
         url = f"https://api.frankfurter.app/{date_str}?from={currency}&to=EUR"
         r = requests.get(url, timeout=10)
@@ -134,13 +141,14 @@ def get_eur_rate(currency: str, date_str: str) -> float:
         print(f"  FX: 1 {currency} = {rate:.4f} EUR on {date_str}")
         return rate
     except Exception as e:
+        _fx_failures.add(key)
         msg = f"  WARNING: FX lookup failed for {currency} on {date_str}: {e}"
         if currency == "TRY":
-            msg += "\n  NOTE: Frankfurter dropped TRY in 2018. Fix amount_eur manually in the CSV."
+            msg += "\n  NOTE: Frankfurter dropped TRY in 2018 — row will be SKIPPED."
         else:
-            msg += "\n  Rate set to 1.0 — fix this row manually in the CSV."
+            msg += "\n  Row will be SKIPPED. Add manually in the app after looking up the rate."
         print(msg)
-        return 1.0
+        return None
 
 # ---------------------------------------------------------------------------
 # Category
@@ -232,7 +240,11 @@ def process_json_files(paths: list[Path]) -> list[dict]:
 def build_rows(transactions: list[dict]) -> list[dict]:
     rows = []
     skipped: dict[str, int] = {}
-    now_ts = int(datetime.now(timezone.utc).timestamp())
+    fx_dropped: list[dict] = []
+    # updated_at is the sync cursor used by /api/sync — must be MILLISECONDS to match
+    # Date.now() in the worker and client. Writing seconds here causes the worker query
+    # `WHERE updated_at >= ?` to exclude pipeline rows forever (the cursor lives in ms).
+    now_ts = int(datetime.now(timezone.utc).timestamp() * 1000)
 
     fx_needed = [tx for tx in transactions
                  if tx.get("state") == "COMPLETED"
@@ -255,6 +267,15 @@ def build_rows(transactions: list[dict]) -> list[dict]:
         date_str = datetime.fromtimestamp(date_ts / 1000, tz=timezone.utc).strftime("%Y-%m-%d")
 
         rate = get_eur_rate(currency, date_str)
+        if rate is None:
+            fx_dropped.append({
+                "id": tx.get("id"),
+                "date": date_str,
+                "description": ((tx.get("merchant") or {}).get("name") or tx.get("description", "")).strip(),
+                "currency": currency,
+                "amount_raw": amount_raw,
+            })
+            continue
         amount_eur = round(amount_raw * rate, 2)
         fee_eur = round(fee_raw * rate, 2) if fee_raw else 0.0
 
@@ -305,6 +326,10 @@ def build_rows(transactions: list[dict]) -> list[dict]:
         print(f"    prior year (completedDate before {current_year}): {len(pre_year)}")
         for r in pre_year:
             print(f"      {r['date']}  {r['description']:<35}  €{r['amount_eur']:.2f}")
+    if fx_dropped:
+        print(f"\n  ⚠️  {len(fx_dropped)} row(s) DROPPED because FX lookup failed — add manually in the app:")
+        for r in fx_dropped:
+            print(f"      {r['date']}  {r['description']:<35}  {r['amount_raw']:.2f} {r['currency']}")
 
     return rows
 
@@ -318,25 +343,41 @@ def process_xlsx(path: Path) -> list[dict]:
     except ImportError:
         sys.exit("pandas required for XLSX: pip install pandas openpyxl")
 
+    import hashlib
+
     print(f"  Legacy XLSX mode — no enrichment columns available")
     df = pd.read_excel(path)
     df.columns = [c.strip() for c in df.columns]
     df = df[df["State"] == "COMPLETED"]
     df = df[df["Amount"] < 0]
+    if "Type" in df.columns:
+        df = df[~df["Type"].isin(SKIP_TYPES)]
     skip_re = re.compile("|".join(SKIP_DESCRIPTION_PATTERNS), re.IGNORECASE)
     df = df[~df["Description"].str.contains(skip_re, na=False)]
 
-    now_ts = int(datetime.now(timezone.utc).timestamp())
+    # ms to match Date.now() in the worker / client cursor — same reason as build_rows().
+    now_ts = int(datetime.now(timezone.utc).timestamp() * 1000)
     rows = []
+    fx_dropped: list[dict] = []
     for _, row in df.iterrows():
         date_str = pd.to_datetime(row["Completed Date"]).strftime("%Y-%m-%d")
         currency = row["Currency"]
         amount_orig = abs(float(row["Amount"]))
+        description = str(row["Description"]).strip()
         rate = get_eur_rate(currency, date_str)
+        if rate is None:
+            fx_dropped.append({
+                "date": date_str, "description": description,
+                "currency": currency, "amount_raw": amount_orig,
+            })
+            continue
+        # Hash date+amount+description so two same-day same-amount rows don't collide.
+        id_key = f"{row.get('Started Date', '')}|{amount_orig}|{description}"
+        row_id = f"xlsx-{hashlib.md5(id_key.encode('utf-8')).hexdigest()[:16]}"
         rows.append({
-            "id":                   f"xlsx-{row.get('Started Date', '')}-{amount_orig}",
+            "id":                   row_id,
             "date":                 date_str,
-            "description":          str(row["Description"]).strip(),
+            "description":          description,
             "amount_eur":           round(amount_orig * rate, 2),
             "category":             "General",
             "note":                 "",

@@ -4,5 +4,5 @@ output.csv
 account-statement_2026-01-01_2026-05-31_en-us_0a3e6e.csv
 node_modules/
 .idea/
-scripts/batches/*.json
-scripts/batches/console_script.js
+scripts/batches/
+scripts/__pycache__/

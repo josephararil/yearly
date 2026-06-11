@@ -189,9 +189,14 @@
   }
 
   // ---- public: pull ----
-  async function pull() {
+  // pull({ force: true }) ignores the cursor and refetches the entire dataset —
+  // the user-facing escape hatch for "the app is missing rows I know are on the server"
+  // (e.g. when a server-side write lands with a stale updated_at and skips the cursor).
+  async function pull(opts) {
+    const force = !!(opts && opts.force);
     await flush();
-    const result = await syncFetch(`/api/sync?since=${getCursor()}`);
+    const since = force ? 0 : getCursor();
+    const result = await syncFetch(`/api/sync?since=${since}`);
     if (!result || !_applyServer) return;
 
     // Pre-compute settings merge outside the state updater (no side-effects inside updater)
