@@ -404,6 +404,28 @@
           {showPeak && canShowPeak && <LegendItem c="var(--amber)" dash="2 3" label="Peak mo" />}
           {showReq && canShowReq && <LegendItem c="var(--chart-proj)" dash="5 4" label="Needed/mo" />}
         </div>
+
+        {/* verbose legend */}
+        {(() => {
+          const items = [
+            { color: "var(--chart-actual)", label: "Bars", desc: "monthly main-budget spend totals" },
+            ...(avgMonthly > 0 ? [{ color: "var(--chart-pace)", label: `Avg (${eurK(avgMonthly)}/mo)`, desc: "monthly average over completed months" }] : []),
+            ...(canShowPeak ? [{ color: "var(--amber)", label: `Peak (${eurK(maxMonthly)})`, desc: "highest single month so far" }] : []),
+            ...(canShowReq ? [{ color: "var(--chart-proj)", label: `Needed/mo (${eurK(requiredMonthlyAvg)})`, desc: "monthly cap required to finish the year under the main budget" }] : []),
+          ];
+          return (
+            <div style={{ marginTop: 14, borderTop: "1px solid var(--hair)", paddingTop: 10 }}>
+              {items.map(({ color, label, desc }) => (
+                <div key={label} style={{ display: "flex", gap: 8, alignItems: "flex-start", marginBottom: 6 }}>
+                  <span style={{ display: "inline-block", marginTop: 4, width: 7, height: 7, borderRadius: "50%", background: color, flexShrink: 0 }} />
+                  <span style={{ fontSize: 11, fontFamily: "var(--mono)", color: "var(--muted)", lineHeight: 1.5 }}>
+                    <span style={{ color: "var(--ink)", fontWeight: 600 }}>{label}</span>{" — "}{desc}
+                  </span>
+                </div>
+              ))}
+            </div>
+          );
+        })()}
       </div>
     );
   }
@@ -449,14 +471,30 @@
     return (
       <div className="stagger" style={{ display: "flex", flexDirection: "column", gap: 24 }}>
         <div>
-          <div className="section-h" style={{ marginTop: 0, marginBottom: 10 }}><h2>Spend vs pace</h2></div>
+          <div className="section-h" style={{ marginTop: 0, marginBottom: 10 }}><h2>This year</h2></div>
           <ProjectionChart stats={stats} />
           <ChartLegend stats={stats} />
-          <p className="muted" style={{ fontSize: 12.5, lineHeight: 1.5, margin: "12px 2px 0", textWrap: "pretty" }}>
-            {stats.complete
-              ? "Final spend recorded — year complete."
-              : `Projection: blended daily rate (${eur0(stats.trailingDailyRate)}/d) × ${stats.daysRemaining} remaining days${stats.buffer > 0 ? `, lifted ${Math.round(stats.buffer * 100)}% for missed entries` : ""}. Blend = ${Math.round((1 - stats.doy / 365) * 100)}% recent 60d + ${Math.round(stats.doy / 365 * 100)}% YTD (${eur0(stats.dailyRate)}/d).`}
-          </p>
+          {!stats.isFuture && (() => {
+            const items = [
+              { color: "var(--chart-actual)", label: `Actual (${eur0(stats.spent)})`, desc: "cumulative main-budget spend year-to-date" },
+              ...(!stats.complete ? [{ color: "var(--chart-proj)", label: `Projected (→${eur0(stats.projection)})`, desc: "year-end extrapolation at your current blended daily rate" }] : []),
+              ...(stats.projLow != null ? [{ color: "var(--chart-proj)", label: `Range (±${eur0(stats.bandAmt)})`, desc: "forecast uncertainty band based on weekly spending variance" }] : []),
+              { color: "var(--chart-pace)", label: `Pace (→${eur0(stats.mainTarget)})`, desc: "ideal on-track trajectory from Jan 1 to the main budget" },
+              ...(stats.priorCum ? [{ color: "var(--chart-target)", label: `${stats.year - 1} (${eur0(stats.priorSpent)})`, desc: "prior year's main-budget spend at the same day of year" }] : []),
+            ];
+            return (
+              <div style={{ marginTop: 14, borderTop: "1px solid var(--hair)", paddingTop: 10 }}>
+                {items.map(({ color, label, desc }) => (
+                  <div key={label} style={{ display: "flex", gap: 8, alignItems: "flex-start", marginBottom: 6 }}>
+                    <span style={{ display: "inline-block", marginTop: 4, width: 7, height: 7, borderRadius: "50%", background: color, flexShrink: 0 }} />
+                    <span style={{ fontSize: 11, fontFamily: "var(--mono)", color: "var(--muted)", lineHeight: 1.5 }}>
+                      <span style={{ color: "var(--ink)", fontWeight: 600 }}>{label}</span>{" — "}{desc}
+                    </span>
+                  </div>
+                ))}
+              </div>
+            );
+          })()}
         </div>
 
         {!stats.isFuture && <MonthlyBarsChart stats={stats} />}
