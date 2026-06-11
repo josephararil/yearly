@@ -51,7 +51,7 @@ Full local-dev notes (the no-backend 404 handling, reload-loop fix) are in
    appear in preview, **assume stale cache first** — rule it out before debugging logic. Full SW +
    preview workflow: [docs/PWA-AND-DEV.md](docs/PWA-AND-DEV.md).
 2. **`APP_VERSION` (`settings.jsx` footer) and `CACHE_NAME` (`sw.js`) move together** — currently
-   `v44` / `yearly-v44`. Bump both on every release.
+   `v45` / `yearly-v45`. Bump both on every release.
 3. **`localISO(d)`, never `toISOString()`** for dates in `calc.jsx` — `toISOString()` is UTC and
    silently drops Dec 31 transactions in UTC+ timezones (EET).
 3b. **`updated_at` is milliseconds everywhere** — `Date.now()` in the worker, `Date.now()` for the

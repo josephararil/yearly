@@ -516,7 +516,7 @@
         <div>
           <div className="section-h" style={{ marginTop: 0, marginBottom: 10 }}><h2>In numbers</h2></div>
           <div className="statgrid">
-            <StatCard label="Spent year-to-date" value={eur0(stats.spent)} sub={`${stats.upto.length} entries`} />
+            <StatCard label="Spent year-to-date" value={eur0(stats.spent + (stats.funSpent || 0))} sub={`${stats.upto.length} entries`} />
             <StatCard label={stats.complete ? "Days" : "On-pace by today"} value={stats.complete ? "365" : eur0(stats.pace)} sub={stats.complete ? "complete" : `day ${stats.doy} of ${stats.daysInYear}`} />
             <StatCard label="Blended rate" value={eur0(stats.trailingDailyRate) + "/d"} sub={`YTD avg ${eur0(stats.dailyRate)}/d`} />
             {!stats.complete && <StatCard label="Buffer adds" value={"+" + eur0(stats.bufferAmt)} sub={`${Math.round(stats.buffer * 100)}% missed-entry`} />}
@@ -569,7 +569,7 @@
     );
   }
 
-  function CategoriesTab({ stats, focusCategory, onEditTx }) {
+  function CategoriesTab({ stats, focusCategory, onEditTx, people }) {
     const [sel, setSel] = React.useState(focusCategory || null);
     React.useEffect(() => { if (focusCategory) setSel(focusCategory); }, [focusCategory]);
     const curMonth = stats.asOf.getMonth();
@@ -579,7 +579,7 @@
         <div>
           <div className="section-h" style={{ marginTop: 0, marginBottom: 6 }}>
             <h2>Where it's going</h2><span className="spacer" />
-            <span className="muted" style={{ fontSize: 12 }}>{eur0(stats.spent)} total</span>
+            <span className="muted" style={{ fontSize: 12 }}>{eur0(stats.spent + (stats.funSpent || 0))} total</span>
           </div>
           {stats.catList.map((c) => {
             const cat = YData.cat(c.id);
@@ -613,13 +613,13 @@
                     <div className="muted" style={{ fontSize: 11, fontFamily: "var(--mono)", margin: "8px 2px 4px", textTransform: "uppercase", letterSpacing: "0.1em" }}>Recent in {cat.label}</div>
                     <div className="txlist">
                       {stats.upto.filter((t) => t.category === c.id).slice().reverse().slice(0, 5).map((t) => (
-                        <TxRow key={t.id} t={t} onClick={onEditTx ? () => onEditTx(t) : undefined} />
+                        <TxRow key={t.id} t={t} onClick={onEditTx ? () => onEditTx(t) : undefined} people={people} />
                       ))}
                     </div>
                     <div className="muted" style={{ fontSize: 11, fontFamily: "var(--mono)", margin: "14px 2px 4px", textTransform: "uppercase", letterSpacing: "0.1em" }}>Largest in {cat.label}</div>
                     <div className="txlist">
                       {stats.upto.filter((t) => t.category === c.id).slice().sort((a, b) => b.amount_eur - a.amount_eur).slice(0, 5).map((t) => (
-                        <TxRow key={t.id} t={t} onClick={onEditTx ? () => onEditTx(t) : undefined} />
+                        <TxRow key={t.id} t={t} onClick={onEditTx ? () => onEditTx(t) : undefined} people={people} />
                       ))}
                     </div>
                   </div>
@@ -641,7 +641,7 @@
     { id: "za", label: "Z → A" },
   ];
 
-  function ActivityTab({ stats, onEditTx }) {
+  function ActivityTab({ stats, onEditTx, people }) {
     const [q, setQ] = React.useState("");
     const [fc, setFc] = React.useState(null);
     const [sort, setSort] = React.useState("date-desc");
@@ -679,7 +679,7 @@
         </div>
         <div>
           {list.length ? (
-            <div className="txlist">{list.map((t) => <TxRow key={t.id} t={t} onClick={() => onEditTx(t)} />)}</div>
+            <div className="txlist">{list.map((t) => <TxRow key={t.id} t={t} onClick={() => onEditTx(t)} people={people} />)}</div>
           ) : <div className="empty">No matching transactions.</div>}
         </div>
         <div className="muted" style={{ textAlign: "center", fontFamily: "var(--mono)", fontSize: 11 }}>{list.length} of {stats.txns.length} entries</div>
@@ -701,8 +701,8 @@
           <SegmentedControl options={["Projection", "Categories", "Activity", "Fun"]} value={tab} fill onChange={setTab} />
         </div>
         {tab === "Projection" && <ProjectionTab stats={stats} fun={fun} store={store} callouts={callouts} onCallout={onCallout} />}
-        {tab === "Categories" && <CategoriesTab stats={stats} focusCategory={focus && focus.category} onEditTx={onEditTx} />}
-        {tab === "Activity" && <ActivityTab stats={stats} onEditTx={onEditTx} />}
+        {tab === "Categories" && <CategoriesTab stats={stats} focusCategory={focus && focus.category} onEditTx={onEditTx} people={store && store.people || []} />}
+        {tab === "Activity" && <ActivityTab stats={stats} onEditTx={onEditTx} people={store && store.people || []} />}
         {tab === "Fun" && <YFun.FunTab fun={fun} store={store} setStore={setStore} addTx={addTx} />}
       </div>
     );
