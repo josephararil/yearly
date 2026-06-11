@@ -18,7 +18,8 @@ file that loads React + Babel from CDN and transpiles the `y/*.jsx` modules in t
 - State persists to `localStorage` under `yearly:store:v1`; on first load `buildSeed` creates a
   blank store (no transactions, no wishlist) with default year settings, people, and templates. To
   reset to a blank store, clear that key.
-- Also hosted on GitHub Pages — `index.html` at the repo root serves as the PWA entry point.
+- In production the app is served by the Cloudflare Worker (`src/index.js`), which serves `public/`
+  as static assets; there is **no root `index.html`** — the entry point is `public/index.html`.
 
 ### Local dev — no backend, no reload loop
 

@@ -1,679 +1,526 @@
-# Handoff: Yearly — annual budgeting PWA
+# Yearly
 
-## Overview
+**Yearly** is a mobile-first budgeting PWA for a couple tracking joint household spending in EUR
+against a single **annual ceiling**. Its reason to exist is the one thing a spreadsheet can't do:
+look at the spending and explain, in plain analytical language, **whether you're on track for the
+year and — when you're not — why.**
 
-**Yearly** is a mobile-first personal budgeting app for a couple tracking joint
-household spending in EUR against a single **annual** target. Its reason to exist
-is one thing a spreadsheet can't do: look at the spending data and explain, in
-plain analytical language, **whether you're on track for the year and — when
-you're not — why**. Everything else is in service of that.
+It is a real, deployed app (Cloudflare Workers + D1, live at
+[yearly.josepharari.com](https://yearly.josepharari.com) behind Google SSO) that two people use
+daily, with a Revolut import pipeline feeding it. It also happens to have no build step — a single
+static HTML file loads React from a CDN and transpiles the modules in the browser. That keeps the
+whole thing hackable from any text editor.
+
+> **This README is the authoritative spec for *intended* behavior** — the data model, the
+> projection math, the status thresholds, and the callout detectors. Treat the code as the *current
+> implementation* of this spec. If you change the math or the detectors, update this file in the
+> same change. Code-internals, the backend, the sync layer, and the Revolut pipeline have their own
+> deep-dive docs (see [Repo layout](#repo-layout) and the `docs/` table at the end).
+
+---
+
+## Contents
+
+- [What it does](#what-it-does)
+- [The mental model](#the-mental-model)
+- [How the numbers work](#how-the-numbers-work) — projection, buffer, uncertainty band, status
+- [The fun budget](#the-fun-budget)
+- [The callout engine](#the-callout-engine) — the 8 detectors + threshold table
+- [Categories](#categories)
+- [Screens](#screens)
+- [Design system — Broadsheet](#design-system--broadsheet)
+- [Architecture at a glance](#architecture-at-a-glance)
+- [Data model](#data-model)
+- [Repo layout](#repo-layout) — what every file is
+- [Running it](#running-it)
+
+---
+
+## What it does
 
 The product has two jobs:
-1. **One-glance status** — within a second of opening, the user knows spent-to-date,
-   projected year-end, and whether that projection is above/at/below the annual target.
-2. **Callouts** — ranked, plain-language observations that explain the *why* behind
-   the projection, using specific numbers from the data.
 
-The defining UX principle is **progressive disclosure for two very different users**:
-the **Overview** screen is calm and answers only "on track? / why not? / log an
-expense", while a separate **Analysis** surface holds the full depth (charts, category
-diagnostics, period comparisons, activity) for the analytical user who wants to drill in.
+1. **One-glance status.** Within a second of opening, you see spent-to-date, projected year-end,
+   and whether that projection lands above / at / below the annual ceiling.
+2. **Callouts.** Ranked, plain-language observations that explain the *why* behind the projection,
+   using specific numbers from your own data ("Restaurants: €340 in May, +60% vs April").
 
----
+The defining UX principle is **progressive disclosure for two different moods**. The **Overview**
+screen is calm and answers only *on track? / why not? / log an expense*. A separate **Analysis**
+surface holds the full depth — charts, category diagnostics, period comparisons, the activity log —
+for when you want to drill in.
 
-## About the design files
-
-The files in this repo (`index.html` + the `y/` module folder) are **design
-references built in HTML/React-via-Babel** — a working prototype that demonstrates the
-intended look, behavior, data model, and business logic. **They are not meant to be
-shipped as-is.**
-
-The task is to **recreate this design in the target codebase's environment** using its
-established patterns. The brief specifies the intended production stack:
-
-> **React PWA, localStorage persistence, mobile-first (max-width ~430px centered on
-> desktop), iOS safe-area padding, EUR currency, Recharts for charts.**
-
-If you're starting fresh, that stack is the intended target (e.g. Vite + React + a
-real component library, or Next.js). The prototype loads React/Babel from CDN and
-splits logic into plain `window`-scoped modules purely so it can run as a single static
-HTML file — **in production, use real ES modules / components and a build step.**
-
-**Running this prototype:** serve the repo root over HTTP (e.g. `python -m http.server`)
-and open `http://localhost:8000/` — the entry point is `index.html`. It will **not** work
-over `file://`. The app is **fully self-contained**: no external `_ds/` Aperture bundle is
-needed. CSS tokens live in `y/tokens.css`; the DS primitives (Button, SegmentedControl,
-Input, Chip) are in `y/ds.jsx`. It is an installable PWA with offline support via `sw.js`
-and a masked app icon (`icons/`).
-
-The prototype's **logic files are directly reusable**: the projection math
-(`y/calc.jsx`), the callout engine (`y/calc.jsx → buildCallouts`), the category/
-template definitions and seed data (`y/data.jsx`), and the icon set (`y/icons.jsx`)
-are framework-agnostic and can be ported almost verbatim into a real React app.
+The voice is analytical, never coachy: it states what the data shows with specific numbers and
+never moralizes. The **year is the primary unit** — the verdict is always annual — though the app
+does surface a "this month" diagnostic view as supporting context.
 
 ---
 
-## Fidelity
+## The mental model
 
-**High-fidelity.** Final colors, typography, spacing, iconography, interactions, and
-copy are all decided. Recreate the UI to match, using the codebase's component
-primitives. Exact tokens are listed in the **Design Tokens** section below.
+Everything turns on a few terms. Get these straight and the rest follows.
 
-> **Charts note:** The prototype's charts are hand-built inline SVG (Recharts' UMD
-> build wouldn't run in the in-browser Babel sandbox). **In production, use Recharts**
-> per the brief — the SVG charts in `y/analysis.jsx` (`ProjectionChart`, `CatTrend`)
-> document exactly what each chart must show (data series, axes, reference lines), so
-> treat them as a chart spec, not code to copy.
+| Term | What it is | Stored? |
+|---|---|---|
+| **`ceiling`** | The single per-year household spending cap. User-set, **sacred**, never derived. (Historically called `target` — don't rename it back.) | Yes — `years[y].ceiling` |
+| **`funPlanAnnual`** | Sum of every person's monthly fun allowance across all 12 months of the year. | Derived |
+| **`mainTarget`** | `ceiling − funPlanAnnual`. The non-discretionary budget — everything that isn't a personal "fun" allowance. | Derived, never stored |
+| **`spent` / `projection`** | Year-to-date and projected year-end spend, **main (non-fun) only**. | Derived |
+| **`funSpent` / `funProjection`** | Fun-budget year-to-date and projected (capped) spend. | Derived |
+| **`combinedProjection`** | `projection + funProjection` — the household total. | Derived |
+
+The **combined projection vs the ceiling is the sacred verdict.** The hero on the Overview always
+leads with it. The main/fun split is a decomposition that explains the verdict, not the verdict
+itself.
+
+For the default 2026 setup — a €25,000 ceiling with Joseph at €100/mo and Marti at €200/mo of fun —
+`funPlanAnnual = (100 + 200) × 12 = €3,600` and `mainTarget = €21,400`.
 
 ---
 
-## Visual system
+## How the numbers work
 
-Dark, confident, numerical — a serious financial instrument, not a gamified consumer
-app. Built on the **Aperture design system's dark theme** (Apple-flavored: native
-system font, soft layered shadows, generous radii, restrained color) with terminal
-discipline applied to the numbers.
+All math lives in one pure, UI-free module: [`public/y/calc.jsx`](public/y/calc.jsx) (`window.YCalc`).
+Every figure shown anywhere in the app comes from three functions there: `computeStats`,
+`buildCallouts`, and `computeFun`. Re-implement those faithfully and the UI follows.
 
-- **Surfaces:** true-black page, elevated dark-grey cards. Soft multi-layer shadows,
-  never a single hard drop shadow. No left-accent-bar cards. No gradients as
-  backgrounds.
-- **Numbers do the talking:** every meaningful figure is set in a **monospace** font
-  with tabular figures. UI text is the system sans.
-- **No verdict adjectives** ("On track", "Great job"). The projected year-end figure
-  vs the target *is* the verdict; color (green/amber/red) only reinforces it.
-- **No monthly-budget framing anywhere.** The unit of meaning is the year.
-- **Voice:** analytical, never coachy. State what the data shows with specific numbers;
-  never moralize or suggest cuts.
-- **No emoji.** Category identity comes from a tinted line-icon + a distinct color.
+### Main-budget projection (damped blend)
+
+The projection extrapolates your recent pace to year-end, then lifts the *remaining* part by a
+safety buffer:
+
+```
+projection = spent + blendedRate × daysRemaining × (1 + buffer)
+blendedRate = ytdRate × (doy / daysInYear) + trailing60dRate × (1 − doy / daysInYear)
+```
+
+- **`ytdRate`** = recurring spend so far ÷ day-of-year. **`trailing60dRate`** = recurring spend in
+  the last 60 days ÷ 60 (window capped at `doy`).
+- The blend is **damped**: early in the year (thin history) it trusts recent 60-day momentum; late
+  in the year it locks onto the full-year average. So a July holiday doesn't hijack the December
+  projection.
+- The **buffer** uplifts only the extrapolated remainder, so on Dec 31 (`daysRemaining = 0`) the
+  projection equals `spent` exactly. It's a per-year fraction (default 4%, adjustable 0–15% via a
+  Settings slider) that accounts for expenses you forgot to log.
+- **Completed and future years**: `projection = spent` (no extrapolation, no buffer).
+- All dates use a local `localISO(d)` formatter, **never `toISOString()`** — UTC midnight shifts
+  dates backward in UTC+ timezones (EET) and silently drops Dec 31 transactions.
+
+### Lump-sum winsorization
+
+A single €5k holiday would otherwise inflate the year-end projection by ~4× its price. So
+transactions larger than **2% of `mainTarget`** — or any transaction explicitly flagged
+`oneoff:true` — are **excluded from the blended rate** while **still counting in `spent`**. They're
+real money, they just shouldn't set your daily pace.
+
+### Forecast uncertainty band
+
+Once **≥4 complete weeks** of recurring data exist (current incomplete year only), the projection
+gets an honest ± range from your week-to-week volatility:
+
+```
+sigmaWeek      = sample std-dev of weekly recurring totals (n−1 divisor, empty weeks count as 0)
+bandAmt        = sigmaWeek × √(weeksRemaining) × (1 + buffer)
+projLow        = max(spent, projection − bandAmt)      // floored: never below money already spent
+projHigh       = projection + bandAmt
+```
+
+`projLow / projHigh / bandAmt` are `null` when fewer than 4 weeks have elapsed, or for
+complete/future years.
+
+### Status (green / amber / red)
+
+The main-budget status escalates conservatively so the number doesn't flap day to day:
+
+- **With a band** (≥4 weeks): `good` if `projection ≤ mainTarget`; `alert` only if even the
+  optimistic edge misses (`projLow > mainTarget`); `watch` in between.
+- **Without a band** (<4 weeks): `good` if `projection ≤ mainTarget`; `watch` if `≤ mainTarget ×
+  1.08`; else `alert`. (Completed years use a tighter `× 1.03`.)
+
+The **combined status** (vs the ceiling) always uses the static bands: `good` if
+`combinedProjection ≤ ceiling`, `watch` if `≤ ceiling × 1.08`, else `alert`.
+
+---
+
+## The fun budget
+
+Each person has a **monthly fun allowance** — a "no questions asked" discretionary budget that
+accrues every month. It layers *on top of* the main budget: fun-tagged transactions are excluded
+from all main-budget math, and only the **combined** total is measured against the ceiling.
+
+### Running balance
+
+```
+balance(person) = Σ accrued allowance (from startMonth to now)
+                − Σ that person's fun spend
+                + balanceAdjustment            // optional manual correction
+```
+
+The balance is **all-time and as-of-now** — it doesn't change when you view a past year. It **can
+go negative** ("buy now, earn it back"); the UI shows negatives explicitly and never clamps them
+(progress bars do clamp to 0–100%).
+
+### Dated rate schedule
+
+`person.rates` is a **forward-only** sorted list of `{ from: "YYYY-MM", amount }`. Changing the
+allowance appends a new entry for the current month; past entries are never rewritten.
+`rateForMonth(person, ym)` returns the latest entry with `from ≤ ym`, or 0 before `startMonth`. A
+mid-year change is reflected in `mainTarget` from that month forward.
+
+### Projected fun spend (capped)
+
+Fun spend is lumpy — one big purchase, not a steady drip. A naive linear projection of a €2k
+January splurge would read ~€22k. So `funProjection` is **capped** at what the allowance system can
+actually produce:
+
+```
+funProjection = min( linearProjection,  funSpent + max(0, Σ balances) + futureAccruals )
+```
+
+`funProjection` carries no buffer. For completed years it's just `funSpent`; for future years, 0.
+
+### Wishlist
+
+Each person keeps savings goals `{ name, price, … }`. Progress = `max(0, balance) / price`;
+months-to-afford = `max(0, ceil((price − balance) / rate))` ("ready now" if the balance already
+covers it). **"Bought it"** logs a fun-tagged transaction for the price and removes the goal.
+
+---
+
+## The callout engine
+
+`buildCallouts(store, stats)` is a pure `(store, stats) → Callout[]` function — the heart of the
+app. Each callout is a number-led analytical sentence with a severity (`alert > watch > info >
+good`), an icon, and a `drill` target. Tapping one jumps to the relevant Analysis tab. Results are
+ranked by severity, then by a magnitude score.
+
+There are **8 detectors** for the current year. The **ceiling verdict (#8) is always prepended
+first.**
+
+| # | Detector | Fires when | Says (example) |
+|---|---|---|---|
+| 1 | **Projection trend** | `doy > 28` and the projection moved > 1.2% of `mainTarget` over 4 weeks | "Main budget: Year-end projection has moved up €420 over the last 4 weeks, now €21,800." |
+| 2 | **14-day pace streak** | last-14-day daily rate is > 1.15× or < 0.70× the linear daily pace | "Main budget: Last 14 days are running +28% above linear pace — €78/day vs €61/day." |
+| 3 | **Category mover** | a category changed > €60 month-over-month (and had ≥ €50 the prior month) | "Restaurants: €340 in May, +60% vs April." |
+| 4 | **Top-category share** | the largest category is > 26% of YTD spend | "Groceries is 27% of spend so far — €3,120 across 84 entries." |
+| 5 | **Buffer explanation** | the buffer adds > 1% of `mainTarget` | "Logged spend alone projects to €20,900; the 4% missed-entry buffer lifts that to €21,700." |
+| 6 | **Year-over-year** | prior year has spend at the same point | "Spending is €640 (+9%) higher than the same point in 2025." |
+| 7 | **Required pace** | `projection > mainTarget` | "Main budget: Spend ≤ €58/day from here to finish on main budget target." |
+| 8 | **Ceiling verdict** | always (current year) | see below — *always first* |
+
+**The ceiling verdict (#8)** is the sacred line, and has three states:
+
+- **Over** (`combinedProjection > ceiling`): "Household projects to €X against your €Y ceiling — trim
+  fun spending by ~€Z/mo to stay within it." If trimming fun alone can't close the gap, it instead
+  says "…even cutting the entire fun budget (€Z/mo) won't close it; main spending needs to drop
+  ~€W/mo too." (`alert` if over by > 8% of ceiling, else `watch`.)
+- **Comfortable** (`< ceiling × 0.94`): "You're tracking €X under your €Y ceiling — room to raise the
+  fun budget by ~€Z/mo if you want." (`good`)
+- **Tight but on course** (between 0.94× and 1×): "Tracking €X under your €Y ceiling — tight but on
+  course." (`info`)
+
+**Special cases:** a **completed year** gets a single review callout comparing `spent + funSpent` vs
+the ceiling ("Finished under the ceiling by €X — €Y against a €Z ceiling."). A **future year** gets a
+single "hasn't started yet" line. If nothing reaches `watch`/`alert`, a calm fallback line is shown.
+
+**Overview density** (Settings → Display) controls how many callouts the Overview lists: `minimal`
+shows the top ≤2, `balanced` the top 4, `all` everything. The Analysis "What's happening" section
+always shows all of them.
+
+### Threshold table
+
+Every magic number lives in a single `T` constants object at the top of `calc.jsx`:
+
+| Constant | Value | Meaning |
+|---|---|---|
+| `WATCH_BAND_CURRENT` | `1.08` | Within +8% of target/ceiling = watch; beyond = alert (current year) |
+| `WATCH_BAND_COMPLETE` | `1.03` | Tighter +3% band for finished years |
+| `CEILING_COMFORT` | `0.94` | Below 94% of ceiling = comfortable, room to raise fun |
+| `CEILING_ALERT` | `0.08` | Over ceiling by > 8% → ceiling verdict is `alert` |
+| `TREND_NOTABLE` | `0.012` | 4-week projection move > 1.2% of `mainTarget` is worth a callout |
+| `TREND_ALERT` | `0.04` | > 4% move → `alert` |
+| `STREAK_HOT` | `1.15` | 14-day pace > 115% of linear → spending streak |
+| `STREAK_ALERT` | `1.35` | 14-day pace > 135% → `alert` |
+| `STREAK_COOL` | `0.70` | 14-day pace < 70% → under-pace (`good`) |
+| `SHARE_NOTABLE` | `0.26` | Top category > 26% of spend is worth surfacing |
+| `SHARE_WATCH` | `0.34` | Top category > 34% → `watch` |
+| `MOVER_MIN_EUR` | `60` | MoM category change must exceed €60 to count |
+| `MOVER_MIN_BASE` | `50` | Category needs ≥ €50 in the prior full month to be eligible |
+| `BUFFER_EXPLAIN_MIN` | `0.01` | Explain the buffer only when it adds > 1% of `mainTarget` |
+| `LUMP_PCT` | `0.02` | Transactions > 2% of `mainTarget` are winsorized out of the rate |
+| `DAYS_PER_MONTH` | `30.4` | Average month length for "months remaining" arithmetic |
+| `YOY_WATCH` | `0.08` | YTD spend > prior year by > 8% of `mainTarget` → `watch` |
+
+---
+
+## Categories
+
+A fixed list of **18 categories** (`CATEGORIES` in [`public/y/data.jsx`](public/y/data.jsx)), each
+with an inline-SVG line icon and a distinct identity color. Category identity comes from icon +
+color — there are no emoji anywhere.
+
+| Category | Color | | Category | Color |
+|---|---|---|---|---|
+| Groceries | `#32d74b` | | Entertainment | `#bf5af2` |
+| Restaurants | `#ff9f0a` | | Sophie Kindergarten | `#5e5ce6` |
+| Shopping | `#ff6ac1` | | Services | `#d0a24c` |
+| Gym | `#9be15d` | | Gift | `#e0489a` |
+| Health | `#ff6961` | | Pets | `#cd8b4f` |
+| Utilities | `#ffd60a` | | Donation | `#30d0c0` |
+| House Stuff | `#40c8e0` | | Cash | `#99a06b` |
+| Transport | `#0a84ff` | | General | `#8e8e93` |
+| Taxes | `#98989d` | | Travel | `#5ac8fa` |
+
+---
+
+## Screens
+
+The app is a fixed mobile column (~440px, centered with a rounded device frame on desktop). A
+sticky top bar carries the **`Yearly.`** wordmark, a year pill, and a gear → Settings. A bottom nav
+has **Overview**, a raised **`+`** button (opens the Add sheet from anywhere), and **Analysis**.
+
+### Overview — the calm surface ([`home.jsx`](public/y/home.jsx))
+
+Top to bottom:
+- **Status hero** (`StatusHero`) — a three-zone block: the combined projection vs ceiling (the big
+  serif number + over/under sub-line); a multi-stage bullet bar showing spent → projection against
+  `mainTarget` and `ceiling` ticks; and a monthly "pulse" line (this month's spend vs its cap).
+- **Fun strip** — one hairline row per person: name, all-time balance (sage/terra), nearest wishlist
+  goal with a progress bar. Tappable → Analysis Fun tab.
+- **This month** — `MonthCurve`, an interactive day-by-day cumulative chart for the current month
+  with toggleable Pace / Projection / Target / Month-end / Prev-month series and an explanatory
+  legend.
+
+### Analysis — the deep surface ([`analysis.jsx`](public/y/analysis.jsx))
+
+A segmented control: **Projection · Categories · Activity · Fun**.
+
+- **Projection** — a full-year interactive line chart (actual cumulative + dashed projection + pace
+  + ceiling + prior-year, with the uncertainty band drawn as a translucent triangle), a per-month
+  bar chart with average/peak/needed reference lines, the full callouts list ("What's happening"),
+  and an "In numbers" stat grid (Spent YTD, blended rate, buffer adds, avg spend/mo, 90-day trend,
+  total fun budget, target fun/mo, a "FIRE portfolio" curiosity at the 4% rule, and more).
+- **Categories** — every category with spend, ranked, as an expandable bar row (share %, entry
+  count, MoM change). Expanding shows the most recent and largest transactions in that category.
+- **Activity** — search by description, filter chips for every category, a 6-way sort, and the full
+  main-transaction list (fun tx excluded), each row tappable to edit.
+- **Fun** — per-person cards (balance, monthly rate, this-month usage, all-time spent), a fun-only
+  category breakdown, and each person's wishlist with progress bars, ETAs, and a "Bought it" action.
+
+### Add / Edit ([`addflow.jsx`](public/y/addflow.jsx))
+
+A bottom sheet with a **Quick | Manual** toggle. **Quick** is a grid of template tiles → a custom
+numeric keypad for fast thumb entry. **Manual** is description + amount + an 18-category picker +
+date + note. Both expose a **Fun budget toggle** (reveals a Joseph/Marti owner picker) and a
+**One-off toggle** (writes `oneoff:true`, excluding the tx from the trend forecast). Editing a
+transaction opens the same form with Delete + Save.
+
+### Settings ([`settings.jsx`](public/y/settings.jsx))
+
+Grouped rows: **This year** (household ceiling, missed-entry buffer slider, past-years detail) ·
+**Fun budget** (per-person rate config, forward-only) · **Display** (Overview density) · **Data**
+(template manager, CSV import with duplicate detection, CSV export, JSON backup/restore, "Sync now")
+· **Danger zone** (clear all data, type-to-confirm). Footer shows the app version.
+
+---
+
+## Design system — Broadsheet
+
+The app wears an editorial **Broadsheet** theme: warm paper, hairline rules, three typefaces, and a
+single terracotta accent. The spec is [`design/BROADSHEET_DESIGN_SPEC.md`](design/BROADSHEET_DESIGN_SPEC.md);
+tokens live in [`public/y/tokens.css`](public/y/tokens.css).
+
+**Palette** — paper `#F4F1E8`, ink `#221F19` (never pure black), muted `#8D846F`, hairline rules at
+~13% ink. One accent, **terracotta `#BE4A30`** (links, active nav, key numbers); state colors **sage
+`#5E7C54`** (good) and **amber `#C0852B`** (watch). Charts use muted terracotta/sand variants.
+
+**Typography** — three families: **Newsreader** (serif) for the display hero number and section
+headers; **Hanken Grotesk** (sans) for UI and body prose; **JetBrains Mono** for *every figure*,
+label, eyebrow, and axis tick (tabular numerals). The rule: numbers are always mono, the one big
+hero number is serif, everything else is sans.
+
+**Voice** — analytical, never coachy. No emoji, no verdict adjectives ("Great job!"), no
+celebratory color. The projected figure against the ceiling *is* the verdict; color only reinforces
+it.
+
+---
+
+## Architecture at a glance
+
+The whole client is one static HTML file plus a folder of modules — **no bundler, no package
+manager, no build step, no test runner.** [`public/index.html`](public/index.html) loads React +
+Babel from a CDN and transpiles each `y/*.jsx` module in the browser.
+
+- **Module system.** Every `y/*.jsx` file is an IIFE that reads its dependencies off `window` and
+  attaches its own export back to `window` (`window.YCalc`, `window.YData`, …). There are no
+  imports/exports, so **load order is significant** and fixed in `index.html`.
+- **The brain.** [`calc.jsx`](public/y/calc.jsx) (math + callouts) and [`data.jsx`](public/y/data.jsx)
+  (store shape, categories, persistence) are pure and framework-agnostic.
+- **State.** [`app.jsx`](public/y/app.jsx) is the single stateful root. The persisted `store` is the
+  only durable state; everything visible derives from `computeStats` / `buildCallouts` / `computeFun`.
+- **Backend.** A Cloudflare Worker ([`src/index.js`](src/index.js)) serves the static files and a
+  small `/api/*` surface backed by a D1 (SQLite) database. The client
+  ([`sync.jsx`](public/y/sync.jsx)) does outbox-based, offline-safe sync with the server, plus a
+  reconciliation check on every launch.
+- **Data in.** Transactions are imported from Revolut via a browser console script + Python cleaning
+  pipeline in [`scripts/`](scripts/), then pushed to D1.
+
+Deeper references live in `docs/` — see the table at the end.
 
 ---
 
 ## Data model
 
-Persisted to `localStorage` under key `yearly:store:v1`:
+Persisted to `localStorage` under `yearly:store:v1` (and mirrored to D1 via sync):
 
 ```jsonc
 {
   "version": 1,
   "currentYear": 2026,
-  "density": "balanced",
+  "density": "balanced",                       // "minimal" | "balanced" | "all"
   "years": {
     "2024": { "ceiling": 21000, "buffer": 0.04 },
     "2025": { "ceiling": 23000, "buffer": 0.04 },
     "2026": { "ceiling": 25000, "buffer": 0.04 }
   },
-  "people": [ /* Person[] */ ],
+  "people":   [ /* Person[] */ ],
   "wishlist": [ /* WishlistItem[] */ ],
-  "templates": [ /* Template[] */ ],
+  "templates":[ /* Template[] */ ],
   "transactions": [ /* Transaction[] */ ]
 }
 ```
 
-**Transaction** (positive `amount_eur` = expense):
+**Transaction** (positive `amount_eur` = an expense):
 ```ts
 {
   id: string;
-  date: string;              // "YYYY-MM-DD"
+  date: string;                 // "YYYY-MM-DD" (year is derived from date.slice(0,4))
   description: string;
-  amount_eur: number;        // positive
-  original_amount?: number;  // for imported rows in foreign currency
-  original_currency?: string;
+  amount_eur: number;           // positive, rounded to cents
   category: CategoryId;
+  source: "manual" | "import" | "revolut";
+  original_amount?: number;     // for imported rows in a foreign currency
+  original_currency?: string;
   note?: string;
-  source: "manual" | "import";
-  fun?: true;                // present + true on fun-budget tx only
-  person?: "joseph" | "marti"; // required when fun === true
+  fun?: true;                   // present on fun-budget tx only
+  person?: "joseph" | "marti";  // required when fun === true
+  oneoff?: true;                // excluded from the trend rate (still counts in spent)
+  merchant_logo?: string;       // Revolut-sourced
+  merchant_city?: string;       // Revolut-sourced
 }
 ```
 
-**Person** (fun-budget rate schedule):
-```ts
-{
-  id: string;               // "joseph" | "marti"
-  name: string;
-  startMonth: string;       // "YYYY-MM" — rates accrue from here
-  rates: Array<{ from: string; amount: number }>; // sorted ascending by `from`
-}
-```
-`rates` is a **forward-only dated schedule**: each entry means "from this month onwards, the rate is €X/mo". Past entries are never modified; a new entry is appended when the user changes the amount. `rateForMonth(person, ym)` picks the latest entry with `from ≤ ym`, returning 0 before `startMonth`.
+**Person** — `{ id, name, startMonth, rates: [{ from, amount }], balanceAdjustment? }`. `rates` is the
+forward-only dated allowance schedule. Defaults: Joseph €100/mo, Marti €200/mo, both from `2026-01`.
 
-**WishlistItem** (per-person savings goal):
-```ts
-{
-  id: string;
-  owner: string;            // person.id
-  name: string;
-  price: number;
-  note?: string;
-  createdMonth: string;     // "YYYY-MM"
-}
-```
+**WishlistItem** — `{ id, owner, name, price, note?, createdMonth }`.
+**Template** — `{ id, name, category, defaultAmount?, icon? }` (the Quick-log tiles).
 
-**Template** (Quick-log tile):
-```ts
-{ id: string; name: string; category: CategoryId; defaultAmount?: number; icon?: string; }
-```
-
-**Key model decisions:**
-- **`ceiling` is per-year, sacred, user-set** — renamed from `target`. It is the total allowed annual outflow. Never derived. Old backups with `target` are migrated automatically by `migrateStore`.
-- **Fun budget is layered on top** — fun-tagged transactions are excluded from all main budget math; only the combined verdict is measured against `ceiling`. See *Fun budget model* below.
-- **`buffer` is per-year** (a fraction, e.g. `0.04` = 4%). See *Projection math*.
-- Year is derived from `date.slice(0,4)`; actuals are always computed from transactions, never stored as aggregates.
+Actuals are **always computed from transactions**, never stored as aggregates. Old backups (with
+`target` instead of `ceiling`, or missing `people`/`wishlist`) are upgraded by `migrateStore` on load
+and on JSON restore.
 
 ---
 
-## Projection math  (`y/calc.jsx → computeStats`)
-
-### Vocabulary
-
-| Name | Meaning | Stored? |
-|---|---|---|
-| `ceiling` | per-year household ceiling (sacred, user-set) | yes — `years[y].ceiling` |
-| `funPlanAnnual` | Σ planned fun allocations for the year | derived |
-| `mainTarget` | `ceiling − funPlanAnnual` (non-discretionary budget) | derived, never stored |
-| `spent` / `projection` | main (non-fun) YTD / projection | derived |
-| `funSpent` / `funProjection` | fun YTD / linear projection | derived |
-| `combinedProjection` | `projection + funProjection` | derived |
-| `combinedDelta` / `combinedStatus` | combined vs `ceiling` | derived |
-
-### Main budget (non-fun transactions only)
-
-Linear pace model (intentionally simple for v1 — Christmas isn't linear, accepted):
+## Repo layout
 
 ```
-doy            = day-of-year of "as of" date          // today for current year, 365 for past years
-ceiling        = years[year].ceiling
-funPlanAnnual  = Σ over people of Σ over months 1..12 of rateForMonth(person, "YYYY-MM")
-mainTarget     = ceiling − funPlanAnnual               // derived, never stored
-buffer         = years[year].buffer                   // fraction
-spent          = sum(amount_eur) for NON-FUN txns in year, date <= asOf
-lumpThreshold  = mainTarget × 0.02                    // tx above this are winsorized out of rates
-recurring      = NON-FUN txns with amount_eur ≤ lumpThreshold (still counted in spent)
-recurringRate  = sum(recurring.amount_eur) / doy      // YTD rate, lump-insensitive
-trailing60Rate = sum(recurring where date > asOf-60d) / 60
-blendedRate    = recurringRate × (doy/365) + trailing60Rate × (1 − doy/365)
-projNoBuffer   = spent + blendedRate × daysRemaining   // raw extrapolation, no buffer
-projection     = spent + blendedRate × daysRemaining × (1 + buffer)
-bufferAmt      = projection - projNoBuffer
-pace           = (doy / 365) * mainTarget              // on-pace benchmark
-delta          = projection - mainTarget
-deltaPct       = delta / mainTarget
+.
+├── public/                     Everything the browser loads (served by the Worker)
+│   ├── index.html              App shell: loads React/Babel from CDN, then y/*.jsx in order, mounts
+│   ├── sw.js                   Network-first service worker; CACHE_NAME bumped on every release
+│   ├── manifest.json           PWA manifest (name, icons, standalone, scope)
+│   ├── icons/
+│   │   ├── icon.svg            App icon (192/512)
+│   │   └── icon-maskable.svg   Maskable variant for Android adaptive icons
+│   └── y/                      The app modules (each an IIFE attaching to window; load order matters)
+│       ├── icons.jsx           Inline-SVG Lucide-style icon set → window.Icon / window.YIcons
+│       ├── ds.jsx              Local Button/SegmentedControl/Input/Chip → ApertureDesignSystem_72a4cd
+│       ├── data.jsx            Store shape, 18 categories, templates, load/save/migrate → YData
+│       ├── sync.jsx            Outbox-based client↔D1 sync + launch reconciliation → YSync
+│       ├── calc.jsx            THE BRAIN: projection math, fun math, callout engine → YCalc
+│       ├── ui.jsx              Shared primitives (StatusHero, TxRow, CalloutCard, Toast…) → YUI
+│       ├── fun.jsx             Fun-budget UI (FunStrip + FunTab) → YFun
+│       ├── home.jsx            Overview screen (hero + fun strip + MonthCurve) → YHome
+│       ├── addflow.jsx         Add/Edit sheets, Quick keypad, category picker → YAdd
+│       ├── analysis.jsx        Analysis screen (Projection/Categories/Activity/Fun) → YAnalysis
+│       ├── settings.jsx        Settings, years, fun config, import/export, version footer → YSettings
+│       ├── app.jsx             Stateful root: routing, year switch, store + sync wiring
+│       ├── tokens.css          Broadsheet design tokens (colors, fonts, spacing, shadows)
+│       └── app.css             All app styling, built on the tokens — the visual source of truth
+│
+├── src/
+│   └── index.js                Cloudflare Worker: serves public/ + the /api/* sync endpoints, talks to D1
+│
+├── migrations/                 D1 schema, applied with `wrangler d1 migrations apply`
+│   ├── 0001_init.sql           transactions + settings tables
+│   ├── 0002_revolut_fields.sql Revolut enrichment columns (merchant city/logo/mcc, fees, card label…)
+│   ├── 0003_oneoff_flag.sql    oneoff INTEGER column
+│   └── 0004_fix_updated_at_seconds.sql  Retro-fix legacy rows stamped in seconds → milliseconds
+│
+├── scripts/                    Revolut import pipeline (Python + Windows .bat helpers)
+│   ├── revolut_clean.py        Core: Revolut JSON → cleaned SQL/CSV (FX, category rules, skip logic)
+│   ├── sync.py                 Orchestrator: prepare / push / status
+│   ├── from_csv.py             Legacy XLSX/CSV importer (no enrichment columns)
+│   ├── prepare.bat / push.bat / status.bat   Double-click wrappers around sync.py
+│   ├── .sync_state.json        Last-sync cursor — do not delete
+│   └── batches/                Archived JSON downloads, generated CSV/SQL, the console script
+│
+├── design/
+│   ├── BROADSHEET_DESIGN_SPEC.md   The Broadsheet theme spec (colors, type, spacing)
+│   ├── RESTYLE_LOG.md              Session-by-session restyle history
+│   └── reference/                  Static design references (broadsheet.html, legacy lb-*.jsx, tokens.css)
+│
+├── docs/                       Deep-dive technical docs (pulled when a task touches that area)
+│   ├── ARCHITECTURE.md         calc/data/sync/app internals + full vocabulary
+│   ├── UI.md                   Component & screen specifications
+│   ├── BACKEND.md              Worker + D1 schema + /api endpoint contract
+│   ├── REVOLUT.md              Import pipeline detail, category rules, FX, known issues
+│   └── PWA-AND-DEV.md          Service worker, local dev, regression test, preview workflow
+│
+├── .claude/                    Claude Code config (launch.json preview server, settings.local.json)
+├── calc.test.html              Standalone regression test for calc.jsx — open over HTTP, all rows PASS
+├── CLAUDE.md                   Guide for Claude Code sessions (hub → docs/)
+├── README.md                   This file — the product + math spec
+├── wrangler.jsonc              Cloudflare Workers config (D1 binding, assets, migrations dir)
+└── package.json                npm metadata; scripts: `dev` (wrangler dev), `deploy` (wrangler deploy)
 ```
-
-**Date convention:** all "as of" date strings use `localISO(d)` — `d.getFullYear()/getMonth()/getDate()`.
-Never `toISOString()`, which shifts dates backward in UTC+ timezones (EET = UTC+2/+3), silently
-dropping Dec 31 transactions from completed years.
-
-**Lump-sum winsorization:** transactions larger than 2% of `mainTarget` are excluded from the
-blended rate calculation (but included in `spent`). This prevents a single holiday purchase
-from inflating the year-end projection by ~4× the purchase price.
-
-The buffer uplifts only the extrapolated remainder, so on Dec 31 (`daysRemaining = 0`) projection equals `spent` exactly; `funProjection` carries no buffer by design. All day counts use the actual year length; leap years (366 days) are supported.
-
-For a **completed (past) year**: `projection = spent` (no extrapolation, no buffer).
-
-### Forecast uncertainty band
-
-When ≥4 complete ISO-agnostic weeks of recurring data are available (current incomplete year only), `computeStats` computes a ±band from observed spend volatility:
-
-```
-weekIdx(t)      = Math.floor((dayOfYear(t.date) − 1) / 7)   // 0-based, ISO-agnostic
-nCompleteWeeks  = Math.floor((doy − 1) / 7)                 // fully-elapsed weeks
-weekTotals[k]   = Σ recurring.amount_eur where weekIdx = k  // 0 for empty weeks
-sigmaWeek       = sample std-dev of weekTotals (n−1 divisor, zero weeks included)
-weeksRemaining  = daysRemaining / 7
-bandAmt         = sigmaWeek × √weeksRemaining × (1 + buffer)
-projLow         = max(spent, projection − bandAmt)           // floor: never below spent
-projHigh        = projection + bandAmt
-```
-
-`projLow/projHigh/bandAmt` are `null` when: `nCompleteWeeks < 4`, or year is complete/future.
-
-**Main budget status thresholds** (drive green/amber/red on the main budget):
-
-When the band exists (≥4 weeks):
-- `good` if `projection ≤ mainTarget`
-- `alert` if `projLow > mainTarget` (even the optimistic edge of the forecast misses — avoids false alarms from threshold-flapping)
-- `watch` otherwise (projection over, but projLow still within reach)
-
-When the band is null (< 4 weeks elapsed, or complete/future year):
-- Current year: `good` if `projection ≤ mainTarget`; `watch` if `≤ mainTarget × 1.08`; else `alert`.
-- Completed year: `good` if `spent ≤ mainTarget`; `watch` if `≤ mainTarget × 1.03`; else `alert`.
-
-**Missed-entry buffer** is a **flat % uplift on the projection**, adjustable 0–15% via a
-slider in Settings, and made visible: the Analysis projection panel shows a "Buffer
-adds +€X" stat, and a callout explicitly explains "logged spend alone projects to €X;
-the N% buffer lifts that to €Y."
-
-### Fun figures and combined verdict
-
-```
-funSpent       = sum(amount_eur) for FUN txns in year, date <= asOf
-funLinear      = funSpent / doy * 365
-funCap         = funSpent + max(0, Σ person balances as of asOf) + futureAccruals
-               // futureAccruals = Σ rateForMonth(p, m) for each person p, each remaining month m
-funProjection  = min(funLinear, funCap)  // current year: capped at what the allowance system permits
-               = funSpent               // completed year
-               = 0                     // future year
-combinedProjection = projection + funProjection
-combinedDelta  = combinedProjection − ceiling
-combinedStatus = good if combinedProjection ≤ ceiling
-                 watch if ≤ ceiling × 1.08
-                 alert otherwise        (completed year uses × 1.03)
-```
-
-> **Why cap funProjection?** Fun spend is often lumpy (one big purchase rather than a steady
-> monthly drip). Without the cap, a single €2k purchase in January extrapolates linearly to
-> ~€22k, inflating `combinedProjection` by far more than the allowance system could ever
-> produce. The cap `funSpent + max(0, Σbalances) + futureAccruals` reflects the maximum
-> plausible fun spend given current balances and remaining accruals.
-
-**Combined verdict is the sacred number** — the hero always leads with `combinedProjection`
-vs `ceiling`. The main budget figures are a decomposition, not the primary verdict.
 
 ---
 
-## Callout engine  (`y/calc.jsx → buildCallouts`)  — the heart of the app
+## Running it
 
-Pure function `(store, stats) → Callout[]`, ranked. Each callout:
-```ts
-{ id, severity: "alert"|"watch"|"info"|"good", icon, accent?, text, drill: { section, category? }, mag }
-```
-`text` is a number-led analytical sentence; numbers within it are rendered in mono.
-Tapping a callout navigates to Analysis and focuses the relevant section/category.
+The client needs only an HTTP server (it will **not** work over `file://`, because the
+`type="text/babel"` script tags fetch the modules):
 
-**Detectors** (current year, main budget — detectors 1–7; combined verdict — detector 8):
-
-1. **Projection trend** — only fires when `doy > 28` (suppressed in January: before day 28,
-   the 28-day-ago reference falls in the prior year with zero current-year spend, producing a
-   spurious "projection shot up" alert). Recompute projection as of 28 days ago (using only
-   main txns up to then); if it moved > 1.2% of mainTarget, emit "**Main budget:** Year-end
-   projection has moved up/down €X over the last 4 weeks, now €Y." (`alert` if worsened >
-   4% of mainTarget, else `watch`/`good`).
-2. **14-day pace streak** — last-14-day daily rate vs linear daily (`mainTarget/365`); if
-   > 1.15× or < 0.7×, emit "**Main budget:** Last 14 days are running +N% above/below linear
-   pace — €X/day vs €Y/day." (`alert` if > 1.35×).
-3. **Category month-over-month mover** — biggest change between last *full* month and the
-   month before (only categories with > €50 that month, change > €60): "Restaurants: €340
-   in May, +60% vs April."
-4. **Top category share / drift** — if the largest category is > 26% of main spend: "Groceries
-   is 27% of spend so far — €X across N entries." (`watch` if > 34%).
-5. **Buffer explanation** (info) — see *Projection math*.
-6. **Year-over-year** (current year, when prior year has main data) — "Spending is €X (+N%)
-   higher/lower than the same point in [year−1]." (`watch` if higher by > 8% of mainTarget).
-7. **Required daily pace** (current year, when projection > mainTarget) — "**Main budget:**
-   Spend ≤ €X/day from here to finish on main budget target." (`watch` if status is alert,
-   else `info`).
-8. **Ceiling verdict** (current year, **always top**, replaces calm fallback) —
-   - `combinedProjection > ceiling` — two sub-cases based on `trimPer = overBy / monthsLeft`:
-     - If `trimPer ≤ funPlanAnnual / 12`: "Household projects to €X against your €Y ceiling —
-       trim fun spending by ~€Z/mo to stay within it."
-     - Else (main spending must also fall): "Household projects to €X against your €Y ceiling —
-       even cutting the entire fun budget (€Z/mo) won't close it; main spending needs to drop
-       ~€W/mo too."
-     Both: (`alert` if over by > 8% of ceiling, else `watch`). Drill → Fun tab.
-   - `combinedProjection < ceiling × 0.94`: "You're tracking €X under your €Y ceiling —
-     room to raise the fun budget by ~€Z/mo if you want." (`good`). Drill → Fun tab.
-   - Between 0.94× and 1×: "Tracking €X under your €Y ceiling — tight but on course." (`info`).
-     Drill → Fun tab. Replaces the calm fallback.
-
-**Ranking:** by severity (`alert > watch > info > good`), then by `mag`. Detector #8 is
-always prepended first when present.
-**Calm state:** if nothing reaches `watch`/`alert` *and* no ceiling callout, prepend a
-single neutral line ("Projection steady at €X … nothing notable in the data").
-**Completed years:** a single review callout comparing `spent + funSpent` vs `ceiling` ("Finished over/under the ceiling by €X — €Y against a €Z ceiling."). The combined figure (not just main spend) is the verdict for complete years.
-**Future years:** a single "hasn't started yet" callout.
-
-**Threshold table** — all constants live in the `T` object at the top of `calc.jsx`'s IIFE:
-
-| Constant | Value | Rationale |
-|---|---|---|
-| `WATCH_BAND_CURRENT` | 1.08 | Forecast uncertainty mid-year: within +8% of mainTarget/ceiling = watch, beyond = alert |
-| `WATCH_BAND_COMPLETE` | 1.03 | Settled fact: tighter +3% band for finished years |
-| `CEILING_COMFORT` | 0.94 | Below 94% of ceiling = comfortable, room to raise fun |
-| `CEILING_ALERT` | 0.08 | Combined projection > ceiling × (1+8%) → alert severity |
-| `TREND_NOTABLE` | 0.012 | Projection moved > 1.2% of mainTarget in 4 weeks = worth a callout |
-| `TREND_ALERT` | 0.04 | > 4% of mainTarget move → alert severity |
-| `STREAK_HOT` | 1.15 | 14d daily pace > 115% of linear pace → spending streak |
-| `STREAK_ALERT` | 1.35 | 14d pace > 135% → alert severity |
-| `STREAK_COOL` | 0.70 | 14d pace < 70% → under-pace (good) |
-| `SHARE_NOTABLE` | 0.26 | Top category > 26% of YTD spend = worth surfacing |
-| `SHARE_WATCH` | 0.34 | Top category > 34% → watch severity |
-| `MOVER_MIN_EUR` | €60 | MoM category change must exceed €60 to be a "mover" |
-| `MOVER_MIN_BASE` | €50 | Category must have ≥ €50 in the last full month to be eligible |
-| `BUFFER_EXPLAIN_MIN` | 0.01 | Explain the buffer only when it adds > 1% of mainTarget |
-| `LUMP_PCT` | 0.02 | Transactions > 2% of mainTarget excluded from extrapolated rate (winsorization) |
-| `DAYS_PER_MONTH` | 30.4 | Average month length for "months remaining" arithmetic |
-| `YOY_WATCH` | 0.08 | YTD spend > prior year same point by > 8% of mainTarget → watch |
-
-**Overview density** (a Tweak): `minimal` = top ≤2 hot callouts (or 1 calm), `balanced`
-= top 4, `all` = everything.
-
----
-
-## Fun budget model  (`y/calc.jsx → computeFun`, `y/fun.jsx`)
-
-### Concept
-
-Each person has a **monthly fun allowance** — a "no questions asked" discretionary
-budget. Fun transactions are tagged `fun:true` + `person` at log time and are **excluded
-from all main budget math**. The fun budget layers on top of the main budget; together
-they measure against the household `ceiling`.
-
-### All-time running balance
-
-```
-balance(person, asOf) =
-  Σ(rateForMonth(person, m) for each month m from person.startMonth to asOf month, inclusive)
-  − Σ(amount_eur for all fun txns of that person, date ≤ asOf)
+```bash
+# from the repo root
+python -m http.server 8766
+# → open http://localhost:8766/public/
 ```
 
-Balance **can be negative** ("buy now, earn it back"). The UI shows negative balances
-explicitly ("owe back") and never clamps the number to zero. Progress bars (wishlist
-goal completion) do clamp to 0–100%.
+State persists to `localStorage` under `yearly:store:v1`; clear that key to reset to a blank store.
+Running locally with no backend is fine — the sync layer treats the resulting `/api` 404s as silent
+no-ops.
 
-`computeFun(store, asOfDate?)` returns:
-- `people[]` — per-person: `{ id, name, balance, monthlyRate, usedThisMonth, spentAllTime }`
-- `funSpentYTD` — fun spend in `store.currentYear` up to asOf
-- `funProjection` — linear projection of fun spend (approximate)
-- `funCatList` — fun-only category breakdown for `currentYear`
+To run the **full stack** (Worker + D1) locally, or to deploy:
 
-The per-person balance is an **all-time, as-of-now concept** — it does not change
-when the user switches `viewYear`. The combined verdict for a non-current viewYear
-uses that year's actuals vs that year's `ceiling` (no projection for past years; zero
-for future years).
+```bash
+npm install          # installs wrangler
+npm run dev          # wrangler dev — serves public/ + the Worker + a local D1
+npm run deploy       # wrangler deploy
+```
 
-### Dated rate schedule
+After any change to `calc.jsx` or `data.jsx`, run the regression test (`calc.test.html`) — all rows
+must PASS. Because the app is a PWA, code changes won't appear on a plain reload until you bump
+`CACHE_NAME` in `public/sw.js` and hard-refresh. Both of these, plus the local-dev and preview
+details, are in [`docs/PWA-AND-DEV.md`](docs/PWA-AND-DEV.md).
 
-`person.rates` is a forward-only sorted array of `{ from: "YYYY-MM", amount }`. Editing
-the monthly rate appends (or updates) a new entry for the current `YYYY-MM`; past entries
-are never modified. `rateForMonth(person, ym)` returns the latest `from ≤ ym`, or 0
-before `startMonth`.
-
-This means `funPlanAnnual` sums per-month rates across all 12 months — a mid-year rate
-change is immediately reflected in `mainTarget` from that month forward.
-
-### Wishlist
-
-Each person has a wishlist of savings goals `{ id, owner, name, price, createdMonth }`.
-Progress = `max(0, balance) / price` clamped 0–100%. Months-to-afford =
-`max(0, ceil((price − balance) / monthlyRate))`; "ready now" if balance ≥ price.
-**"Bought it"** logs a fun-tagged shopping transaction for `item.price` and removes the
-item — removal is the v1 archive mechanism.
-
----
-
-## Screens / Views
-
-The app is a fixed mobile column (`max-width: 440px`, full viewport height, centered on
-desktop with a rounded device frame + shadow at ≥480px). Three regions: a sticky
-**top bar**, a scrolling **body**, a **bottom nav**. Sheets and the tweaks panel are
-absolutely positioned within the column.
-
-### Top bar (54px, frosted)
-- Left: **`Yearly.`** wordmark (the period is in the accent color). In Settings, this
-  becomes a `‹ Done` button.
-- Right: a **year pill** (`2026 ⌄`, shows "past" badge when viewing a non-current year)
-  → opens the year menu sheet; and a circular **gear** icon → Settings. In Settings the
-  right side shows the title "Settings".
-
-### Bottom nav
-Three zones: **Overview** (home icon) · a raised circular **`+` FAB** (accent fill, −22px
-margin-top so it floats above the bar) · **Analysis** (layers icon). The FAB opens the
-Add sheet from anywhere. Settings is reached via the gear, not the nav. Active tab uses
-`--text`; inactive uses `--text-3`. Safe-area bottom padding applied.
-
-### 1. Overview  (`y/home.jsx`) — the calm surface
-Top → bottom:
-- **Status hero** (`StatusHero` in `y/ui.jsx`) — Broadsheet numerals:
-  - Headline = `combinedProjection` (current year), combined spent for complete years,
-    `ceiling` for future years.
-  - Sub-line: combined vs ceiling (over/under by €N), coloured by `combinedStatus`.
-  - Pace rule fills to `combinedProjection / ceiling`; day-of-year marker.
-  - Decomposition line beneath: `main €A / €mainTarget` (coloured by main status)
-    and `fun €B` (ink-2), so all three states are readable at a glance.
-- **"What's happening"** — the callouts list (sliced by density). Each callout is a hairline
-  row: a severity dot (terra/amber/sage), the analytical sentence, a faded "→". Whole row
-  tappable → drills into Analysis.
-- **Fun strip** (`FunStrip` from `y/fun.jsx`) — compact hairline section labelled "Fun budget":
-  one row per person showing name, all-time balance (sage if ≥0, terra if negative with
-  "owe back" hint), and nearest wishlist goal name + progress bar. Whole strip tappable →
-  Analysis Fun tab.
-- **Spend curve** — a dependency-free SVG cumulative spend curve for the current year
-  (main spend only).
-
-### 2. Analysis  (`y/analysis.jsx`) — the deep surface
-A sticky **segmented control**: `Projection` · `Categories` · `Activity` · `Fun`.
-
-- **Projection tab:** a "Spend vs pace" card with the projection chart + legend, an
-  explanatory line about the linear model, then a 2-col **stat grid**: Spent YTD,
-  On-pace-by-today, Daily rate (vs linear), Buffer adds, Projected finish (status-colored),
-  vs mainTarget (status-colored).
-  - **Chart spec (use Recharts):** X = day-of-year 0–365 with month ticks; Y = €, domain
-    `[0, max(mainTarget, projection) × 1.1]`. Series: **actual** cumulative line (status color,
-    with a soft area fill) up to today; **projected** dashed line (amber) from today→year-end;
-    **linear pace** dotted reference line from 0→mainTarget; a dashed horizontal **mainTarget**
-    reference line labeled "main €21.4k"; a dot at today and at the projected endpoint.
-- **Categories tab:** "Where it's going" — every category that has spend, sorted by amount,
-  as an interactive bar row: icon, name, amount (mono), a colored share bar, and a sub-line
-  ("27% of spend · 84 entries · +22% MoM"). **Tap to expand** → a per-month **bar trend**
-  mini-chart (last full month highlighted) + the 5 most recent transactions in that category.
-  No per-category targets. This is *diagnostic depth on demand*, not a passive list.
-- **Activity tab:** a search input (filter by description) + horizontally scrolling category
-  filter chips + the full transaction list (reverse-chronological, **main txns only** — fun
-  tx are excluded), each row tappable to edit. Footer "N of M entries."
-- **Fun tab** (`FunTab` from `y/fun.jsx`): per-person cards (balance, monthly rate, this-month
-  usage, all-time spent), fun-only category breakdown, and the full wishlist with progress
-  bars, months-to-afford ETA, "Bought it" button, and an "Add item" sheet. Reached by tapping
-  the Overview fun strip or any callout that drills `{ section: "fun" }`.
-
-### 3. Add an expense  (`y/addflow.jsx`) — bottom sheet, frictionless
-Header "Log an expense" + a `Quick | Manual` segmented control.
-- **Quick (default):** a 4-column grid of **template tiles** (category color dot + name). Tap
-  a tile → an entry step in the same sheet: template chip, a big mono amount display, a
-  **custom numeric keypad** (1–9, ., 0, ⌫ — for fast thumb entry), a date field (defaults to
-  today), an optional note, and a primary "Add €X" button. Prefills category/name (and amount
-  if the template has a default).
-- **Manual:** description, amount, a 3-column **category picker** (all 18, color dot+label,
-  selected highlights in accent), date (defaults today), optional note, "Add expense".
-- Both flows expose a **Fun budget toggle** (off by default). When on, an owner picker
-  (Joseph / Marti chips) appears. The saved transaction has `fun:true` + `person` set.
-
-### 4. Edit / delete  (`y/addflow.jsx → EditSheet`)
-Tapping any transaction (Activity, category drill) opens a sheet prefilled from the
-transaction, with a "Delete" (secondary) + "Save changes" (primary) row. Includes the
-same **Fun budget toggle** as AddSheet; pre-populates from `txn.fun`/`txn.person`.
-
-### 4. Edit / delete  (`y/addflow.jsx → EditSheet`)
-Tapping any transaction (Activity, category drill) opens a sheet prefilled from the
-transaction, with a "Delete" (secondary) + "Save changes" (primary) row. Includes the
-same **Fun budget toggle** as AddSheet.
-
-### 5. Settings  (`y/settings.jsx`) — behind the gear
-Grouped rows:
-- **This year:** Household ceiling (€, opens numeric sheet labelled "Your total annual
-  outflow ceiling — the sacred number everything is measured against") · Missed-entry buffer
-  (opens a slider sheet 0–15% with live "projection €X → €Y" preview) · Past years (opens
-  **Years** list: each year shows `ceiling`, combined projection/final, and a delta chip;
-  tapping a year drills into a year detail view with ceiling + buffer rows).
-- **Fun budget:** one row per person, showing their current monthly rate, opens
-  `FunConfigSheet` to set the rate for the current month onwards (forward-only, past entries
-  preserved). Shows the derived split: `ceiling = main/yr + fun/yr`.
-- **Display:** Overview density (minimal/balanced/all — controls how many callouts are shown).
-- **Data:** Quick templates (manager sheet: reorder ▲▼, edit, delete, add — name/category/
-  default amount) · Import CSV · Export all data (downloads CSV) · Back up JSON · Restore
-  JSON (runs `migrateStore` so old backups with `target`/no `people` migrate cleanly) ·
-  Restore sample data.
-- **Danger zone:** Clear all data (type `DELETE` to confirm; clears transactions, keeps
-  ceiling/templates).
-
-### 6. Import CSV  (`y/settings.jsx → ImportSheet`)
-File picker **or** paste, with a "Try sample" button. Expected columns:
-`date, description, amount_eur, original_amount, original_currency, category`.
-Parses → **preview** list where each row has a category override (`<select>`) and a
-skip checkbox. **Duplicate detection** on `description + date + amount_eur`; dups are
-flagged "DUP" and auto-skipped. Summary line: "N rows · K to import · M duplicates skipped".
-Confirm imports non-skipped rows with `source: "import"`.
-
----
-
-## Interactions & behavior
-
-- **Navigation** is in-memory route state (`home` | `analysis` | `settings`); no URL
-  routing in the prototype (add real routing in production). Scroll resets to top on route
-  change.
-- **Callout → drill:** sets an Analysis "focus" `{ section, category? }`; Analysis switches
-  to that tab and pre-expands the focused category.
-- **Year switching** uses a separate `viewYear` (not `currentYear`); viewing a past year
-  flips the whole app into "completed year" mode (final spend, no projection/buffer, review
-  callout, green/amber by final vs mainTarget).
-- **Bottom sheets:** slide up (`translateY(100%)→0`, 0.34s, Aperture ease) over a
-  blurred scrim; close on scrim tap or Escape; mount/unmount with a 340ms exit.
-  > Implementation note: the prototype toggles the open class via `setTimeout`, not
-  > `requestAnimationFrame`, because the preview pauses rAF when backgrounded. In a real
-  > app, use your sheet/modal primitive.
-- **Hover/press** (desktop): cards lift −2 to −5px with shadow growth; buttons lift −2px;
-  active settles back. All motion wrapped in `prefers-reduced-motion`.
-- **Forms:** amount must parse to > 0 to enable Save. Amounts stored rounded to cents.
-- **Persistence:** every mutation writes the whole store to localStorage.
-
----
-
-## State management
-
-App-level state (see `y/app.jsx`):
-- `store` — the full persisted object (see Data model). All mutations go through a
-  `setStore` that persists to `localStorage` on every write.
-- `route`, `viewYear`, `analysisFocus`, `addOpen`, `editTx`, `yearOpen`, `deletedTx`,
-  `showToast` — ephemeral UI state.
-
-Derived (memoized):
-- `stats = computeStats(store, viewYear)` — main budget figures for the viewed year.
-- `callouts = buildCallouts(store, stats)` — ranked callout list including the ceiling verdict.
-- `fun = computeFun(store)` — all-time per-person fun ledger (always as-of now, independent
-  of `viewYear`).
-
-**All numbers shown anywhere derive from these three pure functions** — re-implement them
-faithfully and the UI follows.
-
----
-
-## Design tokens
-
-Pulled from the Aperture dark theme + app-specific state/category palettes. (CSS variable
-names below are the Aperture token names used throughout `y/app.css`.)
-
-### Color — theme (dark)
-| Token | Value | Use |
-|---|---|---|
-| page background | `#000000` (with a faint radial `#141417→#08080a` behind the device) | app bg |
-| `--surface` | `#1c1c1e` | cards |
-| `--surface-2` | `#242427` | sheets / raised |
-| `--surface-sunk` | `#161618` | wells, segmented track, bar tracks |
-| `--text` | `#f5f5f7` | primary text (never pure white) |
-| `--text-2` | `#c7c7cc` | secondary |
-| `--text-3` | `#8e8e93` | tertiary / meta / axis labels |
-| `--hairline` | `rgba(255,255,255,0.10)` | borders, gridlines |
-| `--hairline-strong` | `rgba(255,255,255,0.18)` | hover borders, grabber |
-
-### Color — accent & state
-| Token | Value | Use |
-|---|---|---|
-| `--accent` | `#0071e3` (Apple blue; alternates: `#3b82f6`, `#5e5ce6`, `#e8e8ea`) | links, focus, primary button, FAB, selected |
-| good (green) | `#30d158` | under/at target |
-| watch (amber) | `#ff9f0a` | slightly over |
-| alert (red) | `#ff453a` | well over |
-| state tint bg | `color-mix(state 16%, transparent)` | chip / icon-badge fills |
-
-### Color — category palette (icon + tint, 18 fixed)
-`#22` (≈13%) alpha of the hue for the badge background; full hue for the icon/bar.
-Groceries `#32d74b` · Restaurants `#ff9f0a` · Shopping `#ff6ac1` · Gym `#9be15d` ·
-Health `#ff6961` · Utilities `#ffd60a` · House Stuff `#40c8e0` · Transport `#0a84ff` ·
-Taxes `#98989d` · Travel `#5ac8fa` · Entertainment `#bf5af2` · Sophie Kindergarten
-`#5e5ce6` · Services `#d0a24c` · Gift `#e0489a` · Pets `#cd8b4f` · Donation `#30d0c0` ·
-Cash `#99a06b` · General `#8e8e93`. (Full map in `y/data.jsx → CATEGORIES`.)
-
-### Typography
-- **UI font:** native system stack — `-apple-system, BlinkMacSystemFont, "SF Pro Display",
-  "SF Pro Text", "Segoe UI", system-ui, Roboto, Helvetica, Arial, sans-serif`. Zero web-font load.
-- **Numbers font (mono):** `ui-monospace, "SF Mono", "JetBrains Mono", Menlo, Consolas,
-  monospace`, with `font-feature-settings: "tnum" 1`. Applied via a `.num` class to every figure.
-- Weights: 600 display/headings, 500 meta/buttons/labels, 400 body.
-- Scale (px): hero numeral 46–62 · screen section labels 13 (uppercase, tracked) · card title 18 ·
-  body 15–16 · meta 12.5 · eyebrow 11–12 (uppercase, letter-spacing 0.1em).
-- Tracking tightens as size grows (−0.04em hero → −0.02em headings → −0.01em body).
-
-### Spacing — 4px base
-`4, 8, 12, 16, 20, 24, 32, 40, 48, 64`. Screen padding 18px. Card padding 18px. Use
-flex/grid with `gap`, never margin-stacked siblings.
-
-### Radii
-small controls/inputs `8–13px` · callout & template tiles `18px` · icon badges `10–13px` ·
-standard card `24px` · sheets `28px` (top corners) · device frame `40px` · chips & buttons
-fully pill (`980px`).
-
-### Elevation (dark)
-- rest: `0 1px 2px rgba(0,0,0,.5), 0 6px 18px rgba(0,0,0,.45)`
-- hover: `0 2px 8px rgba(0,0,0,.55), 0 22px 50px rgba(0,0,0,.6)`
-- modal/sheet: `0 40px 120px rgba(0,0,0,.7), 0 8px 24px rgba(0,0,0,.5)`
-
-### Motion
-Default ease `cubic-bezier(.22,.61,.36,1)`; durations 150–340ms; everything guarded by
-`prefers-reduced-motion`.
-
----
-
-## Assets
-
-- **Icons:** all inline SVG, drawn in a Lucide-compatible rounded-line style (24×24,
-  `stroke-width: 2`, round caps/joins), defined in `y/icons.jsx` (`YIcons` map + `<Icon>`
-  component). Covers 18 category icons + UI chrome (plus, gear, chevrons, search, trash,
-  pencil, calendar, check, arrows, trending up/down, upload/download, alert, info, activity,
-  layers, home, clock). **In production, use [Lucide](https://lucide.dev) (lucide-react)** —
-  the names map closely; the design-system guidance recommends Lucide.
-- **Fonts:** none to ship — native system stack (real SF Pro on Apple hardware).
-- **No images, no emoji, no icon fonts.**
-
----
-
-## Files in this repo
-
-| File | Contents |
+| Want the detail on… | Read |
 |---|---|
-| `index.html` | App shell — loads React/Babel from CDN, then the `y/` modules in dependency order, mounts the app. PWA meta + manifest link + SW registration. |
-| `manifest.json` | PWA manifest (standalone, portrait, black theme, icons). |
-| `sw.js` | Network-first service worker — serves cached app shell when offline. Bump `CACHE_NAME` on shell changes. |
-| `icons/` | App icon SVG assets (192, 512, maskable) for PWA install. |
-| `y/tokens.css` | All ~25 CSS custom properties the app consumes (`--bg`, `--surface`, `--text`, `--accent`, etc.). Loaded before `y/app.css`. |
-| `y/ds.jsx` | Local `Button`, `SegmentedControl`, `Input`, `Chip` primitives exposed as `window.ApertureDesignSystem_72a4cd`. No external DS bundle needed. |
-| `y/app.css` | All app styling, built on the token variables. **The source of truth for layout, spacing, and the visual system.** |
-| `y/data.jsx` | Categories (18, icon+color), default templates (8), seeded sample data generator (deterministic), localStorage load/save/reset/migrate. Exports `migrateStore` (idempotent) for both `loadStore` and JSON restore. |
-| `y/calc.jsx` | **Projection math + callout engine** + `computeFun` + `rateForMonth` + formatters + date helpers. Port verbatim. |
-| `y/icons.jsx` | Inline SVG icon set. |
-| `y/ui.jsx` | Shared primitives: `StatusHero` (combined-vs-ceiling hero), `CalloutCard`, `TxRow`, `CatIcon`, `DeltaChip`, `Sheet`, `SectionH`, `Toast`, mono-number rich-text helper. |
-| `y/fun.jsx` | Fun budget UI: `FunStrip` (Overview compact strip) + `FunTab` (Analysis workshop: per-person cards, wishlist, category breakdown). |
-| `y/home.jsx` | Overview screen: hero + callouts (density-sliced) + FunStrip + spend curve. |
-| `y/addflow.jsx` | Add sheet (Quick keypad + Manual + fun toggle), Edit sheet, category picker, numpad. |
-| `y/analysis.jsx` | Analysis screen: Projection / Categories / Activity / Fun tabs. Projection + Spend curve are dependency-free SVG; Fun tab renders `FunTab`. |
-| `y/settings.jsx` | Settings + Years + Fun budget config + Templates manager + CSV import/export/backup/restore + density + clear. |
-| `y/app.jsx` | Root: nav, routing, year switch, store wiring, `computeFun` memo, `onOpenFun`, undo-on-delete toast, mount. |
-| `calc.test.html` | Dev-only regression test for `y/calc.jsx` — open over HTTP to run assertions. Not precached by the SW. |
-
-> The prototype also references the **Aperture design system** under `_ds/` (dark theme
-> tokens + a few React components: Button, SegmentedControl, Input, Chip). These are the
-> visual foundation; in the target codebase, map them to your own component library while
-> keeping the tokens above.
-
----
-
-## Recommended build order in the target codebase
-
-1. Port `y/data.jsx` (model + categories + seed) and `y/calc.jsx` (math + callouts) as
-   plain TS modules — they have no UI dependency and are the product's brain.
-2. Set up tokens (colors/type/spacing above) in your styling system; dark theme only.
-3. Build the shell (mobile column, top bar, bottom nav + FAB) and the **Overview** screen
-   (status hero + callouts + recent).
-4. Build the **Add** flow (Quick keypad + Manual) — the most-used surface; optimize for speed.
-5. Build **Analysis** (Recharts projection chart first, then category diagnostics, then activity).
-6. Build **Settings** (ceiling, buffer, years, fun budget config, templates, import/export, clear).
-7. Wire localStorage persistence and the year switcher last.
+| The engine, store, sync, and state internals | [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) |
+| Components and screen specs | [docs/UI.md](docs/UI.md) |
+| The Worker, D1 schema, and `/api` endpoints | [docs/BACKEND.md](docs/BACKEND.md) |
+| The Revolut import pipeline | [docs/REVOLUT.md](docs/REVOLUT.md) |
+| Service worker, local dev, testing, preview | [docs/PWA-AND-DEV.md](docs/PWA-AND-DEV.md) |
+| Day-to-day guidance for Claude Code | [CLAUDE.md](CLAUDE.md) |
