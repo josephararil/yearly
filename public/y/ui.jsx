@@ -187,9 +187,9 @@
               const cap = YCalc.neededMonthlyCap(stats);
               const proj = YCalc.projectedMonthEnd(stats);
               const verdict =
-                proj > cap * 1.1  ? { cls: 'over',  text: 'Slow down ▲' } :
-                proj > cap * 0.95 ? { cls: 'tight', text: 'Tight ●' }     :
-                                    { cls: 'under', text: 'Room to spend ▼' };
+                proj > cap * 1.1  ? { cls: 'over',  text: 'Slow down ◂' } :
+                proj > cap * 0.95 ? { cls: 'tight', text: 'Tight' }     :
+                                    { cls: 'under', text: 'Fine ▸' };
               return (
                 <div className="pulse">
                   <div className="pulse-r1">
