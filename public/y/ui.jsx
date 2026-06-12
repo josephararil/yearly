@@ -226,19 +226,26 @@
     );
   }
 
-function TxRow({ t, onClick }) {
+function TxRow({ t, onClick, people }) {
     const c = YData.cat(t.category);
+    const personName = t.person && people ? (people.find((p) => p.id === t.person) || {}).name : null;
+    const isManual = t.source !== 'revolut';
     return (
       <button className="txrow" onClick={onClick}>
-        {t.merchant_logo
-          ? <img className="tx-logo" src={t.merchant_logo} alt="" onError={(e) => { e.target.style.display = 'none'; e.target.nextSibling.style.display = 'grid'; }} />
-          : null}
-        <span className="cat-ic" style={{ width: 24, height: 24, borderRadius: 6, background: tint(c.color, "22"), color: c.color, display: t.merchant_logo ? 'none' : 'grid' }}>
-          <Icon name={c.icon} size={12} />
+        <span style={{ position: 'relative', display: 'inline-flex', flexShrink: 0 }}>
+          {t.merchant_logo
+            ? <img className="tx-logo" src={t.merchant_logo} alt="" onError={(e) => { e.target.style.display = 'none'; e.target.nextSibling.style.display = 'grid'; }} />
+            : null}
+          <span className="cat-ic" style={{ width: 24, height: 24, borderRadius: 6, background: tint(c.color, "22"), color: c.color, display: t.merchant_logo ? 'none' : 'grid' }}>
+            <Icon name={c.icon} size={12} />
+          </span>
+          {isManual && (
+            <span style={{ position: 'absolute', top: -2, left: -2, width: 7, height: 7, borderRadius: '50%', background: 'var(--terra)', border: '1.5px solid var(--paper)', zIndex: 1, pointerEvents: 'none' }} />
+          )}
         </span>
         <span className="tx-main">
           <div className="tx-desc">{t.description}</div>
-          <div className="tx-meta">{fmtDateShort(t.date)} · {c.label}{t.source === "import" ? " · imported" : ""}{t.merchant_city ? ` · ${t.merchant_city}` : ""}</div>
+          <div className="tx-meta">{fmtDateShort(t.date)} · {c.label}{personName ? ` · ${personName}` : ""}</div>
         </span>
         <span className="tx-amt num">{eurAuto(t.amount_eur)}</span>
       </button>
