@@ -37,8 +37,13 @@ REVOLUT_WALLET = "b3badc0f-f575-43ec-8ca5-eac55929d857"
 # Device ID from the Revolut network request
 REVOLUT_DEVICE_ID = "AAAAAIXDDztSOzqJLJZaae2QShIgSMJa6PgaOQP86SD/0AfbuALYF356fkx+vwwOJF8D+L3rjdMW2EOWIAu5hdWzIK7hUCNDYPD6HEBBnBA9URP3rtLIhHoKhYymmrd9BY9dgA=="
 
-# Safety buffer — pull this many extra days before last sync to catch late-settling txns
-BUFFER_DAYS = 5
+# Safety buffer — pull this many extra days before last sync to catch late-settling txns.
+# Pagination is keyed on startedDate, so a transaction that stays PENDING longer than this
+# window falls behind it before completing and its finalised amount/date would be missed.
+# 30 days covers realistic pending durations (holds, disputes). Safe to widen because the
+# pipeline's upsert preserves user-owned fields on conflict (see revolut_clean.py
+# PRESERVE_ON_CONFLICT) — re-pulling already-imported rows no longer reverts in-app edits.
+BUFFER_DAYS = 30
 
 # Where this script lives (also where revolut_clean.py lives)
 SCRIPT_DIR = Path(__file__).parent

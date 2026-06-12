@@ -21,12 +21,12 @@ scripts/
 ```
 
 Config in `sync.py`: `D1_DATABASE = "yearly-db"`, `REVOLUT_WALLET`, `REVOLUT_DEVICE_ID`,
-`BUFFER_DAYS = 5` (days before last sync to re-pull for late-settling transactions).
+`BUFFER_DAYS = 30` (days before last sync to re-pull for late-settling transactions).
 
 ## Day-to-day workflow
 
 1. **`prepare.bat`** (`python sync.py prepare`) — generates the console script with the correct
-   `STOP_BEFORE` date (last sync − 5 days), copies it to clipboard, saves to
+   `STOP_BEFORE` date (last sync − 30 days), copies it to clipboard, saves to
    `batches/console_script.js`.
 2. Open `app.revolut.com`, paste the script in DevTools console (F12). A `revolut_YYYY-MM-DD.json`
    downloads to `~/Downloads`.
@@ -73,7 +73,10 @@ or `lastDate < STOP_BEFORE`.
 
 ## Skip logic
 
-- `state != "COMPLETED"` → skip
+- `state` in `{REVERTED, DECLINED, FAILED}` → skip. **PENDING is kept** so a transaction is
+  captured at started-time and later finalised when it completes and is re-pulled (see the
+  upsert + `BUFFER_DAYS` notes below). Pending rows use `startedDate` for `date` until they
+  complete.
 - `amount >= 0` → skip (income / refunds)
 - `type` in `{TOPUP, EXCHANGE}` → skip
 - Description matches any of: `^transfer from joseph`, `^transfer from martina`, `^transfer to
@@ -115,24 +118,30 @@ clean step — add it manually in the app rather than letting `amount_eur` go in
 }
 ```
 
-`prepare` uses `last_sync_date − 5 days` as `STOP_BEFORE` to catch late-settling transactions. Do
-not delete this file.
+`prepare` uses `last_sync_date − BUFFER_DAYS` (30) as `STOP_BEFORE` to catch late-settling
+transactions. Pagination is keyed on `startedDate`, so the window must be wide enough to re-reach a
+transaction that was PENDING when first captured and completed later. Do not delete this file.
 
 ## Known issues
 
 - **TRY**: Frankfurter doesn't support Turkish lira. The row is dropped — add manually in the app.
 - **Cyrillic merchant names**: Revolut's XLSX export garbles them; JSON export is clean. Always use
   JSON.
-- **PENDING transactions**: skipped (`state != "COMPLETED"`). Small discrepancies vs Revolut's
-  dashboard are expected.
+- **PENDING transactions**: included (captured at started-time, finalised on completion via the
+  preserving upsert + 30-day re-pull window). A pending row carries `startedDate` as its `date` and
+  an estimated `amount_eur` until it completes.
 - **Wrangler auth**: OAuth token occasionally goes stale. Fix: run `npx wrangler logout && npx
   wrangler login` from `scripts/`.
 - **D1 no transaction support**: SQL uses bare `INSERT OR REPLACE` statements with no `BEGIN
   TRANSACTION` wrapper.
-- **`INSERT OR REPLACE` overwrites manual edits**: re-pushing a transaction that you've already
-  edited in the app (category, fun flag, note) will silently revert those edits. Mitigated by the
-  pipeline only re-fetching the last `BUFFER_DAYS=5` of data, but still a known footgun — to be
-  reworked into `INSERT … ON CONFLICT DO UPDATE` with field-level merging.
+- **Field-preserving upsert** (resolved): the pipeline writes `INSERT … ON CONFLICT(id) DO UPDATE`
+  (`write_sql`), not `INSERT OR REPLACE`. On re-push it preserves the user-owned columns in
+  `PRESERVE_ON_CONFLICT` (`category, fun, person, note, deleted`, plus `oneoff` which the pipeline
+  never writes) and updates only pipeline-authoritative fields (`date, amount_eur, description`,
+  bank/enrichment columns, `updated_at`). This is what makes `BUFFER_DAYS=30` safe — re-pulling an
+  already-imported row no longer reverts in-app edits, resurrects deletions, or wipes `oneoff`.
+  Trade-off: a manual override of `amount_eur`/`date` on a Revolut row *is* overwritten back to the
+  bank value on re-pull (required so PENDING rows can finalise).
 
 ## `updated_at` units — must be milliseconds
 
