@@ -85,7 +85,7 @@
         <div style={{ display: "flex", gap: 6, flexWrap: "wrap", marginBottom: 10 }}>
           <ToggleChip label="Pace" active={showPace} color="var(--chart-pace)" onClick={() => setShowPace(!showPace)} />
           {!stats.complete && !stats.isFuture && <ToggleChip label="Projection" active={showProj} color="var(--chart-proj)" onClick={() => setShowProj(!showProj)} />}
-          <ToggleChip label="Ceiling" active={showCeiling} color="var(--ink-2)" onClick={() => setShowCeiling(!showCeiling)} />
+          <ToggleChip label="Main" active={showCeiling} color="var(--ink-2)" onClick={() => setShowCeiling(!showCeiling)} />
           {priorCum && <ToggleChip label={String(stats.year - 1)} active={showPrior} color="var(--chart-target)" onClick={() => setShowPrior(!showPrior)} />}
         </div>
         <svg ref={svgRef} viewBox={`0 0 ${W} ${H}`} width="100%"
@@ -107,18 +107,18 @@
           {showMonths.map((m) => (
             <text key={m} x={sx(MONTH_STARTS[m])} y={H - 8} textAnchor="middle" fontSize="9" fill="var(--chart-axis)" fontFamily="var(--mono)">{MONTHS[m]}</text>
           ))}
-          {/* target reference — always shown */}
-          <line x1={x0} y1={sy(stats.mainTarget)} x2={x1} y2={sy(stats.mainTarget)} stroke="var(--chart-target)" strokeWidth="1.2" strokeDasharray="4 4" />
-          <text x={x1} y={sy(stats.mainTarget) - 5} textAnchor="end" fontSize="9" fill="var(--chart-target)" fontFamily="var(--mono)">target {eurK(stats.mainTarget)}</text>
-          {/* household ceiling */}
+          {/* target = ceiling — always shown */}
+          <line x1={x0} y1={sy(stats.ceiling)} x2={x1} y2={sy(stats.ceiling)} stroke="var(--chart-target)" strokeWidth="1.2" strokeDasharray="4 4" />
+          <text x={x1} y={sy(stats.ceiling) - 5} textAnchor="end" fontSize="9" fill="var(--chart-target)" fontFamily="var(--mono)">target {eurK(stats.ceiling)}</text>
+          {/* main-budget decomposition — faint reference, not the target */}
           {showCeiling && (
             <>
-              <line x1={x0} y1={sy(stats.ceiling)} x2={x1} y2={sy(stats.ceiling)} stroke="var(--ink-2)" strokeWidth="1.5" strokeDasharray="6 3" />
-              <text x={x1} y={sy(stats.ceiling) - 5} textAnchor="end" fontSize="9" fill="var(--ink-2)" fontFamily="var(--mono)">ceiling {eurK(stats.ceiling)}</text>
+              <line x1={x0} y1={sy(stats.mainTarget)} x2={x1} y2={sy(stats.mainTarget)} stroke="var(--ink-2)" strokeWidth="1" strokeDasharray="4 4" opacity="0.4" />
+              <text x={x1} y={sy(stats.mainTarget) - 5} textAnchor="end" fontSize="9" fill="var(--ink-2)" fontFamily="var(--mono)" opacity="0.5">main {eurK(stats.mainTarget)}</text>
             </>
           )}
           {/* linear pace */}
-          {showPace && <line x1={sx(0)} y1={sy(0)} x2={sx(365)} y2={sy(stats.mainTarget)} stroke="var(--chart-pace)" strokeWidth="1" strokeDasharray="2 4" opacity="0.6" />}
+          {showPace && <line x1={sx(0)} y1={sy(0)} x2={sx(365)} y2={sy(stats.ceiling)} stroke="var(--chart-pace)" strokeWidth="1" strokeDasharray="2 4" opacity="0.6" />}
           {/* prior year */}
           {showPrior && priorCum && (() => {
             const endDay = stats.complete ? 365 : stats.doy;
@@ -411,7 +411,7 @@
             { color: "var(--chart-actual)", label: "Bars", desc: "monthly main-budget spend totals" },
             ...(avgMonthly > 0 ? [{ color: "var(--chart-pace)", label: `Avg (${eurK(avgMonthly)}/mo)`, desc: "monthly average over completed months" }] : []),
             ...(canShowPeak ? [{ color: "var(--amber)", label: `Peak (${eurK(maxMonthly)})`, desc: "highest single month so far" }] : []),
-            ...(canShowReq ? [{ color: "var(--chart-proj)", label: `Needed/mo (${eurK(requiredMonthlyAvg)})`, desc: "monthly cap required to finish the year under the main budget" }] : []),
+            ...(canShowReq ? [{ color: "var(--chart-proj)", label: `Needed/mo (${eurK(requiredMonthlyAvg)})`, desc: "monthly cap required to finish the year within your ceiling" }] : []),
           ];
           return (
             <div style={{ marginTop: 14, borderTop: "1px solid var(--hair)", paddingTop: 10 }}>
@@ -479,7 +479,7 @@
               { color: "var(--chart-actual)", label: `Actual (${eur0(stats.spent)})`, desc: "cumulative main-budget spend year-to-date" },
               ...(!stats.complete ? [{ color: "var(--chart-proj)", label: `Projected (→${eur0(stats.projection)})`, desc: "year-end extrapolation at your current blended daily rate" }] : []),
               ...(stats.projLow != null ? [{ color: "var(--chart-proj)", label: `Range (±${eur0(stats.bandAmt)})`, desc: "forecast uncertainty band based on weekly spending variance" }] : []),
-              { color: "var(--chart-pace)", label: `Pace (→${eur0(stats.mainTarget)})`, desc: "ideal on-track trajectory from Jan 1 to the main budget" },
+              { color: "var(--chart-pace)", label: `Pace (→${eur0(stats.ceiling)})`, desc: "ideal on-track trajectory from Jan 1 to the ceiling" },
               ...(stats.priorCum ? [{ color: "var(--chart-target)", label: `${stats.year - 1} (${eur0(stats.priorSpent)})`, desc: "prior year's main-budget spend at the same day of year" }] : []),
             ];
             return (
@@ -516,7 +516,7 @@
         <div>
           <div className="section-h" style={{ marginTop: 0, marginBottom: 10 }}><h2>In numbers</h2></div>
           <div className="statgrid">
-            <StatCard label="Spent year-to-date" value={eur0(stats.spent + (stats.funSpent || 0))} sub={`${stats.upto.length} entries`} />
+            <StatCard label="Spent year-to-date" value={eur0(stats.spent)} sub={`${stats.upto.length} entries`} />
             <StatCard label={stats.complete ? "Days" : "On-pace by today"} value={stats.complete ? "365" : eur0(stats.pace)} sub={stats.complete ? "complete" : `day ${stats.doy} of ${stats.daysInYear}`} />
             <StatCard label="Blended rate" value={eur0(stats.trailingDailyRate) + "/d"} sub={`YTD avg ${eur0(stats.dailyRate)}/d`} />
             {!stats.complete && <StatCard label="Buffer adds" value={"+" + eur0(stats.bufferAmt)} sub={`${Math.round(stats.buffer * 100)}% missed-entry`} />}
@@ -579,7 +579,7 @@
         <div>
           <div className="section-h" style={{ marginTop: 0, marginBottom: 6 }}>
             <h2>Where it's going</h2><span className="spacer" />
-            <span className="muted" style={{ fontSize: 12 }}>{eur0(stats.spent + (stats.funSpent || 0))} total</span>
+            <span className="muted" style={{ fontSize: 12 }}>{eur0(stats.spent)} total</span>
           </div>
           {stats.catList.map((c) => {
             const cat = YData.cat(c.id);
