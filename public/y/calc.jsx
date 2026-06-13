@@ -271,8 +271,6 @@ function computeStats(store, year, asOfDate) {
       pace, delta, deltaPct, status, projLow, projHigh, bandAmt, txns, upto, byCat, catList, byMonth, catMonth,
       priorCum, priorSpent,
       mainSpent, funSpent, funProjection,
-      // TODO(session4): remove aliases
-      combinedProjection: projection, combinedStatus: status, combinedDelta: delta, combinedDeltaPct: deltaPct,
     };
   }
 

@@ -151,12 +151,12 @@
     // status is vs mainTarget
     assert('status === "good" when projection = 0', stats.status === 'good', 'got "' + stats.status + '"');
 
-    // combined fields
-    assert('combinedProjection = projection + funProjection',
-      Math.abs(stats.combinedProjection - (stats.projection + stats.funProjection)) < 0.01,
-      stats.combinedProjection.toFixed(0) + ' vs ' + (stats.projection + stats.funProjection).toFixed(0));
-    assert('combinedDelta = combinedProjection − ceiling',
-      Math.abs(stats.combinedDelta - (stats.combinedProjection - stats.ceiling)) < 0.01);
+    // delta / deltaPct — projection is now total (main+fun), delta = projection − ceiling
+    assert('delta = projection − ceiling',
+      Math.abs(stats.delta - (stats.projection - stats.ceiling)) < 0.01,
+      'delta=' + stats.delta.toFixed(0) + ' projection=' + stats.projection.toFixed(0));
+    assert('deltaPct ≈ delta / ceiling',
+      Math.abs(stats.deltaPct - stats.delta / stats.ceiling) < 0.0001);
 
     // requiredDailyToHit is null when projection ≤ ceiling (blank store: projection=0)
     const reqBlank = YCalc.requiredDailyToHit(stats);
@@ -213,7 +213,7 @@
       ],
     };
     // asOf = Jun 7: doy=158; spent=4400 (all tx, lumps included in spent).
-    // lumpThreshold = mainTarget × 0.02 = 25000 × 0.02 = 500 (people:[] → mainTarget=25000).
+    // lumpThreshold = ceiling × 0.02 = 25000 × 0.02 = 500 (people:[] → ceiling=25000).
     // recurring (≤500): tr5(500)+tr6(500)+tr7(200) = €1200. tr1-tr4 exceed threshold → excluded from rates.
     // recurringYtdRate = 1200/158 ≈ 7.60/d; 60-day window = Apr 8 → Jun 7.
     // recurring in window: tr5(Apr15=500)+tr6(May15=500)+tr7(Jun1=200) = 1200 → rawTrailing=20/d.
@@ -356,12 +356,13 @@
       Math.abs(stats.mainTarget - (stats.ceiling - stats.funPlanAnnual)) < 0.01,
       stats.mainTarget + ' === ' + stats.ceiling + ' − ' + stats.funPlanAnnual);
 
-    // ---- combinedProjection = projection + funProjection ----
-    section('combined projection');
-    assert('combinedProjection = projection + funProjection',
-      Math.abs(stats.combinedProjection - (stats.projection + stats.funProjection)) < 0.01);
-    assert('combinedDeltaPct ≈ combinedDelta / ceiling',
-      Math.abs(stats.combinedDeltaPct - stats.combinedDelta / stats.ceiling) < 0.0001);
+    // ---- projection includes all spend (main + fun); delta vs ceiling ----
+    section('projection = total household spend; delta vs ceiling');
+    assert('delta = projection − ceiling',
+      Math.abs(stats.delta - (stats.projection - stats.ceiling)) < 0.01,
+      'delta=' + stats.delta.toFixed(2));
+    assert('deltaPct ≈ delta / ceiling',
+      Math.abs(stats.deltaPct - stats.delta / stats.ceiling) < 0.0001);
 
     // ---- 2026 rich fixture callout IDs (all detectors fire) ----
     section('2026 rich fixture — buildCallouts (all detectors)');
@@ -649,7 +650,7 @@
 
     // ---- §1.1 regression: neededMonthlyCap formula ----
     section('§1.1 regression — neededMonthlyCap helper');
-    // neededMonthlyCap(stats) = max(0, (mainTarget − spentBeforeCurrentMonth) / (12 − currentMonth))
+    // neededMonthlyCap(stats) = max(0, (ceiling − spentBeforeCurrentMonth) / (12 − currentMonth))
     // "spentBefore" covers only completed months so the current month is not penalised twice.
     const capStore = {
       currentYear: 2026,

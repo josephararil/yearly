@@ -44,7 +44,7 @@
 
     const headline = stats.isFuture ? stats.ceiling : stats.projection;
     const eyebrow = stats.complete
-      ? "Final combined spend · " + stats.year
+      ? "Final spend · " + stats.year
       : stats.isFuture
       ? "Household ceiling · " + stats.year
       : "Projected year-end";

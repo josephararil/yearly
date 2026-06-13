@@ -30,7 +30,7 @@
     const [showPace, setShowPace] = React.useState(true);
     const [showPrior, setShowPrior] = React.useState(true);
     const [showProj, setShowProj] = React.useState(true);
-    const [showCeiling, setShowCeiling] = React.useState(true);
+    const [showMain, setShowMain] = React.useState(true);
 
     const x0 = padL, x1 = W - padR, y0 = padT, y1 = H - padB;
     const priorCum = stats.priorCum;
@@ -85,7 +85,7 @@
         <div style={{ display: "flex", gap: 6, flexWrap: "wrap", marginBottom: 10 }}>
           <ToggleChip label="Pace" active={showPace} color="var(--chart-pace)" onClick={() => setShowPace(!showPace)} />
           {!stats.complete && !stats.isFuture && <ToggleChip label="Projection" active={showProj} color="var(--chart-proj)" onClick={() => setShowProj(!showProj)} />}
-          <ToggleChip label="Main" active={showCeiling} color="var(--ink-2)" onClick={() => setShowCeiling(!showCeiling)} />
+          <ToggleChip label="Main" active={showMain} color="var(--ink-2)" onClick={() => setShowMain(!showMain)} />
           {priorCum && <ToggleChip label={String(stats.year - 1)} active={showPrior} color="var(--chart-target)" onClick={() => setShowPrior(!showPrior)} />}
         </div>
         <svg ref={svgRef} viewBox={`0 0 ${W} ${H}`} width="100%"
@@ -111,7 +111,7 @@
           <line x1={x0} y1={sy(stats.ceiling)} x2={x1} y2={sy(stats.ceiling)} stroke="var(--chart-target)" strokeWidth="1.2" strokeDasharray="4 4" />
           <text x={x1} y={sy(stats.ceiling) - 5} textAnchor="end" fontSize="9" fill="var(--chart-target)" fontFamily="var(--mono)">target {eurK(stats.ceiling)}</text>
           {/* main-budget decomposition — faint reference, not the target */}
-          {showCeiling && (
+          {showMain && (
             <>
               <line x1={x0} y1={sy(stats.mainTarget)} x2={x1} y2={sy(stats.mainTarget)} stroke="var(--ink-2)" strokeWidth="1" strokeDasharray="4 4" opacity="0.4" />
               <text x={x1} y={sy(stats.mainTarget) - 5} textAnchor="end" fontSize="9" fill="var(--ink-2)" fontFamily="var(--mono)" opacity="0.5">main {eurK(stats.mainTarget)}</text>
@@ -408,7 +408,7 @@
         {/* verbose legend */}
         {(() => {
           const items = [
-            { color: "var(--chart-actual)", label: "Bars", desc: "monthly main-budget spend totals" },
+            { color: "var(--chart-actual)", label: "Bars", desc: "monthly total spend (main + fun)" },
             ...(avgMonthly > 0 ? [{ color: "var(--chart-pace)", label: `Avg (${eurK(avgMonthly)}/mo)`, desc: "monthly average over completed months" }] : []),
             ...(canShowPeak ? [{ color: "var(--amber)", label: `Peak (${eurK(maxMonthly)})`, desc: "highest single month so far" }] : []),
             ...(canShowReq ? [{ color: "var(--chart-proj)", label: `Needed/mo (${eurK(requiredMonthlyAvg)})`, desc: "monthly cap required to finish the year within your ceiling" }] : []),
@@ -465,8 +465,8 @@
 
     const numPeople = (store && store.people && store.people.length) || 1;
     const monthsLeft = Math.max(1, stats.daysRemaining / 30.4);
-    const targetFunPerMo = Math.max(0, stats.ceiling - stats.combinedProjection) / monthsLeft / numPeople;
-    const firePortfolio = stats.combinedProjection / 0.04;
+    const targetFunPerMo = Math.max(0, stats.ceiling - stats.projection) / monthsLeft / numPeople;
+    const firePortfolio = stats.projection / 0.04;
 
     return (
       <div className="stagger" style={{ display: "flex", flexDirection: "column", gap: 24 }}>
@@ -476,11 +476,11 @@
           <ChartLegend stats={stats} />
           {!stats.isFuture && (() => {
             const items = [
-              { color: "var(--chart-actual)", label: `Actual (${eur0(stats.spent)})`, desc: "cumulative main-budget spend year-to-date" },
+              { color: "var(--chart-actual)", label: `Actual (${eur0(stats.spent)})`, desc: "cumulative total spend (main + fun) year-to-date" },
               ...(!stats.complete ? [{ color: "var(--chart-proj)", label: `Projected (→${eur0(stats.projection)})`, desc: "year-end extrapolation at your current blended daily rate" }] : []),
               ...(stats.projLow != null ? [{ color: "var(--chart-proj)", label: `Range (±${eur0(stats.bandAmt)})`, desc: "forecast uncertainty band based on weekly spending variance" }] : []),
               { color: "var(--chart-pace)", label: `Pace (→${eur0(stats.ceiling)})`, desc: "ideal on-track trajectory from Jan 1 to the ceiling" },
-              ...(stats.priorCum ? [{ color: "var(--chart-target)", label: `${stats.year - 1} (${eur0(stats.priorSpent)})`, desc: "prior year's main-budget spend at the same day of year" }] : []),
+              ...(stats.priorCum ? [{ color: "var(--chart-target)", label: `${stats.year - 1} (${eur0(stats.priorSpent)})`, desc: "prior year's total spend at the same day of year" }] : []),
             ];
             return (
               <div style={{ marginTop: 14, borderTop: "1px solid var(--hair)", paddingTop: 10 }}>

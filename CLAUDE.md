@@ -51,7 +51,7 @@ Full local-dev notes (the no-backend 404 handling, reload-loop fix) are in
    appear in preview, **assume stale cache first** — rule it out before debugging logic. Full SW +
    preview workflow: [docs/PWA-AND-DEV.md](docs/PWA-AND-DEV.md).
 2. **`APP_VERSION` (`settings.jsx` footer) and `CACHE_NAME` (`sw.js`) move together** — currently
-   `v45` / `yearly-v45`. Bump both on every release.
+   `v47` / `yearly-v47`. Bump both on every release.
 3. **`localISO(d)`, never `toISOString()`** for dates in `calc.jsx` — `toISOString()` is UTC and
    silently drops Dec 31 transactions in UTC+ timezones (EET).
 3b. **`updated_at` is milliseconds everywhere** — `Date.now()` in the worker, `Date.now()` for the
@@ -91,10 +91,10 @@ The essentials every session needs:
 **Vocabulary (canonical — never use `target` for the stored ceiling):**
 - `ceiling` — `years[y].ceiling`, stored, user-set, sacred.
 - `funPlanAnnual` — Σ people × 12 × `rateForMonth`; derived.
-- `mainTarget` — `ceiling − funPlanAnnual`; derived, never stored. Non-discretionary budget.
-- `spent` / `projection` (in stats) — **main (non-fun) only**; fun tx excluded from all main math.
-- `funSpent` / `funProjection` — fun YTD and capped projection.
-- `combinedProjection` = `projection + funProjection`; compared vs `ceiling` for the sacred verdict.
+- `mainTarget` — `ceiling − funPlanAnnual`; derived, never stored. **Explanatory decomposition only — never a target.**
+- `spent` / `projection` (in stats) — **total household spend (main + fun)**; measured vs `ceiling`.
+- `mainSpent` / `funSpent` — decomposition fields for the Fun tab and ceiling-callout advice only.
+- `funProjection` — capped fun projection (allowance-limited); used in the Fun tab and the "trim fun" callout advice.
 
 **Projection (damped blend):** `projection = spent + blendedRate × daysRemaining × (1 + buffer)`,
 `blendedRate = YTD_rate × (doy/365) + trailing_60d_rate × (1 − doy/365)`. Buffer uplifts only the
@@ -102,8 +102,8 @@ extrapolated remainder (so on Dec 31 projection = spent). Complete/future years:
 spent`.
 
 **Conventions that are easy to break** (see ARCHITECTURE.md for the why): `localISO` not
-`toISOString`; lump-sum winsorization (tx > 2% of `mainTarget`, or `oneoff:true`, excluded from the
-blended rate but kept in `spent`); the `doy>28` trend-detector guard; the `funProjection` cap.
+`toISOString`; lump-sum winsorization (tx > 2% of `ceiling`, or `oneoff:true`, excluded from the
+blended rate but kept in `spent`); the `doy>28` trend-detector guard; the `funProjection` cap (Fun tab only).
 
 `buildCallouts` runs 8 detectors (README is authoritative; quick index in ARCHITECTURE.md); the
 ceiling verdict (#8) is always prepended first.

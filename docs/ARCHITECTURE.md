@@ -52,7 +52,7 @@ see README §Callout detectors threshold table for the full rationale.
   getDate()`, never `toISOString()`. `toISOString()` uses UTC midnight and shifts the date
   backward in UTC+ timezones (EET = UTC+2/+3), silently dropping Dec 31 transactions from
   completed years.
-- **Lump-sum winsorization** — transactions > 2% of `mainTarget` are excluded from the blended
+- **Lump-sum winsorization** — transactions > 2% of `ceiling` are excluded from the blended
   trailing rate calculation (but still included in `spent`). Without this, a single €5k holiday
   inflates the year-end projection by ~4× the purchase price. Winsorized tx appear in
   `stats.lumps[]`. The `oneoff:true` tx flag forces the same exclusion via `isLump()`.
@@ -61,21 +61,17 @@ see README §Callout detectors threshold table for the full rationale.
   spurious near-zero reference projection and triggering a false "year-end projection has shot
   up" alert every January.
 - **`funProjection` cap** — `funProjection = min(linear, funSpentYTD + max(0, Σbalances) +
-  futureAccruals)`. Without the cap, a single large fun purchase in January extrapolates
-  linearly to ~€22k, inflating `combinedProjection` by ~7× what the allowance system can ever
-  permit. The cap is based on what the allowance system will actually produce over the rest of
-  the year.
+  futureAccruals)`. Used only for the Fun tab and the ceiling-callout "trim fun" advice. The cap
+  is based on what the allowance system will actually produce over the rest of the year.
 
 ### Vocabulary (canonical names — never use `target` for the stored ceiling)
 
 - `ceiling` — `years[y].ceiling`, stored, user-set, sacred. Renamed from `target`.
 - `funPlanAnnual` — Σ people × 12 months × rateForMonth; derived.
-- `mainTarget` — `ceiling − funPlanAnnual`; derived, never stored. Non-discretionary budget.
-- `spent` / `projection` in stats — main (non-fun) only. Fun tx excluded from all main math.
-- `funSpent` / `funProjection` — fun YTD and capped projection (linear, but capped at what the
-  allowance system can permit; see "funProjection cap" above).
-- `combinedProjection` = `projection + funProjection`; `combinedDelta` / `combinedStatus` vs
-  `ceiling`.
+- `mainTarget` — `ceiling − funPlanAnnual`; derived, never stored. **Explanatory decomposition only — never a target.**
+- `spent` / `projection` in stats — **total household spend (main + fun)**. Measured vs `ceiling`.
+- `mainSpent` / `funSpent` — decomposition of `spent` into non-fun / fun portions.
+- `funProjection` — allowance-capped fun projection; used only in the Fun tab and ceiling-callout "trim fun" advice.
 
 ### Projection formula (damped blend)
 
@@ -89,45 +85,47 @@ same blend for consistent trend comparisons.
 
 ### `computeStats` returns
 
-`ceiling`, `mainTarget`, `funPlanAnnual`, `funSpent`, `funProjection`, `combinedProjection`,
-`combinedDelta`, `combinedDeltaPct`, `combinedStatus` plus all existing fields (`spent`,
-`dailyRate` YTD, `trailingDailyRate` blended, `daysRemaining`, `projection`, `delta`,
-`status`, `projLow`, `projHigh`, `bandAmt`, etc. — all main-budget). `stats.txns` contains
-main-only tx (fun tx excluded); `stats.upto` is likewise main-only.
+Primary fields: `ceiling`, `mainTarget`, `funPlanAnnual`, `spent`, `projection`, `delta`,
+`deltaPct`, `status`, `pace`, `projLow`, `projHigh`, `bandAmt`, `dailyRate`, `trailingDailyRate`,
+`daysRemaining`, `projNoBuffer`, `bufferAmt`, `upto`, `txns`, `byCat`, `catList`, `byMonth`,
+`catMonth`, `priorCum`, `priorSpent`, `isCurrent`, `complete`, `isFuture`, `asOf`, `asOfStr`,
+`doy`, `daysInYear`, `year`, `buffer`.
+Decomposition fields: `mainSpent`, `funSpent`, `funProjection`.
+
+`stats.txns` / `stats.upto` contain **all** transactions for the year (main + fun).
 
 **Forecast uncertainty band** (`projLow`/`projHigh`/`bandAmt`): computed from sample std-dev of
 weekly recurring totals when ≥4 complete weeks are available (current incomplete year only).
 `bandAmt = sigmaWeek × √weeksRemaining × (1+buffer)`; `projLow = max(spent, projection −
 bandAmt)`. All three are `null` when data is insufficient (<4 weeks, or complete/future year).
 
-**Main status gating**: when the band exists, `status` is "good" if `projection ≤ mainTarget`;
-"alert" if `projLow > mainTarget` (even the optimistic bound misses); "watch" otherwise. This
-prevents threshold-flapping: the number only escalates to "alert" when the lower bound of the
-forecast clears the target. When `bandAmt` is null (<4 weeks), the old static ±8% threshold
-(`T.WATCH_BAND_CURRENT`) applies unchanged. `combinedStatus` always uses the static thresholds
-— the band applies to main only.
+**Status gating** (all vs `ceiling`): when the band exists, `status` is "good" if `projection ≤
+ceiling`; "alert" if `projLow > ceiling` (even the optimistic bound misses); "watch" otherwise.
+Prevents threshold-flapping: escalates to "alert" only when the forecast lower bound clears the
+ceiling. When `bandAmt` is null (<4 weeks), the static ±8% threshold (`T.WATCH_BAND_CURRENT`)
+applies unchanged.
 
-`priorCum` (number[366] | null) and `priorSpent` (number | null) — prior year, main tx only.
+`priorCum` (number[366] | null) and `priorSpent` (number | null) — prior year total spend.
 Future-year guard: spent 0, projection 0, status "good"; `isFuture` in returned stats.
 
 ### `buildCallouts` — 8 detectors
 
 See README for the authoritative spec. Quick index:
-- #1 trend (doy>28 guard, 4-week projection change) — text prefixed "Main budget: "
-- #2 streak (14-day pace vs baseline) — text prefixed "Main budget: "
-- #3 mover (MoM category change)
-- #4 share (top category % of spend)
-- #5 buffer explanation
-- #6 yoy (main spent vs prior year at same doy)
-- #7 reqpace (when projection > mainTarget) — text prefixed "Main budget: "
-- #8 ceiling (sacred combined verdict, always first)
+- #1 trend (doy>28 guard, 4-week change in total `projection`; threshold = 1.2% of `ceiling`)
+- #2 streak (14-day pace vs ceiling-linear baseline)
+- #3 mover (MoM category change — includes fun spend in categories)
+- #4 share (top category % of total spend)
+- #5 buffer explanation (threshold = 1% of `ceiling`)
+- #6 yoy (total spent vs prior year at same doy; threshold = 8% of `ceiling`)
+- #7 reqpace (when `projection > ceiling` — ceiling-centric text)
+- #8 ceiling (sacred verdict vs `stats.projection`, always first)
 
-Ceiling callout states: `combinedProjection > ceiling` → watch/alert — text "trim fun ~€Z/mo"
-when overBy/monthsLeft ≤ funPlanAnnual/12, else "even cutting entire fun budget won't close it;
-main spending needs to drop ~€W/mo too"; between 0.94×–1× → `info` "tight but on course"; <
-0.94× → good/info "room to raise fun budget". Always prepended first; replaces calm fallback.
-Complete year: single `{id:"final"}` callout compares `spent + funSpent` vs `ceiling` (not just
-main spend vs mainTarget). Future year: single `{id:"future"}` callout.
+Ceiling callout states: `projection > ceiling` → watch/alert — text "trim fun ~€Z/mo" when
+overBy/monthsLeft ≤ funPlanAnnual/12, else "even cutting entire fun budget won't close it; main
+spending needs to drop ~€W/mo too"; between 0.94×–1× → `info` "tight but on course"; < 0.94× →
+good "room to raise fun budget". Always prepended first; replaces calm fallback.
+Complete year: single `{id:"final"}` callout compares `stats.spent` (total) vs `ceiling`.
+Future year: single `{id:"future"}` callout.
 
 ### `computeFun(store, asOfDate?)`
 
