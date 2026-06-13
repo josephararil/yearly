@@ -23,8 +23,8 @@
   <div id="summary"></div>
 
   <!-- Plain script tags — no Babel needed; these files contain no JSX -->
-  <script src="public/y/data.jsx?v=35"></script>
-  <script src="public/y/calc.jsx?v=35"></script>
+  <script src="public/y/data.jsx?v=46"></script>
+  <script src="public/y/calc.jsx?v=46"></script>
   <script>
     const container = document.getElementById('results');
     let passed = 0, failed = 0;
@@ -58,13 +58,12 @@
     const ids = new Set(callouts.map(c => c.id));
 
     // Rich fixture store — used wherever non-empty transaction data is needed.
-    // Designed so all 7 main-budget detectors (trend/streak/mover/share/buffer/yoy/reqpace)
+    // Designed so all 7 detectors (trend/streak/mover/share/buffer/yoy/reqpace)
     // and the ceiling callout fire when asOf = 2026-06-07.
     //
-    // mainTarget = ceiling(25000) − funPlanAnnual(3600) = 21400
-    // lumpThreshold = 21400 × 0.02 = 428
-    // Main transactions: 21 × 425 = 8925 (recurring) + 100 restaurants (Apr) + 500 restaurants lump (May)
-    // Total main spent = 9525; fun spent = 330; total all = 9855.
+    // ceiling(22000) − funPlanAnnual(3600) = mainTarget(18400) [decomposition, not target]
+    // lumpThreshold = ceiling × 0.02 = 22000 × 0.02 = 440; r19(500) > 440 → lump
+    // All txns up to Jun 7: main 9525 + fun 330 = 9855 (spent); 9355 recurring (excl r19 lump)
     const richStore = {
       currentYear: 2026,
       people: [
@@ -74,7 +73,7 @@
       wishlist: [],
       years: {
         '2025': { ceiling: 23000, buffer: 0.04 },
-        '2026': { ceiling: 25000, buffer: 0.04 },
+        '2026': { ceiling: 22000, buffer: 0.04 },
       },
       density: 'balanced',
       templates: [],
@@ -152,22 +151,22 @@
     // status is vs mainTarget
     assert('status === "good" when projection = 0', stats.status === 'good', 'got "' + stats.status + '"');
 
-    // combined fields
-    assert('combinedProjection = projection + funProjection',
-      Math.abs(stats.combinedProjection - (stats.projection + stats.funProjection)) < 0.01,
-      stats.combinedProjection.toFixed(0) + ' vs ' + (stats.projection + stats.funProjection).toFixed(0));
-    assert('combinedDelta = combinedProjection − ceiling',
-      Math.abs(stats.combinedDelta - (stats.combinedProjection - stats.ceiling)) < 0.01);
+    // delta / deltaPct — projection is now total (main+fun), delta = projection − ceiling
+    assert('delta = projection − ceiling',
+      Math.abs(stats.delta - (stats.projection - stats.ceiling)) < 0.01,
+      'delta=' + stats.delta.toFixed(0) + ' projection=' + stats.projection.toFixed(0));
+    assert('deltaPct ≈ delta / ceiling',
+      Math.abs(stats.deltaPct - stats.delta / stats.ceiling) < 0.0001);
 
-    // requiredDailyToHit is null when projection ≤ mainTarget (blank store: projection=0)
+    // requiredDailyToHit is null when projection ≤ ceiling (blank store: projection=0)
     const reqBlank = YCalc.requiredDailyToHit(stats);
-    assert('requiredDailyToHit is null when projection ≤ mainTarget', reqBlank === null, 'got ' + reqBlank);
+    assert('requiredDailyToHit is null when projection ≤ ceiling', reqBlank === null, 'got ' + reqBlank);
 
     // ---- 2026 current-year stats (rich fixture — transaction-dependent behavior) ----
     section('2026 current-year — computeStats with transactions (rich fixture)');
 
     // Total main + fun 2026 up to Jun 7: main=9525, fun=330, total=9855.
-    // (21×425 groceries + 100 restaurants Apr + 500 restaurants May) + (80+250 fun) = 9525+330
+    // Primary pipeline now runs over ALL txns: richStats.spent === richTotalAll.
     const asOfStr = '2026-06-07';
     const richAllYearTxns = YCalc.yearTxns(richStore, 2026);
     const richTotalAll = richAllYearTxns.filter(t => t.date <= asOfStr).reduce((a, t) => a + t.amount_eur, 0);
@@ -175,20 +174,20 @@
     const richFunDirect = richFunTxns.reduce((a, t) => a + t.amount_eur, 0);
     assert('rich fixture: total spent (main+fun) = 9855', Math.abs(richTotalAll - 9855) <= 1, 'got ' + richTotalAll.toFixed(2));
     assert('rich fixture: exactly 2 fun-tagged tx', richFunTxns.length === 2, 'got ' + richFunTxns.length);
-    assert('rich fixture: richStats.spent excludes fun (main only)',
-      Math.abs(richStats.spent + richFunDirect - richTotalAll) < 0.01,
-      'main=' + richStats.spent.toFixed(2) + ' fun=' + richFunDirect.toFixed(2));
-    assert('rich fixture: richStats.spent < richTotalAll (fun excluded)', richStats.spent < richTotalAll,
-      richStats.spent.toFixed(2) + ' < ' + richTotalAll.toFixed(2));
+    assert('rich fixture: richStats.spent includes fun (all txns)', Math.abs(richStats.spent - richTotalAll) < 0.01,
+      'spent=' + richStats.spent.toFixed(2) + ' total=' + richTotalAll.toFixed(2));
+    assert('rich fixture: richStats.mainSpent = main-only decomposition',
+      Math.abs(richStats.mainSpent - (richTotalAll - richFunDirect)) < 0.01,
+      'mainSpent=' + richStats.mainSpent.toFixed(2));
     assert('rich fixture: funSpent > 0', richStats.funSpent > 0, 'got ' + richStats.funSpent.toFixed(2));
     assert('rich fixture: funProjection > 0 (current year)', richStats.funProjection > 0, 'got ' + richStats.funProjection.toFixed(2));
     assert('rich fixture: priorCum not null (2025 data present)', richStats.priorCum !== null);
 
-    // projection should exceed mainTarget (designed so reqpace fires)
-    assert('rich fixture: projection > mainTarget', richStats.projection > richStats.mainTarget,
-      richStats.projection.toFixed(0) + ' > ' + richStats.mainTarget);
+    // projection should exceed ceiling (ceiling=22000, designed so reqpace fires)
+    assert('rich fixture: projection > ceiling', richStats.projection > richStats.ceiling,
+      richStats.projection.toFixed(0) + ' > ' + richStats.ceiling);
     const richReq = YCalc.requiredDailyToHit(richStats);
-    assert('requiredDailyToHit non-null when projection > mainTarget', richReq !== null, 'got ' + richReq);
+    assert('requiredDailyToHit non-null when projection > ceiling', richReq !== null, 'got ' + richReq);
     assert('requiredDailyToHit positive', richReq !== null && richReq > 0, 'got ' + richReq);
 
     // ---- Trailing 60-day projection formula ----
@@ -214,7 +213,7 @@
       ],
     };
     // asOf = Jun 7: doy=158; spent=4400 (all tx, lumps included in spent).
-    // lumpThreshold = mainTarget × 0.02 = 25000 × 0.02 = 500 (people:[] → mainTarget=25000).
+    // lumpThreshold = ceiling × 0.02 = 25000 × 0.02 = 500 (people:[] → ceiling=25000).
     // recurring (≤500): tr5(500)+tr6(500)+tr7(200) = €1200. tr1-tr4 exceed threshold → excluded from rates.
     // recurringYtdRate = 1200/158 ≈ 7.60/d; 60-day window = Apr 8 → Jun 7.
     // recurring in window: tr5(Apr15=500)+tr6(May15=500)+tr7(Jun1=200) = 1200 → rawTrailing=20/d.
@@ -357,12 +356,13 @@
       Math.abs(stats.mainTarget - (stats.ceiling - stats.funPlanAnnual)) < 0.01,
       stats.mainTarget + ' === ' + stats.ceiling + ' − ' + stats.funPlanAnnual);
 
-    // ---- combinedProjection = projection + funProjection ----
-    section('combined projection');
-    assert('combinedProjection = projection + funProjection',
-      Math.abs(stats.combinedProjection - (stats.projection + stats.funProjection)) < 0.01);
-    assert('combinedDeltaPct ≈ combinedDelta / ceiling',
-      Math.abs(stats.combinedDeltaPct - stats.combinedDelta / stats.ceiling) < 0.0001);
+    // ---- projection includes all spend (main + fun); delta vs ceiling ----
+    section('projection = total household spend; delta vs ceiling');
+    assert('delta = projection − ceiling',
+      Math.abs(stats.delta - (stats.projection - stats.ceiling)) < 0.01,
+      'delta=' + stats.delta.toFixed(2));
+    assert('deltaPct ≈ delta / ceiling',
+      Math.abs(stats.deltaPct - stats.delta / stats.ceiling) < 0.0001);
 
     // ---- 2026 rich fixture callout IDs (all detectors fire) ----
     section('2026 rich fixture — buildCallouts (all detectors)');
@@ -394,13 +394,12 @@
 
     // ---- ceiling detector — over ceiling ----
     section('ceiling detector');
-    // Small ceiling + large rates + a fun tx → combined projection >> ceiling.
-    // A fun transaction is required to bypass the blank-store guard
-    // (!(upto.length===0 && funSpent===0)); the fixture design intentionally has no main txns.
+    // ceiling=50 + a fun tx of 100 → spent(100) > ceiling(50) → projection over ceiling.
+    // lumpThreshold = 50×0.02=1; the fun tx (100>1) is a lump → recurring=[]; projection=spent=100.
+    // upto.length>0 bypasses the blank-store guard.
     const overCeilingStore = Object.assign({}, store, {
       people: [{ id: 'joseph', name: 'Joseph', rates: [{ from: '2026-01', amount: 2000 }], startMonth: '2026-01' }],
-      // ceiling=100 → funProjection (~€226 linear from €100 on day 5) >> ceiling; funSpent>0 bypasses guard
-      years: Object.assign({}, store.years, { '2026': { ceiling: 100, buffer: 0.04 } }),
+      years: Object.assign({}, store.years, { '2026': { ceiling: 50, buffer: 0.04 } }),
       transactions: [
         { id: 'oc1', date: '2026-01-05', description: 'Fun', amount_eur: 100, category: 'shopping', fun: true, person: 'joseph', source: 'manual' },
       ],
@@ -459,23 +458,35 @@
     assert('§5.6 clamp: clamped text still contains "ceiling"',
       bigOverCeil && bigOverCeil.text.includes('ceiling'));
 
-    // §5.1 — reqpace text prefix (use richCallouts — reqpace is designed to fire there)
+    // §5.1 — reqpace text (use richCallouts — reqpace is designed to fire there)
+    // "Main budget:" prefix stripped; text mentions "ceiling" and "Spend ≤"
     const reqpaceCallout = richCallouts.find(c => c.id === 'reqpace');
-    assert('§5.1: reqpace text starts with "Main budget:"',
-      reqpaceCallout && reqpaceCallout.text.startsWith('Main budget:'),
+    assert('§5.1: reqpace text does not start with "Main budget:"',
+      reqpaceCallout && !reqpaceCallout.text.startsWith('Main budget:'),
       reqpaceCallout ? reqpaceCallout.text.substring(0, 60) : 'no reqpace callout');
+    assert('§5.1: reqpace text contains "ceiling"',
+      reqpaceCallout && reqpaceCallout.text.includes('ceiling'),
+      reqpaceCallout ? reqpaceCallout.text.substring(0, 80) : 'no reqpace callout');
 
-    // §5.1 — trend text prefix (use richCallouts — trend is designed to fire there)
+    // §5.1 — trend text (use richCallouts — trend is designed to fire there)
+    // "Main budget:" prefix stripped; text mentions "projection"
     const trendCallout = richCallouts.find(c => c.id === 'trend');
-    assert('§5.1: trend text starts with "Main budget:"',
-      trendCallout && trendCallout.text.startsWith('Main budget:'),
+    assert('§5.1: trend text does not start with "Main budget:"',
+      trendCallout && !trendCallout.text.startsWith('Main budget:'),
       trendCallout ? trendCallout.text.substring(0, 60) : 'no trend callout');
+    assert('§5.1: trend text contains "projection"',
+      trendCallout && trendCallout.text.toLowerCase().includes('projection'),
+      trendCallout ? trendCallout.text.substring(0, 80) : 'no trend callout');
 
-    // §5.1 — streak text prefix (use richCallouts — streak is designed to fire there)
+    // §5.1 — streak text (use richCallouts — streak is designed to fire there)
+    // "Main budget:" prefix stripped; text mentions "linear pace"
     const streakCallout = richCallouts.find(c => c.id === 'streak');
-    assert('§5.1: streak text starts with "Main budget:"',
-      streakCallout && streakCallout.text.startsWith('Main budget:'),
+    assert('§5.1: streak text does not start with "Main budget:"',
+      streakCallout && !streakCallout.text.startsWith('Main budget:'),
       streakCallout ? streakCallout.text.substring(0, 60) : 'no streak callout');
+    assert('§5.1: streak text contains "linear pace"',
+      streakCallout && streakCallout.text.includes('linear pace'),
+      streakCallout ? streakCallout.text.substring(0, 80) : 'no streak callout');
 
     // ---- migrateStore ----
     section('migrateStore (idempotent)');
@@ -639,7 +650,7 @@
 
     // ---- §1.1 regression: neededMonthlyCap formula ----
     section('§1.1 regression — neededMonthlyCap helper');
-    // neededMonthlyCap(stats) = max(0, (mainTarget − spentBeforeCurrentMonth) / (12 − currentMonth))
+    // neededMonthlyCap(stats) = max(0, (ceiling − spentBeforeCurrentMonth) / (12 − currentMonth))
     // "spentBefore" covers only completed months so the current month is not penalised twice.
     const capStore = {
       currentYear: 2026,
@@ -657,16 +668,17 @@
         { id: 'ca6', date: '2026-06-05', description: 'C6', amount_eur: 300,  category: 'groceries', source: 'manual' },
       ],
     };
-    // asOf = Jun 7 (m=5 = June, index 5); spentBefore = Jan+Feb+Mar+Apr+May = 8100; mainTarget = 25000
+    // asOf = Jun 7 (m=5 = June, index 5); spentBefore = Jan+Feb+Mar+Apr+May = 8100; ceiling = 25000
     // neededMonthlyCap = (25000 − 8100) / (12 − 5) = 16900/7 ≈ 2414.29
+    // (capStore has no people → funPlanAnnual=0 → ceiling=mainTarget=25000)
     const capStats  = YCalc.computeStats(capStore, 2026, new Date('2026-06-07T12:00:00Z'));
     const capResult = YCalc.neededMonthlyCap(capStats);
     const capM = capStats.asOf.getMonth();  // 5 (June)
     const capSpentBefore = capStats.byMonth.slice(0, capM).reduce((a, x) => a + x.amount, 0);
-    const capExpected = Math.max(0, (capStats.mainTarget - capSpentBefore) / (12 - capM));
+    const capExpected = Math.max(0, (capStats.ceiling - capSpentBefore) / (12 - capM));
     assert('§1.1: spentBefore = Jan+Feb+Mar+Apr+May = 8100',
       Math.abs(capSpentBefore - 8100) < 0.01, 'got ' + capSpentBefore);
-    assert('§1.1: neededMonthlyCap excludes current-month spend from numerator',
+    assert('§1.1: neededMonthlyCap uses ceiling (excludes current-month spend from numerator)',
       Math.abs(capResult - capExpected) < 0.01,
       'got ' + capResult.toFixed(2) + ' expected ' + capExpected.toFixed(2));
     assert('§1.1: neededMonthlyCap ≈ 2414.29',

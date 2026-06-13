@@ -64,17 +64,16 @@ Everything turns on a few terms. Get these straight and the rest follows.
 |---|---|---|
 | **`ceiling`** | The single per-year household spending cap. User-set, **sacred**, never derived. (Historically called `target` — don't rename it back.) | Yes — `years[y].ceiling` |
 | **`funPlanAnnual`** | Sum of every person's monthly fun allowance across all 12 months of the year. | Derived |
-| **`mainTarget`** | `ceiling − funPlanAnnual`. The non-discretionary budget — everything that isn't a personal "fun" allowance. | Derived, never stored |
-| **`spent` / `projection`** | Year-to-date and projected year-end spend, **main (non-fun) only**. | Derived |
-| **`funSpent` / `funProjection`** | Fun-budget year-to-date and projected (capped) spend. | Derived |
-| **`combinedProjection`** | `projection + funProjection` — the household total. | Derived |
+| **`mainTarget`** | `ceiling − funPlanAnnual`. **Explanatory decomposition only — never a target.** Shows how much of the ceiling isn't pre-allocated to fun allowances. | Derived, never stored |
+| **`spent` / `projection`** | Year-to-date and projected year-end spend, **total household (main + fun)**. Measured against `ceiling`. | Derived |
+| **`mainSpent` / `funSpent`** | Decomposition of `spent` into non-fun and fun portions — used in the Fun tab and the ceiling-callout "trim fun" advice only. | Derived |
+| **`funProjection`** | Allowance-capped fun projection — used in the Fun tab and the ceiling-callout "trim fun" calculation only. | Derived |
 
-The **combined projection vs the ceiling is the sacred verdict.** The hero on the Overview always
-leads with it. The main/fun split is a decomposition that explains the verdict, not the verdict
-itself.
+**`projection` vs `ceiling` is the sacred verdict.** The hero on the Overview always leads with it.
+The main/fun split is a decomposition that explains the verdict, not a secondary target.
 
 For the default 2026 setup — a €25,000 ceiling with Joseph at €100/mo and Marti at €200/mo of fun —
-`funPlanAnnual = (100 + 200) × 12 = €3,600` and `mainTarget = €21,400`.
+`funPlanAnnual = (100 + 200) × 12 = €3,600` and `mainTarget = €21,400` (explanatory only).
 
 ---
 
@@ -84,7 +83,7 @@ All math lives in one pure, UI-free module: [`public/y/calc.jsx`](public/y/calc.
 Every figure shown anywhere in the app comes from three functions there: `computeStats`,
 `buildCallouts`, and `computeFun`. Re-implement those faithfully and the UI follows.
 
-### Main-budget projection (damped blend)
+### Projection (damped blend)
 
 The projection extrapolates your recent pace to year-end, then lifts the *remaining* part by a
 safety buffer:
@@ -109,7 +108,7 @@ blendedRate = ytdRate × (doy / daysInYear) + trailing60dRate × (1 − doy / da
 ### Lump-sum winsorization
 
 A single €5k holiday would otherwise inflate the year-end projection by ~4× its price. So
-transactions larger than **2% of `mainTarget`** — or any transaction explicitly flagged
+transactions larger than **2% of `ceiling`** — or any transaction explicitly flagged
 `oneoff:true` — are **excluded from the blended rate** while **still counting in `spent`**. They're
 real money, they just shouldn't set your daily pace.
 
@@ -130,23 +129,23 @@ complete/future years.
 
 ### Status (green / amber / red)
 
-The main-budget status escalates conservatively so the number doesn't flap day to day:
+Status escalates conservatively so the number doesn't flap day to day. All thresholds are vs the
+**ceiling**:
 
-- **With a band** (≥4 weeks): `good` if `projection ≤ mainTarget`; `alert` only if even the
-  optimistic edge misses (`projLow > mainTarget`); `watch` in between.
-- **Without a band** (<4 weeks): `good` if `projection ≤ mainTarget`; `watch` if `≤ mainTarget ×
+- **With a band** (≥4 weeks): `good` if `projection ≤ ceiling`; `alert` only if even the
+  optimistic edge misses (`projLow > ceiling`); `watch` in between.
+- **Without a band** (<4 weeks): `good` if `projection ≤ ceiling`; `watch` if `≤ ceiling ×
   1.08`; else `alert`. (Completed years use a tighter `× 1.03`.)
-
-The **combined status** (vs the ceiling) always uses the static bands: `good` if
-`combinedProjection ≤ ceiling`, `watch` if `≤ ceiling × 1.08`, else `alert`.
 
 ---
 
 ## The fun budget
 
 Each person has a **monthly fun allowance** — a "no questions asked" discretionary budget that
-accrues every month. It layers *on top of* the main budget: fun-tagged transactions are excluded
-from all main-budget math, and only the **combined** total is measured against the ceiling.
+accrues every month. Fun-tagged transactions are **real household spend and count toward the
+ceiling** exactly like any other transaction. The fun/main split is metadata: it powers the Fun
+tab's per-person balance tracker and the ceiling callout's "trim fun by ~€X/mo" advice, but it
+does not create a separate pot or secondary target.
 
 ### Running balance
 
@@ -199,22 +198,22 @@ first.**
 
 | # | Detector | Fires when | Says (example) |
 |---|---|---|---|
-| 1 | **Projection trend** | `doy > 28` and the projection moved > 1.2% of `mainTarget` over 4 weeks | "Main budget: Year-end projection has moved up €420 over the last 4 weeks, now €21,800." |
-| 2 | **14-day pace streak** | last-14-day daily rate is > 1.15× or < 0.70× the linear daily pace | "Main budget: Last 14 days are running +28% above linear pace — €78/day vs €61/day." |
+| 1 | **Projection trend** | `doy > 28` and the projection moved > 1.2% of `ceiling` over 4 weeks | "Year-end projection has moved up €420 over the last 4 weeks, now €21,800." |
+| 2 | **14-day pace streak** | last-14-day daily rate is > 1.15× or < 0.70× the linear daily pace | "Last 14 days are running +28% above linear pace — €78/day vs €61/day." |
 | 3 | **Category mover** | a category changed > €60 month-over-month (and had ≥ €50 the prior month) | "Restaurants: €340 in May, +60% vs April." |
 | 4 | **Top-category share** | the largest category is > 26% of YTD spend | "Groceries is 27% of spend so far — €3,120 across 84 entries." |
-| 5 | **Buffer explanation** | the buffer adds > 1% of `mainTarget` | "Logged spend alone projects to €20,900; the 4% missed-entry buffer lifts that to €21,700." |
-| 6 | **Year-over-year** | prior year has spend at the same point | "Spending is €640 (+9%) higher than the same point in 2025." |
-| 7 | **Required pace** | `projection > mainTarget` | "Main budget: Spend ≤ €58/day from here to finish on main budget target." |
+| 5 | **Buffer explanation** | the buffer adds > 1% of `ceiling` | "Logged spend alone projects to €20,900; the 4% missed-entry buffer lifts that to €21,700." |
+| 6 | **Year-over-year** | prior year has total spend at the same point | "Spending is €640 (+9%) higher than the same point in 2025." |
+| 7 | **Required pace** | `projection > ceiling` | "Spend ≤ €58/day from here to finish within your ceiling." |
 | 8 | **Ceiling verdict** | always (current year) | see below — *always first* |
 
 **The ceiling verdict (#8)** is the sacred line, and has three states:
 
-- **Over** (`combinedProjection > ceiling`): "Household projects to €X against your €Y ceiling — trim
+- **Over** (`projection > ceiling`): "Household projects to €X against your €Y ceiling — trim
   fun spending by ~€Z/mo to stay within it." If trimming fun alone can't close the gap, it instead
   says "…even cutting the entire fun budget (€Z/mo) won't close it; main spending needs to drop
   ~€W/mo too." (`alert` if over by > 8% of ceiling, else `watch`.)
-- **Comfortable** (`< ceiling × 0.94`): "You're tracking €X under your €Y ceiling — room to raise the
+- **Comfortable** (`projection < ceiling × 0.94`): "You're tracking €X under your €Y ceiling — room to raise the
   fun budget by ~€Z/mo if you want." (`good`)
 - **Tight but on course** (between 0.94× and 1×): "Tracking €X under your €Y ceiling — tight but on
   course." (`info`)
@@ -237,7 +236,7 @@ Every magic number lives in a single `T` constants object at the top of `calc.js
 | `WATCH_BAND_COMPLETE` | `1.03` | Tighter +3% band for finished years |
 | `CEILING_COMFORT` | `0.94` | Below 94% of ceiling = comfortable, room to raise fun |
 | `CEILING_ALERT` | `0.08` | Over ceiling by > 8% → ceiling verdict is `alert` |
-| `TREND_NOTABLE` | `0.012` | 4-week projection move > 1.2% of `mainTarget` is worth a callout |
+| `TREND_NOTABLE` | `0.012` | 4-week projection move > 1.2% of `ceiling` is worth a callout |
 | `TREND_ALERT` | `0.04` | > 4% move → `alert` |
 | `STREAK_HOT` | `1.15` | 14-day pace > 115% of linear → spending streak |
 | `STREAK_ALERT` | `1.35` | 14-day pace > 135% → `alert` |
@@ -246,10 +245,10 @@ Every magic number lives in a single `T` constants object at the top of `calc.js
 | `SHARE_WATCH` | `0.34` | Top category > 34% → `watch` |
 | `MOVER_MIN_EUR` | `60` | MoM category change must exceed €60 to count |
 | `MOVER_MIN_BASE` | `50` | Category needs ≥ €50 in the prior full month to be eligible |
-| `BUFFER_EXPLAIN_MIN` | `0.01` | Explain the buffer only when it adds > 1% of `mainTarget` |
-| `LUMP_PCT` | `0.02` | Transactions > 2% of `mainTarget` are winsorized out of the rate |
+| `BUFFER_EXPLAIN_MIN` | `0.01` | Explain the buffer only when it adds > 1% of `ceiling` |
+| `LUMP_PCT` | `0.02` | Transactions > 2% of `ceiling` are winsorized out of the rate |
 | `DAYS_PER_MONTH` | `30.4` | Average month length for "months remaining" arithmetic |
-| `YOY_WATCH` | `0.08` | YTD spend > prior year by > 8% of `mainTarget` → `watch` |
+| `YOY_WATCH` | `0.08` | YTD total spend > prior year same point by > 8% of `ceiling` → `watch` |
 
 ---
 
@@ -303,7 +302,7 @@ A segmented control: **Projection · Categories · Activity · Fun**.
 - **Categories** — every category with spend, ranked, as an expandable bar row (share %, entry
   count, MoM change). Expanding shows the most recent and largest transactions in that category.
 - **Activity** — search by description, filter chips for every category, a 6-way sort, and the full
-  main-transaction list (fun tx excluded), each row tappable to edit.
+  transaction list (fun tx included, tagged with the person's name), each row tappable to edit.
 - **Fun** — per-person cards (balance, monthly rate, this-month usage, all-time spent), a fun-only
   category breakdown, and each person's wishlist with progress bars, ETAs, and a "Bought it" action.
 

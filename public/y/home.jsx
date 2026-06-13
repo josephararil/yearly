@@ -154,7 +154,7 @@
     const legendItems = [
       { color: "var(--chart-actual)", label: `Actual (${eurK(spentSoFar)})`, desc: "cumulative spend this month, day by day" },
       { color: "var(--chart-pace)", label: "Pace", desc: "ideal linear trajectory to reach the monthly target" },
-      { color: "var(--chart-target)", label: `Target (${eurK(neededMonthly)})`, desc: "main-budget allowance per month to finish the year on target, given prior months' spend" },
+      { color: "var(--chart-target)", label: `Target (${eurK(neededMonthly)})`, desc: "allowance per month to finish the year within your ceiling, given prior months' spend" },
       { color: "var(--chart-proj)", label: "Projection", desc: "extrapolated trend from your current daily rate" },
       ...(isPartialMonth ? [{ color: "var(--chart-proj)", label: `Month-end (${eurK(projectedEnd)})`, desc: "estimated total for this month if today's rate continues" }] : []),
       ...(hasPrevData ? [{ color: "var(--amber)", label: `${prevMonthName} (${eurK(prevTotal)})`, desc: "last month's spending curve for comparison (scaled to same width)" }] : []),

@@ -1,6 +1,6 @@
 // settings.jsx — target, buffer, years, templates, CSV import/export, clear.
 (function () {
-  const APP_VERSION = 'v45';
+  const APP_VERSION = 'v47';
   const { YData, YCalc, YUI } = window;
   const { eur0, signedPct, computeStats } = YCalc;
   const { Sheet, DeltaChip } = YUI;
@@ -324,10 +324,10 @@
                 <div style={{ flex: 1 }}>
                   <div style={{ fontSize: 17, fontWeight: 600 }} className="num">{y}{st.isCurrent && <span style={{ fontSize: 11, color: "var(--terra)", fontFamily: "var(--mono)", marginLeft: 8, letterSpacing: "0.04em" }}>CURRENT</span>}</div>
                   <div className="muted" style={{ fontSize: 12.5, marginTop: 2 }}>
-                    Ceiling <span className="num" style={{ color: "var(--ink-2)" }}>{eur0(st.ceiling)}</span> · {st.complete ? "combined" : "proj"} <span className="num" style={{ color: "var(--ink-2)" }}>{eur0(st.combinedProjection)}</span>
+                    Ceiling <span className="num" style={{ color: "var(--ink-2)" }}>{eur0(st.ceiling)}</span> · {st.complete ? "final" : "proj"} <span className="num" style={{ color: "var(--ink-2)" }}>{eur0(st.projection)}</span>
                   </div>
                 </div>
-                <DeltaChip delta={st.combinedDelta} status={st.combinedStatus} />
+                <DeltaChip delta={st.delta} status={st.status} />
                 <window.Icon name="chevronRight" size={16} style={{ color: "var(--muted)", marginLeft: 4 }} />
               </button>
             );

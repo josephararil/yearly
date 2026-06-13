@@ -42,21 +42,21 @@
   function StatusHero({ stats }) {
     const [tip, setTip] = React.useState({ open: false, x: 0 });
 
-    const headline = stats.isFuture ? stats.ceiling : stats.combinedProjection;
+    const headline = stats.isFuture ? stats.ceiling : stats.projection;
     const eyebrow = stats.complete
-      ? "Final combined spend · " + stats.year
+      ? "Final spend · " + stats.year
       : stats.isFuture
       ? "Household ceiling · " + stats.year
       : "Projected year-end";
-    const over = stats.combinedDelta >= 0;
-    const near = Math.abs(stats.combinedDelta) < stats.ceiling * 0.005;
-    const totalSpent = stats.spent + stats.funSpent;
+    const over = stats.delta >= 0;
+    const near = Math.abs(stats.delta) < stats.ceiling * 0.005;
+    const totalSpent = stats.spent;
 
     // bullet bar — % positions along the rail (xMax leaves 4% breathing room on the right)
-    const xMax = Math.max(stats.ceiling, stats.combinedProjection, 1) * 1.04;
+    const xMax = Math.max(stats.ceiling, stats.projection, 1) * 1.04;
     const pct = (v) => (v / xMax) * 100;
     const spentPct = pct(totalSpent);
-    const projPct  = pct(stats.combinedProjection);
+    const projPct  = pct(stats.projection);
     const mainPct  = pct(stats.mainTarget);
     const ceilPct  = pct(stats.ceiling);
     const doyPct   = pct((stats.doy / 365) * stats.ceiling);
@@ -73,7 +73,7 @@
     const labelSet = [
       { id: 'main', x: mainPct, text: 'main ' + eurK(stats.mainTarget) },
       { id: 'ceil', x: ceilPct, text: 'ceiling ' + eurK(stats.ceiling) },
-      ...(showProjTick ? [{ id: 'proj', x: projPct, text: 'proj ' + eurK(stats.combinedProjection) }] : []),
+      ...(showProjTick ? [{ id: 'proj', x: projPct, text: 'proj ' + eurK(stats.projection) }] : []),
     ].sort((a, b) => a.x - b.x);
 
     const handleTap = (e) => {
@@ -96,10 +96,8 @@
     const tipStyle = tip.x < 25 ? { left: 0 }
                     : tip.x > 75 ? { right: 0 }
                     : { left: tip.x + '%', transform: 'translateX(-50%)' };
-    const remaining  = Math.max(0, stats.ceiling - stats.combinedProjection);
-    const bufferMain = Math.max(0, stats.mainTarget - stats.projection);
-    const overBy     = Math.max(0, stats.combinedProjection - stats.ceiling);
-    const projVsMain = Math.max(0, stats.projection - stats.mainTarget);
+    const remaining  = Math.max(0, stats.ceiling - stats.projection);
+    const overBy     = Math.max(0, stats.projection - stats.ceiling);
 
     return (
       <div className="hero">
@@ -113,7 +111,7 @@
           ) : (
             <>
               {over ? "Over" : "Under"} your <span className="num">{eur0(stats.ceiling)}</span> ceiling by{" "}
-              <span className={"hero-emph " + (over ? "over" : "under")}>{eur0(Math.abs(stats.combinedDelta))}</span>
+              <span className={"hero-emph " + (over ? "over" : "under")}>{eur0(Math.abs(stats.delta))}</span>
               {stats.bandAmt != null && (
                 <span style={{ fontFamily: "var(--mono)", color: "var(--muted)", fontSize: "0.7em", marginLeft: 4 }}>
                   {'\u0028'}±{eur0(stats.bandAmt)}{'\u0029'}
@@ -128,7 +126,7 @@
             <div className="hero-spent">
               <span>
                 {stats.complete
-                  ? <>Final spend <span className="num-big">{eur0(stats.combinedProjection)}</span></>
+                  ? <>Final spend <span className="num-big">{eur0(stats.projection)}</span></>
                   : <><span className="num-big">{eur0(totalSpent)}</span> spent</>}
               </span>
               <span className="meta">
@@ -140,7 +138,7 @@
             <div className="bullet-wrap" onPointerDown={handleTap}>
               <div className="bullet-rail">
                 <div className="bullet-fill-spent" style={{ width: spentPct + '%' }} />
-                {!stats.complete && stats.combinedProjection > totalSpent && (
+                {!stats.complete && stats.projection > totalSpent && (
                   <div className="bullet-fill-proj"
                     style={{ left: spentPct + '%', width: Math.max(0, projPct - spentPct) + '%' }} />
                 )}
@@ -159,7 +157,7 @@
                     {over ? `Over ceiling ${eur0(overBy)}` : `Remaining ${eur0(remaining)}`}
                   </div>
                   <div className="bullet-tip-sub">
-                    {over ? `Proj vs main +${eur0(projVsMain)}` : `Buffer to main ${eur0(bufferMain)}`}
+                    {`Fun ${eur0(stats.funSpent)} of ${eur0(totalSpent)} spent`}
                   </div>
                 </div>
               )}
@@ -245,7 +243,7 @@ function TxRow({ t, onClick, people }) {
         </span>
         <span className="tx-main">
           <div className="tx-desc">{t.description}</div>
-          <div className="tx-meta">{fmtDateShort(t.date)} · {c.label}{personName ? ` · ${personName}` : ""}</div>
+          <div className="tx-meta">{fmtDateShort(t.date)} · {c.label}{personName ? ` · ${personName}` : ""}{t.fun ? <span style={{ color: 'var(--amber)', fontWeight: 600 }}> · fun</span> : null}</div>
         </span>
         <span className="tx-amt num">{eurAuto(t.amount_eur)}</span>
       </button>

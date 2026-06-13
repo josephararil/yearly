@@ -15,12 +15,12 @@
   // Named thresholds — one source of truth for every magic number in the detector engine.
   // See README §Callout detectors threshold table for the full rationale.
   const T = {
-    WATCH_BAND_CURRENT:  1.08,  // forecast uncertainty mid-year: within +8% of mainTarget/ceiling = watch, beyond = alert
+    WATCH_BAND_CURRENT:  1.08,  // forecast uncertainty mid-year: within +8% of ceiling = watch, beyond = alert
     WATCH_BAND_COMPLETE: 1.03,  // settled fact: tighter +3% band for finished years
     CEILING_COMFORT:     0.94,  // below 94% of ceiling = comfortable, room to raise fun
-    CEILING_ALERT:       0.08,  // combined projection > ceiling × (1 + 8%) → alert severity
-    TREND_NOTABLE:       0.012, // projection moved > 1.2% of mainTarget in 4 weeks = worth a callout
-    TREND_ALERT:         0.04,  // > 4% of mainTarget move → alert severity
+    CEILING_ALERT:       0.08,  // projection > ceiling × (1 + 8%) → alert severity
+    TREND_NOTABLE:       0.012, // projection moved > 1.2% of ceiling in 4 weeks = worth a callout
+    TREND_ALERT:         0.04,  // > 4% of ceiling move → alert severity
     STREAK_HOT:          1.15,  // 14d daily pace > 115% of linear pace → spending streak
     STREAK_ALERT:        1.35,  // 14d pace > 135% → alert severity
     STREAK_COOL:         0.70,  // 14d pace < 70% → under-pace (good)
@@ -28,10 +28,10 @@
     SHARE_WATCH:         0.34,  // top category > 34% → watch severity
     MOVER_MIN_EUR:       60,    // MoM category change must exceed €60 to be a "mover" (ignore tiny swings)
     MOVER_MIN_BASE:      50,    // category must have ≥ €50 in the last full month to be eligible
-    BUFFER_EXPLAIN_MIN:  0.01,  // explain the buffer only when it adds > 1% of mainTarget (otherwise noise)
-    LUMP_PCT:            0.02,  // transactions > 2% of mainTarget excluded from extrapolated rate (winsorization)
+    BUFFER_EXPLAIN_MIN:  0.01,  // explain the buffer only when it adds > 1% of ceiling (otherwise noise)
+    LUMP_PCT:            0.02,  // transactions > 2% of ceiling excluded from extrapolated rate (winsorization)
     DAYS_PER_MONTH:      30.4,  // average month length for "months remaining" arithmetic
-    YOY_WATCH:           0.08,  // YTD spend > prior year same point by > 8% of mainTarget → watch
+    YOY_WATCH:           0.08,  // YTD spend > prior year same point by > 8% of ceiling → watch
   };
 
   function dayOfYear(d) {
@@ -163,14 +163,12 @@ function computeStats(store, year, asOfDate) {
     }
     const asOfStr = localISO(asOf);
 
-    // Split main (non-fun) vs fun transactions for this year
-    const mainTxns = txns.filter((t) => !t.fun);
-    const upto = isFuture ? [] : mainTxns.filter((t) => t.date <= asOfStr);
+    // Primary pipeline over ALL transactions — fun is not a separate pot, just decomposition.
+    const upto = isFuture ? [] : txns.filter((t) => t.date <= asOfStr);
     const spent = isFuture ? 0 : upto.reduce((a, t) => a + t.amount_eur, 0);
     const dailyRate = isFuture ? 0 : spent / doy;  // YTD average, kept for display
 
-    // Derived main target: ceiling minus the planned annual fun allocation.
-    // Computed before the trailing rate so lumpThreshold can reference mainTarget.
+    // Decomposition: fun/main split is secondary (for Fun tab + ceiling-callout advice only).
     const people = store.people || [];
     let funPlanAnnual = 0;
     for (const p of people) {
@@ -180,13 +178,15 @@ function computeStats(store, year, asOfDate) {
       }
     }
     const mainTarget = ceiling - funPlanAnnual;
+    const funSpent = isFuture ? 0 : upto.filter((t) => t.fun).reduce((a, t) => a + t.amount_eur, 0);
+    const mainSpent = spent - funSpent;
 
-    // Lump-sum winsorization: transactions above T.LUMP_PCT of mainTarget, or explicitly
+    // Lump-sum winsorization: transactions above T.LUMP_PCT of ceiling, or explicitly
     // flagged oneoff:true, count in `spent` but are excluded from the RATE that gets
     // extrapolated over daysRemaining. A single large transaction counts once as money spent;
     // it does not inflate the year-end projection by multiplying over remaining days.
     // oneoff:true takes precedence — it excludes smaller one-offs the auto threshold can't catch.
-    const lumpThreshold = mainTarget > 0 ? mainTarget * T.LUMP_PCT : Infinity;
+    const lumpThreshold = ceiling > 0 ? ceiling * T.LUMP_PCT : Infinity;
     const isLump = (t) => !!t.oneoff || t.amount_eur > lumpThreshold;
     const recurring = upto.filter((t) => !isLump(t));
 
@@ -212,9 +212,9 @@ function computeStats(store, year, asOfDate) {
     const projection = (complete || isFuture) ? spent : spent + extrapolated * (1 + buffer);
     const bufferAmt = projection - projNoBuffer;
 
-    const pace = (doy / diy) * mainTarget;
-    const delta = projection - mainTarget;
-    const deltaPct = mainTarget > 0 ? delta / mainTarget : 0;
+    const pace = (doy / diy) * ceiling;
+    const delta = projection - ceiling;
+    const deltaPct = ceiling > 0 ? delta / ceiling : 0;
 
     // Forecast uncertainty band — current incomplete year only, requires ≥4 complete weeks of
     // recurring (non-lump) data. sigmaWeek = sample std-dev of weekly recurring totals (zero
@@ -240,47 +240,37 @@ function computeStats(store, year, asOfDate) {
       }
     }
 
-    // Main budget status — gated on the lower bound of the band when data is sufficient.
-    // "alert" only when even the optimistic scenario (projLow) misses mainTarget; otherwise
+    // Status gated on ceiling — the one sacred number.
+    // "alert" only when even the optimistic scenario (projLow) misses ceiling; otherwise
     // "watch" until the band exists and the lower bound clears. When band is null (<4 weeks),
     // fall back to the static ±8% threshold so early-year behaviour is unchanged.
     let status;
     if (isFuture) status = "good";
-    else if (complete) status = projection <= mainTarget ? "good" : projection <= mainTarget * T.WATCH_BAND_COMPLETE ? "watch" : "alert";
+    else if (complete) status = projection <= ceiling ? "good" : projection <= ceiling * T.WATCH_BAND_COMPLETE ? "watch" : "alert";
     else if (bandAmt !== null) {
-      status = projection <= mainTarget ? "good" : (projLow > mainTarget ? "alert" : "watch");
+      status = projection <= ceiling ? "good" : (projLow > ceiling ? "alert" : "watch");
     } else {
       // Sparse data (<4 weeks): use static threshold (T.WATCH_BAND_CURRENT = 1.08)
-      status = projection <= mainTarget ? "good" : (projection <= mainTarget * T.WATCH_BAND_CURRENT ? "watch" : "alert");
+      status = projection <= ceiling ? "good" : (projection <= ceiling * T.WATCH_BAND_CURRENT ? "watch" : "alert");
     }
 
     const { byCat, catList } = aggregateByCategory(upto, spent);
     const { byMonth, catMonth } = aggregateByMonth(upto);
 
-    // Fun figures for the combined (ceiling-level) verdict
-    const funUpto = isFuture ? [] : txns.filter((t) => t.fun && t.date <= asOfStr);
-    const funSpent = funUpto.reduce((a, t) => a + t.amount_eur, 0);
-    // Fun projection capped by the allowance system (accruals + carryover balances)
+    // Fun decomposition: projection capped by allowance system (for Fun tab + ceiling-callout advice).
     const funProjection = isFuture ? 0 : complete ? funSpent : funProjectionFor(store, year, doy, funSpent, asOfStr);
-    const combinedProjection = projection + funProjection;
-    const combinedDelta = combinedProjection - ceiling;
-    const combinedDeltaPct = ceiling > 0 ? combinedDelta / ceiling : 0;
-    let combinedStatus;
-    if (isFuture) combinedStatus = "good";
-    else if (complete) combinedStatus = combinedProjection <= ceiling ? "good" : combinedProjection <= ceiling * T.WATCH_BAND_COMPLETE ? "watch" : "alert";
-    else combinedStatus = combinedProjection <= ceiling ? "good" : combinedProjection <= ceiling * T.WATCH_BAND_CURRENT ? "watch" : "alert";
 
-    // Prior year cumulative curve — null when no prior year data exists.
-    const priorTxns = yearTxns(store, Number(year) - 1).filter((t) => !t.fun);
+    // Prior year cumulative curve — null when no prior year data exists. Includes fun spend.
+    const priorTxns = yearTxns(store, Number(year) - 1);
     const priorCum = priorTxns.length ? cumulativeByDay(priorTxns) : null;
     const priorSpent = priorCum ? priorCum[Math.min(365, doy)] : null;
 
     return {
       year: Number(year), ceiling, mainTarget, funPlanAnnual, buffer, isCurrent, complete, isFuture,
       asOf, asOfStr, doy, daysInYear: diy, spent, dailyRate, trailingDailyRate, daysRemaining, projection, projNoBuffer, bufferAmt,
-      pace, delta, deltaPct, status, projLow, projHigh, bandAmt, txns: mainTxns, upto, byCat, catList, byMonth, catMonth,
+      pace, delta, deltaPct, status, projLow, projHigh, bandAmt, txns, upto, byCat, catList, byMonth, catMonth,
       priorCum, priorSpent,
-      funSpent, funProjection, combinedProjection, combinedDelta, combinedDeltaPct, combinedStatus,
+      mainSpent, funSpent, funProjection,
     };
   }
 
@@ -294,7 +284,7 @@ function computeStats(store, year, asOfDate) {
     const w60str = localISO(w60);
     const windowDays = Math.min(60, refDoy);
     // Lump-sum winsorization — must match computeStats so the trend comparison is apples-to-apples.
-    const lumpThreshold = stats.mainTarget > 0 ? stats.mainTarget * T.LUMP_PCT : Infinity;
+    const lumpThreshold = stats.ceiling > 0 ? stats.ceiling * T.LUMP_PCT : Infinity;
     const isLump = (t) => !!t.oneoff || t.amount_eur > lumpThreshold;
     const refRecurring = stats.txns.filter((t) => t.date <= refStr && !isLump(t));
     const recurringSum = refRecurring.reduce((a, t) => a + t.amount_eur, 0);
@@ -307,13 +297,13 @@ function computeStats(store, year, asOfDate) {
     return refSpent + blendedRate * daysLeft * (1 + stats.buffer);
   }
 
-  // Required daily rate to stay on mainTarget. Returns null when not applicable.
+  // Required daily rate to finish within ceiling. Returns null when not applicable.
   function requiredDailyToHit(stats) {
     if (!stats.isCurrent) return null;
-    if (stats.projection <= stats.mainTarget) return null;
+    if (stats.projection <= stats.ceiling) return null;
     const daysLeft = stats.daysInYear - stats.doy;
     if (daysLeft <= 0) return null;
-    return Math.max(0, (stats.mainTarget - stats.spent) / daysLeft);
+    return Math.max(0, (stats.ceiling - stats.spent) / daysLeft);
   }
 
   // computeFun — rich per-person fun ledger for the UI (uses store.currentYear for YTD figures).
@@ -363,33 +353,33 @@ function computeStats(store, year, asOfDate) {
   // ---- Callout engine ----
   function buildCallouts(store, stats) {
     if (stats.complete) {
-      const finalSpent = stats.spent + stats.funSpent;
+      const finalSpent = stats.spent;
       const over = finalSpent > stats.ceiling;
       return [{
         id: "final", severity: over ? "watch" : "good", icon: over ? "trendingUp" : "checkCircle",
-        text: `Finished ${over ? "over" : "under"} the ceiling by ${eur0(Math.abs(stats.combinedDelta))} — ${eur0(finalSpent)} against a ${eur0(stats.ceiling)} ceiling.`,
-        drill: { section: "projection" }, mag: Math.abs(stats.combinedDeltaPct),
+        text: `Finished ${over ? "over" : "under"} the ceiling by ${eur0(Math.abs(stats.delta))} — ${eur0(finalSpent)} against a ${eur0(stats.ceiling)} ceiling.`,
+        drill: { section: "projection" }, mag: Math.abs(stats.deltaPct),
       }];
     }
     if (stats.isFuture) return [{
       id: "future", severity: "good", icon: "clock",
-      text: `${stats.year} hasn't started yet — main budget ${eur0(stats.mainTarget)}.`,
+      text: `${stats.year} hasn't started yet — ceiling ${eur0(stats.ceiling)}.`,
       drill: { section: "projection" }, mag: 0,
     }];
     const out = [];
-    const linDaily = stats.mainTarget / stats.daysInYear;
+    const linDaily = stats.ceiling / stats.daysInYear;
 
     // 1. projection trend (vs 4 weeks ago) — skip in January (doy ≤ 28) where the reference
     // date falls in the prior year, making refSpent=0 and proj4≈0 (false "everything moved up").
     const proj4 = stats.doy > 28 ? projectionAsOf(stats, 28) : null;
     const trendD = proj4 !== null ? stats.projection - proj4 : 0;
-    if (proj4 !== null && Math.abs(trendD) > stats.mainTarget * T.TREND_NOTABLE) {
+    if (proj4 !== null && Math.abs(trendD) > stats.ceiling * T.TREND_NOTABLE) {
       const worse = trendD > 0;
       out.push({
-        id: "trend", severity: worse ? (Math.abs(trendD) > stats.mainTarget * T.TREND_ALERT ? "alert" : "watch") : "good",
+        id: "trend", severity: worse ? (Math.abs(trendD) > stats.ceiling * T.TREND_ALERT ? "alert" : "watch") : "good",
         icon: worse ? "trendingUp" : "trendingDown",
-        text: `Main budget: Year-end projection has moved ${worse ? "up" : "down"} ${eur0(Math.abs(trendD))} over the last 4 weeks, now ${eur0(stats.projection)}.`,
-        drill: { section: "projection" }, mag: Math.abs(trendD) / stats.mainTarget + 0.2,
+        text: `Year-end projection has moved ${worse ? "up" : "down"} ${eur0(Math.abs(trendD))} over the last 4 weeks, now ${eur0(stats.projection)}.`,
+        drill: { section: "projection" }, mag: Math.abs(trendD) / stats.ceiling + 0.2,
       });
     }
 
@@ -404,7 +394,7 @@ function computeStats(store, year, asOfDate) {
       out.push({
         id: "streak", severity: hot ? (ratio14 > T.STREAK_ALERT ? "alert" : "watch") : "good",
         icon: "activity",
-        text: `Main budget: Last 14 days are running ${signedPct(ratio14 - 1)} ${hot ? "above" : "below"} linear pace — ${eur0(d14)}/day vs ${eur0(linDaily)}/day.`,
+        text: `Last 14 days are running ${signedPct(ratio14 - 1)} ${hot ? "above" : "below"} linear pace — ${eur0(d14)}/day vs ${eur0(linDaily)}/day.`,
         drill: { section: "projection" }, mag: Math.abs(ratio14 - 1) + 0.15,
       });
     }
@@ -448,7 +438,7 @@ function computeStats(store, year, asOfDate) {
     }
 
     // 5. buffer explanation (why projection > raw pace)
-    if (stats.bufferAmt > stats.mainTarget * T.BUFFER_EXPLAIN_MIN) {
+    if (stats.bufferAmt > stats.ceiling * T.BUFFER_EXPLAIN_MIN) {
       out.push({
         id: "buffer", severity: "info", icon: "layers",
         text: `Logged spend alone projects to ${eur0(stats.projNoBuffer)}; the ${Math.round(stats.buffer * 100)}% missed-entry buffer lifts that to ${eur0(stats.projection)}.`,
@@ -465,22 +455,22 @@ function computeStats(store, year, asOfDate) {
         const higher = diff > 0;
         out.push({
           id: "yoy",
-          severity: higher && diff > stats.mainTarget * T.YOY_WATCH ? "watch" : higher ? "info" : "good",
+          severity: higher && diff > stats.ceiling * T.YOY_WATCH ? "watch" : higher ? "info" : "good",
           icon: higher ? "trendingUp" : "trendingDown",
           text: `Spending is ${eur0(Math.abs(diff))} (${signedPct(diffPct)}) ${higher ? "higher" : "lower"} than the same point in ${stats.year - 1}.`,
-          drill: { section: "projection" }, mag: Math.abs(diff) / stats.mainTarget * 0.7 + 0.05,
+          drill: { section: "projection" }, mag: Math.abs(diff) / stats.ceiling * 0.7 + 0.05,
         });
       }
     }
 
-    // 7. required daily pace (current year, projection over mainTarget)
+    // 7. required daily pace (current year, projection over ceiling)
     const reqDaily = requiredDailyToHit(stats);
     if (reqDaily !== null) {
       out.push({
         id: "reqpace",
         severity: stats.status === "alert" ? "watch" : "info",
         icon: "activity",
-        text: `Main budget: Spend ≤ ${eur0(reqDaily)}/day from here to finish on main budget target.`,
+        text: `Spend ≤ ${eur0(reqDaily)}/day from here to finish within your ceiling.`,
         drill: { section: "projection" },
         mag: stats.deltaPct * 0.5 + 0.1,
       });
@@ -489,26 +479,26 @@ function computeStats(store, year, asOfDate) {
     const sev = { alert: 3, watch: 2, info: 1, good: 0 };
     out.sort((a, b) => (sev[b.severity] - sev[a.severity]) || (b.mag - a.mag));
 
-    // 8. ceiling detector (current year only) — sacred combined verdict, always top
+    // 8. ceiling detector (current year only) — sacred verdict, always top
     // Skip entirely when the store has no data yet (avoids "room to raise fun €X/mo" noise on first load).
     let ceilingCallout = null;
     if (stats.isCurrent && !(stats.upto.length === 0 && stats.funSpent === 0)) {
-      if (stats.combinedProjection > stats.ceiling) {
+      if (stats.projection > stats.ceiling) {
         const monthsLeft = Math.max(1, (stats.daysInYear - stats.doy) / T.DAYS_PER_MONTH);
-        const overBy = stats.combinedProjection - stats.ceiling;
+        const overBy = stats.projection - stats.ceiling;
         const trimPer = overBy / monthsLeft;
         const maxFunTrim = stats.funPlanAnnual / 12;
         const severity = overBy > stats.ceiling * T.CEILING_ALERT ? "alert" : "watch";
         const ceilText = trimPer <= maxFunTrim
-          ? `Household projects to ${eur0(stats.combinedProjection)} against your ${eur0(stats.ceiling)} ceiling — trim fun spending by ~${eur0(trimPer)}/mo to stay within it.`
-          : `Household projects to ${eur0(stats.combinedProjection)} against your ${eur0(stats.ceiling)} ceiling — even cutting the entire fun budget (${eur0(maxFunTrim)}/mo) won't close it; main spending needs to drop ~${eur0(trimPer - maxFunTrim)}/mo too.`;
+          ? `Household projects to ${eur0(stats.projection)} against your ${eur0(stats.ceiling)} ceiling — trim fun spending by ~${eur0(trimPer)}/mo to stay within it.`
+          : `Household projects to ${eur0(stats.projection)} against your ${eur0(stats.ceiling)} ceiling — even cutting the entire fun budget (${eur0(maxFunTrim)}/mo) won't close it; main spending needs to drop ~${eur0(trimPer - maxFunTrim)}/mo too.`;
         ceilingCallout = {
           id: "ceiling", severity, icon: "trendingUp",
           text: ceilText,
           drill: { section: "fun" }, mag: 1.0,
         };
-      } else if (stats.combinedProjection < stats.ceiling * T.CEILING_COMFORT) {
-        const gap = stats.ceiling - stats.combinedProjection;
+      } else if (stats.projection < stats.ceiling * T.CEILING_COMFORT) {
+        const gap = stats.ceiling - stats.projection;
         const monthsLeft = Math.max(1, (stats.daysInYear - stats.doy) / T.DAYS_PER_MONTH);
         const raisePer = gap / monthsLeft;
         ceilingCallout = {
@@ -520,7 +510,7 @@ function computeStats(store, year, asOfDate) {
         // T.CEILING_COMFORT–1.00 band: tight but on course
         ceilingCallout = {
           id: "ceiling", severity: "info", icon: "checkCircle",
-          text: `Tracking ${eur0(stats.ceiling - stats.combinedProjection)} under your ${eur0(stats.ceiling)} ceiling — tight but on course.`,
+          text: `Tracking ${eur0(stats.ceiling - stats.projection)} under your ${eur0(stats.ceiling)} ceiling — tight but on course.`,
           drill: { section: "projection" }, mag: 0.5,
         };
       }
@@ -531,7 +521,7 @@ function computeStats(store, year, asOfDate) {
     } else if (!out.some((c) => sev[c.severity] >= 2)) {
       out.unshift({
         id: "calm", severity: "good", icon: "checkCircle",
-        text: `Projection steady at ${eur0(stats.projection)} against your ${eur0(stats.mainTarget)} main budget — nothing notable in the data.`,
+        text: `Projection steady at ${eur0(stats.projection)} against your ${eur0(stats.ceiling)} ceiling — nothing notable in the data.`,
         drill: { section: "projection" }, mag: 0,
       });
     }
@@ -550,12 +540,12 @@ function computeStats(store, year, asOfDate) {
     return spentSoFar + rate * (daysInMonth - dayOfMonth);
   }
 
-  // Main-budget allowance per remaining month (incl. the current one).
+  // Ceiling allowance per remaining month (incl. the current one).
   // Subtracts only PRIOR months' spend so the current month is judged against a stable cap.
   function neededMonthlyCap(stats) {
     const m = stats.asOf.getMonth();
     const spentBefore = stats.byMonth.slice(0, m).reduce((a, x) => a + x.amount, 0);
-    return Math.max(0, (stats.mainTarget - spentBefore) / (12 - m));
+    return Math.max(0, (stats.ceiling - spentBefore) / (12 - m));
   }
 
   window.YCalc = {
