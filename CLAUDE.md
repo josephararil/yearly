@@ -65,6 +65,9 @@ Full local-dev notes (the no-backend 404 handling, reload-loop fix) are in
    `mainTarget` = `ceiling − funPlanAnnual` is derived. See vocabulary below.
 5. **After changing `calc.jsx` or `data.jsx`, run the regression test** (`calc.test.html`, all rows
    PASS) — see [docs/PWA-AND-DEV.md](docs/PWA-AND-DEV.md) for the browser and Node shortcuts.
+5b. **Don't `wrangler d1 migrations apply` against remote** — its tracking table is out of sync and
+   will try to replay 0002+ and fail. Apply new migrations via the **Cloudflare D1 dashboard
+   Console**, then commit the `.sql` file. Detail: [docs/BACKEND.md](docs/BACKEND.md).
 
 ## Module system (no bundler)
 

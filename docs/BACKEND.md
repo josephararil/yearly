@@ -11,6 +11,12 @@ Four tables, applied via `npx wrangler d1 migrations apply yearly-db --remote`. 
 files: `0001_init.sql`, `0002_revolut_fields.sql`, `0003_oneoff_flag.sql`,
 `0004_fix_updated_at_seconds.sql`, `0005_meta.sql`.
 
+> **⚠️ Wrangler migration tracking on remote is out of sync.** The remote `d1_migrations` table
+> doesn't record 0002–0004 as applied, so `wrangler d1 migrations apply --remote` will try to replay
+> them and fail with "duplicate column name." Until that tracking table is reconciled, apply each
+> **new** migration by pasting its SQL into the **Cloudflare D1 dashboard → Console**, then still
+> commit the `.sql` file to `migrations/` as the schema record. (0005 was applied this way.)
+
 ```sql
 -- 0001_init.sql
 transactions(id TEXT PK, date TEXT NOT NULL, description TEXT,
