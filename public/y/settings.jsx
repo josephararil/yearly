@@ -1,8 +1,8 @@
 // settings.jsx — target, buffer, years, templates, CSV import/export, clear.
 (function () {
-  const APP_VERSION = 'v47';
+  const APP_VERSION = 'v48';
   const { YData, YCalc, YUI } = window;
-  const { eur0, signedPct, computeStats } = YCalc;
+  const { eur0, signedPct, computeStats, localISO } = YCalc;
   const { Sheet, DeltaChip } = YUI;
   const DS = window.ApertureDesignSystem_72a4cd || {};
   const Button = DS.Button, SegmentedControl = DS.SegmentedControl;
@@ -493,7 +493,7 @@
     const a = document.createElement("a"); a.href = URL.createObjectURL(blob); a.download = "yearly-export.csv"; a.click();
   }
 
-  function SettingsScreen({ store, setStore, stats }) {
+  function SettingsScreen({ store, setStore, stats, lastSyncTs }) {
     const [sub, setSub] = React.useState(null);
     const [funPersonSub, setFunPersonSub] = React.useState(null); // person id | null
     const [syncing, setSyncing] = React.useState(false);
@@ -581,6 +581,14 @@
         </div>
 
         <div className="muted" style={{ textAlign: "center", fontSize: 11.5, marginTop: 6, fontFamily: "var(--mono)" }}>Yearly · {APP_VERSION}</div>
+        {lastSyncTs != null && (() => {
+          const ageDays = Math.max(0, Math.floor((Date.now() - lastSyncTs) / 86400000));
+          return (
+            <div className="muted" style={{ textAlign: "center", fontSize: 11, marginTop: 3, fontFamily: "var(--mono)" }}>
+              Data as of {localISO(new Date(lastSyncTs))} · {ageDays} {ageDays === 1 ? 'day' : 'days'} ago
+            </div>
+          );
+        })()}
 
         <TargetSheet open={sub === "target"} onClose={() => setSub(null)} store={store} setStore={setStore} />
         <BufferSheet open={sub === "buffer"} onClose={() => setSub(null)} store={store} setStore={setStore} />

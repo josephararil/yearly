@@ -51,7 +51,7 @@ Full local-dev notes (the no-backend 404 handling, reload-loop fix) are in
    appear in preview, **assume stale cache first** — rule it out before debugging logic. Full SW +
    preview workflow: [docs/PWA-AND-DEV.md](docs/PWA-AND-DEV.md).
 2. **`APP_VERSION` (`settings.jsx` footer) and `CACHE_NAME` (`sw.js`) move together** — currently
-   `v47` / `yearly-v47`. Bump both on every release.
+   `v48` / `yearly-v48`. Bump both on every release.
 3. **`localISO(d)`, never `toISOString()`** for dates in `calc.jsx` — `toISOString()` is UTC and
    silently drops Dec 31 transactions in UTC+ timezones (EET).
 3b. **`updated_at` is milliseconds everywhere** — `Date.now()` in the worker, `Date.now()` for the
@@ -65,6 +65,9 @@ Full local-dev notes (the no-backend 404 handling, reload-loop fix) are in
    `mainTarget` = `ceiling − funPlanAnnual` is derived. See vocabulary below.
 5. **After changing `calc.jsx` or `data.jsx`, run the regression test** (`calc.test.html`, all rows
    PASS) — see [docs/PWA-AND-DEV.md](docs/PWA-AND-DEV.md) for the browser and Node shortcuts.
+5b. **Don't `wrangler d1 migrations apply` against remote** — its tracking table is out of sync and
+   will try to replay 0002+ and fail. Apply new migrations via the **Cloudflare D1 dashboard
+   Console**, then commit the `.sql` file. Detail: [docs/BACKEND.md](docs/BACKEND.md).
 
 ## Module system (no bundler)
 
@@ -95,11 +98,15 @@ The essentials every session needs:
 - `spent` / `projection` (in stats) — **total household spend (main + fun)**; measured vs `ceiling`.
 - `mainSpent` / `funSpent` — decomposition fields for the Fun tab and ceiling-callout advice only.
 - `funProjection` — capped fun projection (allowance-limited); used in the Fun tab and the "trim fun" callout advice.
+- `staleDays` — whole days since the Revolut pipeline last ran; `0` when unknown. Extends the
+  projection horizon: `projDays = daysRemaining + staleDays`. Passed as 4th arg to `computeStats`
+  (default 0); only applied when `isCurrent`. Also widens the uncertainty band (`weeksRemaining =
+  projDays / 7`), making `alert` harder to trip while data is stale.
 
-**Projection (damped blend):** `projection = spent + blendedRate × daysRemaining × (1 + buffer)`,
-`blendedRate = YTD_rate × (doy/365) + trailing_60d_rate × (1 − doy/365)`. Buffer uplifts only the
-extrapolated remainder (so on Dec 31 projection = spent). Complete/future years: `projection =
-spent`.
+**Projection (damped blend):** `projDays = daysRemaining + staleDays`, `projection = spent +
+blendedRate × projDays × (1 + buffer)`, `blendedRate = YTD_rate × (doy/365) +
+trailing_60d_rate × (1 − doy/365)`. Buffer uplifts only the extrapolated remainder (so on Dec 31
+with no stale days projection = spent). Complete/future years: `projection = spent`.
 
 **Conventions that are easy to break** (see ARCHITECTURE.md for the why): `localISO` not
 `toISOString`; lump-sum winsorization (tx > 2% of `ceiling`, or `oneoff:true`, excluded from the
@@ -112,8 +119,9 @@ ceiling verdict (#8) is always prepended first.
 
 `App` is the single stateful root. `store` (persisted to localStorage on every mutation) is the only
 durable state; everything else is ephemeral UI state. Three memoized derivations drive the UI:
-`stats = YCalc.computeStats(store, viewYear)`, `callouts = YCalc.buildCallouts(store, stats)`, `fun =
-YCalc.computeFun(store)`. Navigation is in-memory route state (`home` | `analysis` | `settings`), not
+`stats = YCalc.computeStats(store, viewYear, undefined, viewYear===currentYear ? staleDays : 0)`,
+`callouts = YCalc.buildCallouts(store, stats)`, `fun = YCalc.computeFun(store)`. `staleDays` is
+derived from `lastSyncTs` (state, set after `reconcile()` via `YSync.getLastSyncTs()`). Navigation is in-memory route state (`home` | `analysis` | `settings`), not
 URL routing. `viewYear` is independent of `store.currentYear`; a past year flips the app into
 completed-year mode. Sync wiring, callout→Analysis focus routing, and undo-on-delete are detailed in
 [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md#state-flow--yappjsx).

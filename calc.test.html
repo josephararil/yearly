@@ -985,6 +985,41 @@
     assert('(d) clamp: projLow >= spent (invariant)', clamp21.projLow !== null && clamp21.projLow >= clamp21.spent,
       'projLow=' + (clamp21.projLow||0).toFixed(2) + ' spent=' + clamp21.spent.toFixed(2));
 
+    // ---- staleDays extension ----
+    section('staleDays extension — staleDays=0 regression-safe; staleDays=10 widens projection and band');
+
+    // staleDays=0 must be byte-identical to the 3-arg call (richStats was computed without a 4th arg).
+    const stale0Stats = YCalc.computeStats(richStore, 2026, asOf2026, 0);
+    assert('staleDays=0: projection identical to 3-arg baseline',
+      stale0Stats.projection === richStats.projection,
+      'stale0=' + stale0Stats.projection.toFixed(4) + ' baseline=' + richStats.projection.toFixed(4));
+    assert('staleDays=0: bandAmt identical to 3-arg baseline',
+      stale0Stats.bandAmt === richStats.bandAmt,
+      'stale0=' + (stale0Stats.bandAmt||0).toFixed(4) + ' baseline=' + (richStats.bandAmt||0).toFixed(4));
+    assert('staleDays=0: staleDays field === 0', stale0Stats.staleDays === 0, 'got ' + stale0Stats.staleDays);
+
+    // staleDays=10: projection must rise by exactly trailingDailyRate×10×(1+buffer);
+    // bandAmt must increase because weeksRemaining = (daysRemaining+10)/7 > daysRemaining/7.
+    const stale10Stats = YCalc.computeStats(richStore, 2026, asOf2026, 10);
+    const expectedProjIncrease = richStats.trailingDailyRate * 10 * (1 + richStore.years['2026'].buffer);
+    const actualProjIncrease   = stale10Stats.projection - richStats.projection;
+    assert('staleDays=10: projection > staleDays=0 baseline',
+      stale10Stats.projection > richStats.projection,
+      'stale10=' + stale10Stats.projection.toFixed(2) + ' baseline=' + richStats.projection.toFixed(2));
+    assert('staleDays=10: projection increase ≈ trailingDailyRate×10×(1+buffer)',
+      Math.abs(actualProjIncrease - expectedProjIncrease) < 0.01,
+      'actual=' + actualProjIncrease.toFixed(4) + ' expected=' + expectedProjIncrease.toFixed(4));
+    assert('staleDays=10: bandAmt > staleDays=0 bandAmt (horizon widens)',
+      stale10Stats.bandAmt !== null && richStats.bandAmt !== null && stale10Stats.bandAmt > richStats.bandAmt,
+      'stale10=' + (stale10Stats.bandAmt||0).toFixed(2) + ' baseline=' + (richStats.bandAmt||0).toFixed(2));
+    assert('staleDays=10: staleDays field === 10', stale10Stats.staleDays === 10, 'got ' + stale10Stats.staleDays);
+
+    // staleDays must be ignored for complete years — projection stays = spent.
+    const stale10Complete = YCalc.computeStats(Object.assign({}, richStore, { currentYear: 2027 }), 2026, asOf2026, 10);
+    assert('staleDays ignored for complete year: projection === spent',
+      Math.abs(stale10Complete.projection - stale10Complete.spent) < 0.001,
+      'projection=' + stale10Complete.projection.toFixed(2) + ' spent=' + stale10Complete.spent.toFixed(2));
+
     // ---- Summary ----
     const total = passed + failed;
     const summary = document.getElementById('summary');

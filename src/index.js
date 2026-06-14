@@ -118,10 +118,20 @@ export default {
           .prepare("SELECT updated_at FROM settings WHERE id = 1")
           .first();
 
+        let metaRow = null;
+        try {
+          metaRow = await env.DB
+            .prepare("SELECT value FROM meta WHERE key = 'last_revolut_sync_ts'")
+            .first();
+        } catch (_) {
+          // meta table absent on old deployments — return null
+        }
+
         return json({
-          tx_count:            txRow?.tx_count       ?? 0,
-          sum_eur_cents:       txRow?.sum_eur_cents  ?? 0,
-          settings_updated_at: settingsRow?.updated_at ?? 0,
+          tx_count:              txRow?.tx_count       ?? 0,
+          sum_eur_cents:         txRow?.sum_eur_cents  ?? 0,
+          settings_updated_at:   settingsRow?.updated_at ?? 0,
+          last_revolut_sync_ts:  metaRow?.value ?? null,
         });
       }
 

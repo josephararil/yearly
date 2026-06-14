@@ -32,8 +32,10 @@ Config in `sync.py`: `D1_DATABASE = "yearly-db"`, `REVOLUT_WALLET`, `REVOLUT_DEV
    downloads to `~/Downloads`.
 3. **`push.bat`** (`python sync.py push`) — detects the JSON in Downloads, runs `revolut_clean.py`
    twice (generates `batches/latest.sql` + `batches/latest.csv`), prompts "Push to D1? [Y/n]", runs
-   `npx wrangler d1 execute yearly-db --remote --file=latest.sql`. On success: archives JSON + CSV
-   to `batches/`, updates `.sync_state.json`, deletes working files.
+   `npx wrangler d1 execute yearly-db --remote --file=latest.sql`. The generated SQL includes an
+   UPSERT that writes `last_revolut_sync_ts` (ms epoch, `int(time.time() * 1000)`) into the `meta`
+   table — the pipeline freshness marker the app reads via `/api/sync/check`. On success: archives
+   JSON + CSV to `batches/`, updates `.sync_state.json`, deletes working files.
 4. **`status.bat`** — confirms last sync date, run time, total transactions pushed, next pull start
    date.
 

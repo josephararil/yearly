@@ -26,8 +26,12 @@ formula, status thresholds, and each callout detector.
 
 ### Exports
 
-- `computeStats(store, year, asOfDate?)` — damped-blend projection + per-year buffer uplift +
-  status thresholds; `asOfDate` defaults to `new Date()`.
+- `computeStats(store, year, asOfDate?, staleDays = 0)` — damped-blend projection + per-year
+  buffer uplift + status thresholds; `asOfDate` defaults to `new Date()`. `staleDays` (4th param,
+  default 0) extends the projection horizon backward to cover days elapsed since the Revolut
+  pipeline last ran: `projDays = daysRemaining + staleDays`. Only applied when `isCurrent`;
+  ignored for complete/future years. When `staleDays === 0` output is byte-identical to the
+  pre-stale baseline.
 - `buildCallouts(store, stats)` — the ranked detector engine (8 detectors).
 - `cumulativeByDay(txns)` → `number[366]` (shared with `analysis.jsx`).
 - `priorYearCumulative(store, year, asOfDate)` → number (prior year spend at same day-of-year).
@@ -75,13 +79,16 @@ see README §Callout detectors threshold table for the full rationale.
 
 ### Projection formula (damped blend)
 
-`projection = spent + blendedRate × daysRemaining × (1 + buffer)` where `blendedRate =
+`projDays = daysRemaining + staleDays` (staleDays=0 when no stale signal).
+`projection = spent + blendedRate × projDays × (1 + buffer)` where `blendedRate =
 YTD_rate × (doy/365) + trailing_60d_rate × (1 − doy/365)`. The buffer uplifts only the
-extrapolated remainder, so on Dec 31 projection equals spent exactly; `funProjection` carries
-no buffer by design. Early in the year the blend trusts recent momentum (thin YTD history);
-late in the year it locks onto the full-year average, so a July holiday doesn't hijack the
-December projection. For complete/future years `projection = spent`. `projectionAsOf` uses the
-same blend for consistent trend comparisons.
+extrapolated remainder, so on Dec 31 with no stale days projection equals spent exactly;
+`funProjection` carries no buffer by design. Early in the year the blend trusts recent momentum
+(thin YTD history); late in the year it locks onto the full-year average, so a July holiday
+doesn't hijack the December projection. For complete/future years `projection = spent`.
+`projectionAsOf` uses the same blend for consistent trend comparisons. Band widening: `weeksRemaining
+= projDays / 7`, so a non-zero `staleDays` widens `bandAmt` and lowers `projLow`, making the
+`alert` verdict harder to trip while data is stale (correct — the forecast is less certain).
 
 ### `computeStats` returns
 
@@ -90,6 +97,9 @@ Primary fields: `ceiling`, `mainTarget`, `funPlanAnnual`, `spent`, `projection`,
 `daysRemaining`, `projNoBuffer`, `bufferAmt`, `upto`, `txns`, `byCat`, `catList`, `byMonth`,
 `catMonth`, `priorCum`, `priorSpent`, `isCurrent`, `complete`, `isFuture`, `asOf`, `asOfStr`,
 `doy`, `daysInYear`, `year`, `buffer`.
+Staleness fields: `staleDays` (number, ≥0 — whole elapsed days since last pipeline run; 0 when
+unknown), `lastSyncTs` (number|null — ms epoch from `/api/sync/check`.`last_revolut_sync_ts`; null
+when unavailable). Both are passed through to the UI/banner.
 Decomposition fields: `mainSpent`, `funSpent`, `funProjection`.
 
 `stats.txns` / `stats.upto` contain **all** transactions for the year (main + fun).
@@ -204,8 +214,12 @@ Backend API contract is in [BACKEND.md](BACKEND.md).
   writes), then `GET /api/sync?since=cursor`, merges tx by id (deleted rows are removed), applies
   settings only when `updated_at > appliedAt`, updates cursor.
 - `YSync.reconcile()` — compares `GET /api/sync/check` aggregate against the local store; triggers
-  `pull({ force: true })` on any mismatch. Returns `{ ok, before, after, recovered }`. Offline-safe
+  `pull({ force: true })` on any mismatch. Also captures `last_revolut_sync_ts` from the check
+  response and stores it internally. Returns `{ ok, before, after, recovered }`. Offline-safe
   (no-ops when `syncFetch` returns null).
+- `YSync.getLastSyncTs()` — returns the `last_revolut_sync_ts` (ms epoch) captured during the most
+  recent `reconcile()` call, or `null` if reconcile hasn't run or the field was absent (old
+  deployment / local dev without the `meta` table).
 - `YSync.bootstrap()` — called once on mount. Flushes the outbox first so offline-created
   transactions reach the server before the since=0 pull decides adopt vs seed path. If server has
   data, adopts it (second-device path); if empty, seeds it (first-device path). Sets

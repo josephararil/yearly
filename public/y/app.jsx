@@ -63,6 +63,7 @@
     const [deletedTx, setDeletedTx] = React.useState(null);
     const [showToast, setShowToast] = React.useState(false);
     const [showSyncToast, setShowSyncToast] = React.useState(false);
+    const [lastSyncTs, setLastSyncTs] = React.useState(null);
     const scrollRef = React.useRef(null);
     // Stable ref so sync callbacks always see the current store without re-init
     const storeRef = React.useRef(store);
@@ -76,10 +77,13 @@
       YSync.start();
       YSync.bootstrap().then(() => YSync.pull()).then(() => YSync.reconcile()).then(r => {
         if (r && r.recovered) setShowSyncToast(true);
+        const ts = YSync.getLastSyncTs();
+        if (ts != null) setLastSyncTs(ts);
       });
     }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
-    const stats = React.useMemo(() => YCalc.computeStats(store, viewYear), [store, viewYear]);
+    const staleDays = lastSyncTs ? Math.max(0, Math.floor((Date.now() - lastSyncTs) / 86400000)) : 0;
+    const stats = React.useMemo(() => YCalc.computeStats(store, viewYear, undefined, viewYear === store.currentYear ? staleDays : 0), [store, viewYear, staleDays]);
     const callouts = React.useMemo(() => YCalc.buildCallouts(store, stats), [store, stats]);
     const fun = React.useMemo(() => YCalc.computeFun(store), [store]);
 
@@ -150,7 +154,7 @@
               callouts={callouts} onCallout={onCallout} />
           )}
           {route === "settings" && (
-            <YSettings.SettingsScreen store={store} setStore={setStore} stats={stats} />
+            <YSettings.SettingsScreen store={store} setStore={setStore} stats={stats} lastSyncTs={lastSyncTs} />
           )}
         </div>
 
