@@ -252,6 +252,14 @@ def cmd_push(json_path: Path | None = None):
         print(f"Aborted. SQL file kept at {sql_file}")
         return
 
+    # Stamp pipeline run time and append freshness marker atomically with the tx batch
+    now_ms = int(time.time() * 1000)
+    with open(sql_file, "a", encoding="utf-8") as _f:
+        _f.write(
+            f"\nINSERT INTO meta(key,value) VALUES('last_revolut_sync_ts', {now_ms})"
+            " ON CONFLICT(key) DO UPDATE SET value=excluded.value;\n"
+        )
+
     # Push to D1
     print(f"\nPushing to D1 ({D1_DATABASE})...")
     result = subprocess.run(
@@ -275,7 +283,7 @@ def cmd_push(json_path: Path | None = None):
         latest_date = max(dates)
         state = load_state()
         state["last_sync_date"] = latest_date
-        state["last_sync_ts"] = int(time.time())
+        state["last_sync_ts"] = now_ms // 1000
         state["total_transactions"] = state.get("total_transactions", 0) + len(data)
         save_state(state)
         print(f"\n✓ State updated. Latest transaction date: {latest_date}")
