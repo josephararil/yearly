@@ -137,7 +137,7 @@ function funProjectionFor(store, year, doy, funSpentYTD, asOfStr) {
   return Math.min(linear, funSpentYTD + Math.max(0, balances) + futureAccruals);
 }
 
-function computeStats(store, year, asOfDate) {
+function computeStats(store, year, asOfDate, staleDays = 0) {
     const real = asOfDate || new Date();
     const currentYear = Number(store.currentYear);
     const y = store.years[String(year)] || { ceiling: 25000, buffer: 0.04 };
@@ -207,7 +207,8 @@ function computeStats(store, year, asOfDate) {
       trailingDailyRate = recurringYtdRate * yearWeight + rawTrailing * (1 - yearWeight);
     }
     const daysRemaining = Math.max(0, diy - doy);
-    const extrapolated = trailingDailyRate * daysRemaining;
+    const projDays = isCurrent ? daysRemaining + staleDays : daysRemaining;
+    const extrapolated = trailingDailyRate * projDays;
     const projNoBuffer = (complete || isFuture) ? spent : spent + extrapolated;
     const projection = (complete || isFuture) ? spent : spent + extrapolated * (1 + buffer);
     const bufferAmt = projection - projNoBuffer;
@@ -233,7 +234,7 @@ function computeStats(store, year, asOfDate) {
         const n = nCompleteWeeks;
         const mean = weekTotals.reduce((a, v) => a + v, 0) / n;
         const sigmaWeek = Math.sqrt(weekTotals.reduce((a, v) => a + (v - mean) ** 2, 0) / (n - 1));
-        const weeksRemaining = daysRemaining / 7;
+        const weeksRemaining = projDays / 7;
         bandAmt = sigmaWeek * Math.sqrt(weeksRemaining) * (1 + buffer);
         projLow = Math.max(spent, projection - bandAmt);
         projHigh = projection + bandAmt;
@@ -267,7 +268,7 @@ function computeStats(store, year, asOfDate) {
 
     return {
       year: Number(year), ceiling, mainTarget, funPlanAnnual, buffer, isCurrent, complete, isFuture,
-      asOf, asOfStr, doy, daysInYear: diy, spent, dailyRate, trailingDailyRate, daysRemaining, projection, projNoBuffer, bufferAmt,
+      asOf, asOfStr, doy, daysInYear: diy, spent, dailyRate, trailingDailyRate, daysRemaining, staleDays, projection, projNoBuffer, bufferAmt,
       pace, delta, deltaPct, status, projLow, projHigh, bandAmt, txns, upto, byCat, catList, byMonth, catMonth,
       priorCum, priorSpent,
       mainSpent, funSpent, funProjection,
