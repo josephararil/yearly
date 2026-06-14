@@ -298,9 +298,28 @@
     );
   }
 
+  function StaleBanner({ staleDays }) {
+    return (
+      <div style={{
+        borderTop: '1px solid var(--amber)', borderBottom: '1px solid var(--amber)',
+        background: 'color-mix(in srgb, var(--amber) 8%, transparent)',
+        padding: '9px 14px', display: 'flex', gap: 8, alignItems: 'flex-start',
+      }}>
+        <span style={{
+          display: 'inline-block', marginTop: 5, width: 7, height: 7,
+          borderRadius: '50%', background: 'var(--amber)', flexShrink: 0,
+        }} />
+        <span style={{ fontSize: 12, fontFamily: 'var(--sans)', color: 'var(--ink-2)', lineHeight: 1.55 }}>
+          Revolut data last refreshed <span className="num">{staleDays}</span> days ago. The projection now estimates the gap; figures may shift on your next import.
+        </span>
+      </div>
+    );
+  }
+
   function HomeScreen({ stats, fun, store, onOpenFun }) {
     return (
       <div className="screen stagger">
+        {stats.isCurrent && stats.staleDays >= 7 && <StaleBanner staleDays={stats.staleDays} />}
         <StatusHero stats={stats} />
 
         <div>

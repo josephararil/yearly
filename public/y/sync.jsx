@@ -17,6 +17,7 @@
 
   let _getStore    = null;
   let _applyServer = null;
+  let _lastSyncTs  = null;
 
   // ---- localStorage helpers ----
   function getCursor()   { return parseInt(localStorage.getItem(CURSOR_KEY)  || '0', 10); }
@@ -234,6 +235,7 @@
   async function reconcile() {
     const serverCheck = await syncFetch('/api/sync/check');
     if (!serverCheck) return { ok: true, recovered: false }; // offline — silent no-op
+    if (serverCheck.last_revolut_sync_ts != null) _lastSyncTs = serverCheck.last_revolut_sync_ts;
 
     const store = _getStore ? _getStore() : { transactions: [] };
     const txns  = (store.transactions || []).filter(t => !t.deleted);
@@ -348,5 +350,7 @@
     });
   }
 
-  window.YSync = { init, enqueueTx, markSettingsDirty, flush, pull, reconcile, bootstrap, start };
+  function getLastSyncTs() { return _lastSyncTs; }
+
+  window.YSync = { init, enqueueTx, markSettingsDirty, flush, pull, reconcile, bootstrap, start, getLastSyncTs };
 })();
