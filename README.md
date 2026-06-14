@@ -89,7 +89,8 @@ The projection extrapolates your recent pace to year-end, then lifts the *remain
 safety buffer:
 
 ```
-projection = spent + blendedRate × daysRemaining × (1 + buffer)
+projDays   = daysRemaining + staleDays
+projection = spent + blendedRate × projDays × (1 + buffer)
 blendedRate = ytdRate × (doy / daysInYear) + trailing60dRate × (1 − doy / daysInYear)
 ```
 
@@ -98,9 +99,16 @@ blendedRate = ytdRate × (doy / daysInYear) + trailing60dRate × (1 − doy / da
 - The blend is **damped**: early in the year (thin history) it trusts recent 60-day momentum; late
   in the year it locks onto the full-year average. So a July holiday doesn't hijack the December
   projection.
-- The **buffer** uplifts only the extrapolated remainder, so on Dec 31 (`daysRemaining = 0`) the
-  projection equals `spent` exactly. It's a per-year fraction (default 4%, adjustable 0–15% via a
-  Settings slider) that accounts for expenses you forgot to log.
+- The **buffer** uplifts only the extrapolated remainder, so on Dec 31 (`daysRemaining = 0`, no
+  stale days) the projection equals `spent` exactly. It's a per-year fraction (default 4%,
+  adjustable 0–15% via a Settings slider) that accounts for expenses you forgot to log.
+- **`staleDays`** = whole days since the Revolut pipeline last ran. When the pipeline hasn't run
+  recently, the app has no transactions for the blind days and would otherwise treat them as €0
+  spend. Extending the projection horizon by `staleDays` simultaneously imputes the missing spend
+  (at `blendedRate`) and corrects the extrapolation. When `staleDays === 0` every formula is
+  identical to the pre-stale baseline. Only applied when `isCurrent`; ignored for complete/future
+  years. **Known limitation:** `trailingDailyRate` is computed over a window whose last `staleDays`
+  are empty, so it slightly understates the blind-day spend; the imputation leans conservative.
 - **Completed and future years**: `projection = spent` (no extrapolation, no buffer).
 - All dates use a local `localISO(d)` formatter, **never `toISOString()`** — UTC midnight shifts
   dates backward in UTC+ timezones (EET) and silently drops Dec 31 transactions.
@@ -119,10 +127,15 @@ gets an honest ± range from your week-to-week volatility:
 
 ```
 sigmaWeek      = sample std-dev of weekly recurring totals (n−1 divisor, empty weeks count as 0)
+weeksRemaining = projDays / 7              // projDays = daysRemaining + staleDays
 bandAmt        = sigmaWeek × √(weeksRemaining) × (1 + buffer)
 projLow        = max(spent, projection − bandAmt)      // floored: never below money already spent
 projHigh       = projection + bandAmt
 ```
+
+When `staleDays > 0`, `weeksRemaining` is wider, which widens the band. The wider band lowers
+`projLow`, making the `alert` verdict harder to trip while data is stale — correctly reflecting
+reduced forecast confidence during the blind period.
 
 `projLow / projHigh / bandAmt` are `null` when fewer than 4 weeks have elapsed, or for
 complete/future years.

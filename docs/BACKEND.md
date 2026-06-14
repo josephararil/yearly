@@ -7,8 +7,9 @@ that talks to these endpoints is documented in [ARCHITECTURE.md](ARCHITECTURE.md
 
 ## D1 schema (`migrations/`)
 
-Two tables, applied via `npx wrangler d1 migrations apply yearly-db --remote`. Three migration
-files: `0001_init.sql`, `0002_revolut_fields.sql`, `0003_oneoff_flag.sql`.
+Four tables, applied via `npx wrangler d1 migrations apply yearly-db --remote`. Five migration
+files: `0001_init.sql`, `0002_revolut_fields.sql`, `0003_oneoff_flag.sql`,
+`0004_fix_updated_at_seconds.sql`, `0005_meta.sql`.
 
 ```sql
 -- 0001_init.sql
@@ -28,6 +29,13 @@ transactions(id TEXT PK, date TEXT NOT NULL, description TEXT,
 -- 0003_oneoff_flag.sql
 -- oneoff INTEGER NOT NULL DEFAULT 0  (always 0 on Revolut import; toggled in-app)
 
+-- 0005_meta.sql (pipeline-written key/value store)
+meta(key TEXT PRIMARY KEY, value INTEGER NOT NULL)
+-- Populated only by the pipeline. Current rows:
+--   last_revolut_sync_ts: ms epoch of the most recent successful push.
+--   Written with an UPSERT so the value is always the latest run, never the latest
+--   in-app edit (edit-proof freshness signal).
+
 settings(id INTEGER PK CHECK(id=1), blob TEXT, updated_at INTEGER)
 -- single row; blob is a JSON-serialised settings object
 ```
@@ -44,13 +52,13 @@ All under `/api/*`. Server clock is authoritative; every write stamps `updated_a
 |--------|------|-------------|
 | `GET` | `/api/health` | `{ok:true,db:true}` — DB connectivity check |
 | `GET` | `/api/sync?since=<ms>` | Pull: `{now, transactions:[rows with updated_at>=since], settings:row|null}` |
-| `GET` | `/api/sync/check` | Aggregate check: `{tx_count, sum_eur_cents, settings_updated_at}` — used by client reconciliation |
+| `GET` | `/api/sync/check` | Aggregate check: `{tx_count, sum_eur_cents, settings_updated_at, last_revolut_sync_ts}` — used by client reconciliation |
 | `POST` | `/api/transactions` | Batch upsert array of tx records; returns `{now, count}` |
 | `GET` | `/api/settings` | `{blob:{…}, updated_at}` or `{blob:null}` |
 | `PUT` | `/api/settings` | Upsert settings blob; returns `{now, updated_at}` |
 | `GET` | `/api/export` | Full dump: `{exported_at, transactions:[all incl. deleted], settings}` |
 
-`GET /api/sync/check` returns a cheap one-round-trip aggregate: `tx_count` (COUNT WHERE deleted=0), `sum_eur_cents` (SUM(amount_eur)*100 rounded to INTEGER to avoid float drift), `settings_updated_at` (settings row's `updated_at` or 0). Runs on every app open; intended to be fast (full table scan is acceptable at current scale).
+`GET /api/sync/check` returns a cheap one-round-trip aggregate: `tx_count` (COUNT WHERE deleted=0), `sum_eur_cents` (SUM(amount_eur)*100 rounded to INTEGER to avoid float drift), `settings_updated_at` (settings row's `updated_at` or 0), `last_revolut_sync_ts` (value from `meta` WHERE key=`'last_revolut_sync_ts'`, or `null` if the row/table doesn't exist — graceful for pre-migration deployments). Runs on every app open; intended to be fast (full table scan is acceptable at current scale).
 
 Key implementation notes:
 - `GET /api/sync` uses `>=` (not `>`) to avoid dropping a write on the same-ms boundary.
