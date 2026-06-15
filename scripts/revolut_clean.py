@@ -264,7 +264,9 @@ def build_rows(transactions: list[dict]) -> list[dict]:
         amount_raw = abs(tx.get("amount", 0)) / 100
         fee_raw = abs(tx.get("fee", 0)) / 100
 
-        date_ts = tx.get("completedDate") or tx.get("updatedDate") or tx.get("startedDate")
+        # startedDate = when the transaction was made; completedDate = Visa settlement (often a
+        # day later). We track when you spent, not when it cleared. Fall back only if absent.
+        date_ts = tx.get("startedDate") or tx.get("completedDate") or tx.get("updatedDate")
         date_str = datetime.fromtimestamp(date_ts / 1000, tz=timezone.utc).strftime("%Y-%m-%d")
 
         rate = get_eur_rate(currency, date_str)
@@ -324,7 +326,7 @@ def build_rows(transactions: list[dict]) -> list[dict]:
         if count:
             print(f"    {reason}: {count}")
     if pre_year:
-        print(f"    prior year (completedDate before {current_year}): {len(pre_year)}")
+        print(f"    prior year (startedDate before {current_year}): {len(pre_year)}")
         for r in pre_year:
             print(f"      {r['date']}  {r['description']:<35}  €{r['amount_eur']:.2f}")
     if fx_dropped:
@@ -361,7 +363,9 @@ def process_xlsx(path: Path) -> list[dict]:
     rows = []
     fx_dropped: list[dict] = []
     for _, row in df.iterrows():
-        date_str = pd.to_datetime(row["Completed Date"]).strftime("%Y-%m-%d")
+        # Started Date = when the transaction was made; Completed Date = settlement. Match build_rows().
+        started = row.get("Started Date")
+        date_str = pd.to_datetime(started if pd.notna(started) else row["Completed Date"]).strftime("%Y-%m-%d")
         currency = row["Currency"]
         amount_orig = abs(float(row["Amount"]))
         description = str(row["Description"]).strip()

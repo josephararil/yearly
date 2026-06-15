@@ -54,7 +54,7 @@ or `lastDate < STOP_BEFORE`.
 | Revolut field | D1 column |
 |---|---|
 | `id` | `id` |
-| `completedDate` (ms) → `YYYY-MM-DD` | `date` |
+| `startedDate` (ms) → `YYYY-MM-DD` | `date` | (when the transaction was made, **not** `completedDate`/settlement; falls back to `completedDate` then `updatedDate` if absent) |
 | `abs(amount) / 100`, FX-converted | `amount_eur` |
 | `currency` (when non-EUR) | `original_currency` |
 | `abs(amount) / 100` (when non-EUR) | `original_amount` |
@@ -77,8 +77,8 @@ or `lastDate < STOP_BEFORE`.
 
 - `state` in `{REVERTED, DECLINED, FAILED}` → skip. **PENDING is kept** so a transaction is
   captured at started-time and later finalised when it completes and is re-pulled (see the
-  upsert + `BUFFER_DAYS` notes below). Pending rows use `startedDate` for `date` until they
-  complete.
+  upsert + `BUFFER_DAYS` notes below). `date` is always `startedDate` (when the spend happened),
+  so it does **not** shift when a pending row later completes.
 - `amount >= 0` → skip (income / refunds)
 - `type` in `{TOPUP, EXCHANGE}` → skip
 - Description matches any of: `^transfer from joseph`, `^transfer from martina`, `^transfer to
@@ -114,7 +114,7 @@ clean step — add it manually in the app rather than letting `amount_eur` go in
 
 ```json
 {
-  "last_sync_date": "YYYY-MM-DD",   // latest completedDate seen in the last push
+  "last_sync_date": "YYYY-MM-DD",   // latest startedDate seen in the last push
   "last_sync_ts": 1234567890,       // Unix timestamp of when the push ran
   "total_transactions": 650         // running total across all pushes
 }

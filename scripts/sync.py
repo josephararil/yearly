@@ -275,7 +275,7 @@ def cmd_push(json_path: Path | None = None):
     if isinstance(data, list) and data:
         dates = [
             datetime.fromtimestamp(
-                (tx.get("completedDate") or tx.get("startedDate", 0)) / 1000,
+                (tx.get("startedDate") or tx.get("completedDate") or 0) / 1000,
                 tz=timezone.utc
             ).strftime("%Y-%m-%d")
             for tx in data
