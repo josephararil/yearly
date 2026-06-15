@@ -311,6 +311,22 @@ def cmd_push(json_path: Path | None = None):
     print(f"✓ Raw JSON archived to batches/{json_path.name}")
     print("✓ Done.")
 
+    # Commit and push the updated sync state
+    repo_root = SCRIPT_DIR.parent
+    state_rel = STATE_FILE.relative_to(repo_root).as_posix()
+    print("\nCommitting sync state...")
+    for git_cmd in [
+        ["git", "add", state_rel],
+        ["git", "commit", "-m", "chore: bump sync state"],
+        ["git", "push"],
+    ]:
+        r = subprocess.run(git_cmd, cwd=repo_root)
+        if r.returncode != 0:
+            print(f"  Warning: '{' '.join(git_cmd)}' failed (exit {r.returncode}). Skipping remaining git steps.")
+            break
+    else:
+        print("✓ Sync state committed and pushed.")
+
 # ---------------------------------------------------------------------------
 # status
 # ---------------------------------------------------------------------------
