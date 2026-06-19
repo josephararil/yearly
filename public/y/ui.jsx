@@ -177,33 +177,6 @@
               })}
             </div>
 
-            {/* Zone 3 — monthly pulse (two deliberate rows; current year only) */}
-            {!stats.complete && (() => {
-              const month = stats.asOf.getMonth();
-              const monthLabel = stats.asOf.toLocaleDateString('en', { month: 'long' }).toUpperCase();
-              const now = stats.byMonth[month].amount;
-              const cap = YCalc.neededMonthlyCap(stats);
-              const proj = YCalc.projectedMonthEnd(stats);
-              const verdict =
-                proj > cap * 1.1  ? { cls: 'over',  text: 'Slow down ◂' } :
-                proj > cap * 0.95 ? { cls: 'tight', text: 'Tight' }     :
-                                    { cls: 'under', text: 'Fine ▸' };
-              return (
-                <div className="pulse">
-                  <div className="pulse-r1">
-                    <span className="pulse-month">{monthLabel}</span>
-                    <span className={`pulse-verdict ${verdict.cls}`}>{verdict.text}</span>
-                  </div>
-                  <div className="pulse-r2">
-                    <span className="pulse-now">{eur0(now)} so far</span>
-                    <span className="pulse-sep">·</span>
-                    <span className="pulse-cap">cap {eur0(cap)}</span>
-                    <span className="pulse-sep">·</span>
-                    <span className="pulse-proj">projected {eur0(proj)}</span>
-                  </div>
-                </div>
-              );
-            })()}
           </>
         )}
       </div>
