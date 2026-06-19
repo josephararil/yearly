@@ -317,21 +317,33 @@
   }
 
   function HomeScreen({ stats, fun, store, onOpenFun }) {
+    const verdict = (!stats.isFuture && !stats.complete) ? (() => {
+      const cap = YCalc.neededMonthlyCap(stats);
+      const proj = YCalc.projectedMonthEnd(stats);
+      return proj > cap * 1.1  ? { cls: 'over',  text: 'Slow down ◂' } :
+             proj > cap * 0.95 ? { cls: 'tight', text: 'Tight' }       :
+                                 { cls: 'under', text: 'Fine ▸' };
+    })() : null;
+
     return (
       <div className="screen stagger">
         {stats.isCurrent && stats.staleDays >= 7 && <StaleBanner staleDays={stats.staleDays} />}
         <StatusHero stats={stats} />
 
         <div>
-          <SectionH title="Fun budget" />
-          <FunStrip fun={fun} store={store} onOpen={onOpenFun} />
-        </div>
-
-        <div>
-          <SectionH title="This month" />
+          <div className="section-h">
+            <h2>This month</h2>
+            {verdict && <span className={`pulse-verdict ${verdict.cls}`}>{verdict.text}</span>}
+            <span className="spacer" />
+          </div>
           <div style={{ marginTop: 14 }}>
             <MonthCurve stats={stats} />
           </div>
+        </div>
+
+        <div>
+          <SectionH title="Fun budget" />
+          <FunStrip fun={fun} store={store} onOpen={onOpenFun} />
         </div>
       </div>
     );
