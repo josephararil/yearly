@@ -31,11 +31,33 @@ Config in `sync.py`: `D1_DATABASE = "yearly-db"`, `REVOLUT_WALLET`, `REVOLUT_DEV
 2. Open `app.revolut.com`, paste the script in DevTools console (F12). A `revolut_YYYY-MM-DD.json`
    downloads to `~/Downloads`.
 3. **`push.bat`** (`python sync.py push`) — detects the JSON in Downloads, runs `revolut_clean.py`
-   twice (generates `batches/latest.sql` + `batches/latest.csv`), prompts "Push to D1? [Y/n]", runs
+   **once** (generates `batches/latest.sql` + `batches/latest.csv` + `batches/latest.report.json`
+   in a single pass so FX rates are fetched once, with `--quiet` so `sync.py` owns the console
+   output), prints a **push preview** (see below), prompts "Push to D1? [Y/n]", runs
    `npx wrangler d1 execute yearly-db --remote --file=latest.sql`. The generated SQL includes an
    UPSERT that writes `last_revolut_sync_ts` (ms epoch, `int(time.time() * 1000)`) into the `meta`
    table — the pipeline freshness marker the app reads via `/api/sync/check`. On success: archives
-   JSON + CSV to `batches/`, updates `.sync_state.json`, deletes working files.
+   JSON + CSV to `batches/`, updates `.sync_state.json`, deletes working files (incl. the report).
+
+### Push preview (what `sync.py push` prints before the prompt)
+
+Before pushing, `sync.py` does a **read-only** `wrangler d1 execute --remote` query and diffs the
+batch against live D1 so you can see exactly what the upsert will do:
+
+- **NEW** — id not in D1; will be inserted (listed with date/description/amount/category).
+- **CHANGED** — id in D1 and a pipeline-authoritative field (`date`, `description`, `amount_eur`)
+  differs; shown as before→after per field, with a Δ on amount. The diff deliberately ignores
+  `updated_at` (always changes) and the `PRESERVE_ON_CONFLICT` columns (`category, fun, person,
+  note, deleted`) — those never change in D1, so flagging them would be misleading.
+- **UNCHANGED** — id in D1, no diff; counted only (no-op upsert).
+- **NET IMPACT ON TOTAL** — `Σ(new amounts) + Σ(changed amount deltas)`: the precise effect on the
+  household total. Rows deleted in D1 are noted (the push keeps them deleted).
+- **SKIPPED** — every excluded transaction grouped by reason (income/refund, REVERTED, internal
+  transfer, prior-year, FX-dropped) with date/description/amount.
+
+The structured input for this preview is `batches/latest.report.json`, emitted by
+`revolut_clean.py --report`. If the D1 read fails (auth stale / offline), the preview degrades to a
+category summary of the full batch and the push still proceeds.
 4. **`status.bat`** — confirms last sync date, run time, total transactions pushed, next pull start
    date.
 

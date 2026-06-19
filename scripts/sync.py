@@ -24,6 +24,13 @@ import time
 from datetime import datetime, timezone, timedelta
 from pathlib import Path
 
+# The preview uses → … Δ ✓ €, none guaranteed by the Windows console code page. Emit UTF-8
+# so printing never raises UnicodeEncodeError regardless of where this runs.
+try:
+    sys.stdout.reconfigure(encoding="utf-8")
+except Exception:
+    pass
+
 # ---------------------------------------------------------------------------
 # CONFIG — edit these
 # ---------------------------------------------------------------------------
@@ -192,6 +199,173 @@ def find_new_json(since_ts: float, timeout: int = 120) -> Path | None:
 
     return None
 
+def _trunc(s: str, n: int) -> str:
+    s = s or ""
+    return s if len(s) <= n else s[: n - 1] + "…"
+
+def query_d1_rows(min_date: str) -> dict | None:
+    """Read current D1 state for rows on/after min_date, keyed by id. Returns None on any
+    failure (auth stale, offline) so the caller can degrade gracefully instead of blocking
+    the push. Queried by date range, not an id list, to stay well under the shell command
+    length limit on large batches."""
+    cmd = (
+        f'npx wrangler d1 execute {D1_DATABASE} --remote --json '
+        f'--command "SELECT id, date, description, amount_eur, category, fun, person, note, deleted '
+        f"FROM transactions WHERE date >= '{min_date}'\""
+    )
+    try:
+        # Force UTF-8: wrangler's JSON contains Cyrillic merchant names and €; the Windows
+        # default (cp1252) raises UnicodeDecodeError in the reader thread and loses output.
+        result = subprocess.run(cmd, cwd=SCRIPT_DIR, shell=True, capture_output=True,
+                                encoding="utf-8", errors="replace", timeout=60)
+    except Exception:
+        return None
+    if result.returncode != 0:
+        return None
+    out = result.stdout or ""
+    try:
+        data = json.loads(out)
+    except Exception:
+        # Tolerate any leading banner text wrangler may print before the JSON array.
+        start, end = out.find("["), out.rfind("]")
+        if start == -1 or end == -1:
+            return None
+        try:
+            data = json.loads(out[start:end + 1])
+        except Exception:
+            return None
+    try:
+        results = data[0]["results"]  # shape: [{ "results": [...], "success": true, ... }]
+    except Exception:
+        return None
+    return {r["id"]: r for r in results}
+
+def _print_skipped(skipped: list):
+    if not skipped:
+        return
+    from collections import defaultdict
+    groups: dict[str, list] = defaultdict(list)
+    for s in skipped:
+        groups[s["reason"]].append(s)
+    print(f"\n  SKIPPED ({len(skipped)}) — excluded by pipeline rules, not pushed")
+    for reason, items in sorted(groups.items(), key=lambda kv: -len(kv[1])):
+        print(f"    {reason} — {len(items)}")
+        for s in sorted(items, key=lambda x: x["date"]):
+            print(f"      {s['date']}  {_trunc(s['description'], 30):<30}  {s['amount_str']}")
+
+def _print_category_summary(rows: list, label: str):
+    if not rows:
+        return
+    from collections import defaultdict
+    by_cat: dict[str, float] = defaultdict(float)
+    for r in rows:
+        by_cat[r["category"]] += r["amount_eur"]
+    total = sum(by_cat.values())
+    print(f"\n  {label} by category (€{total:.2f}):")
+    for cat, amt in sorted(by_cat.items(), key=lambda x: -x[1]):
+        print(f"    {cat:<22} €{amt:>8.2f}")
+
+def preview_changes(report: dict | None, json_path: Path):
+    """Print exactly what pushing will add / change / leave alone (diffed against live D1),
+    plus what was excluded and why. The whole point of the preview."""
+    try:
+        age_min = (time.time() - json_path.stat().st_mtime) / 60
+        age = f"{int(age_min)}m ago" if age_min < 60 else f"{age_min / 60:.1f}h ago"
+    except Exception:
+        age = "?"
+    state = load_state()
+
+    print("\n" + "=" * 64)
+    print("  REVOLUT SYNC — PUSH PREVIEW")
+    print("=" * 64)
+    print(f"  Source    : {json_path.name} (downloaded {age})")
+    if state.get("last_sync_date"):
+        print(f"  Last sync : {state['last_sync_date']}")
+
+    if not report:
+        print("\n  (No report produced — cannot preview. Inspect latest.sql manually.)")
+        return
+
+    rows = report.get("rows", [])
+    skipped = report.get("skipped", [])
+    print(f"  Parsed    : {report.get('parsed', '?')} transactions → "
+          f"{len(rows)} to import after filters")
+
+    db = None
+    if rows:
+        min_date = min(r["date"] for r in rows)
+        print(f"\n  Reading live D1 ({D1_DATABASE}) to diff…")
+        db = query_d1_rows(min_date)
+
+    if db is None:
+        print("  ⚠️  Could not read D1 (auth stale or offline?). "
+              "Showing the batch without a diff.")
+        _print_category_summary(rows, "Push set")
+        _print_skipped(skipped)
+        return
+
+    # Compare only pipeline-authoritative, user-visible fields. `updated_at` is excluded
+    # (it always changes). category/fun/person/note/deleted are excluded because the upsert
+    # PRESERVES them on conflict — they never change in D1, so flagging them would be a lie.
+    COMPARE = ("date", "description", "amount_eur")
+    new, changed, unchanged, deleted_hits = [], [], [], 0
+    for r in rows:
+        d = db.get(r["id"])
+        if d is None:
+            new.append(r)
+            continue
+        if int(d.get("deleted") or 0) == 1:
+            deleted_hits += 1
+        diffs = []
+        for f in COMPARE:
+            old, newv = d.get(f), r.get(f)
+            if f == "amount_eur":
+                if round(float(old or 0), 2) != round(float(newv or 0), 2):
+                    diffs.append((f, old, newv))
+            elif (old or "") != (newv or ""):
+                diffs.append((f, old, newv))
+        if diffs:
+            changed.append((r, diffs))
+        else:
+            unchanged.append(r)
+
+    print(f"\n  CHANGES TO PUSH (vs live D1)")
+    print(f"    + {len(new):>3} new")
+    print(f"    ~ {len(changed):>3} changed")
+    print(f"    = {len(unchanged):>3} unchanged (no-op)")
+
+    if new:
+        print(f"\n  NEW ({len(new)}) — will be inserted")
+        for r in sorted(new, key=lambda x: x["date"]):
+            print(f"    {r['date']}  {_trunc(r['description'], 30):<30}  "
+                  f"€{r['amount_eur']:>8.2f}  {r['category']}")
+    if changed:
+        print(f"\n  CHANGED ({len(changed)}) — pipeline fields updated; "
+              f"your category/fun/note/deleted are preserved")
+        for r, diffs in sorted(changed, key=lambda x: x[0]["date"]):
+            print(f"    {r['date']}  {_trunc(r['description'], 30)}")
+            for f, old, newv in diffs:
+                if f == "amount_eur":
+                    delta = float(newv or 0) - float(old or 0)
+                    print(f"        amount   €{float(old or 0):.2f} → "
+                          f"€{float(newv or 0):.2f}  (Δ {delta:+.2f})")
+                else:
+                    print(f"        {f:<8} {old or ''!r} → {newv or ''!r}")
+    if deleted_hits:
+        print(f"\n  Note: {deleted_hits} row(s) in this batch are deleted in D1 — "
+              f"push keeps them deleted (won't resurrect).")
+
+    added = sum(r["amount_eur"] for r in new)
+    delta = sum(
+        float(newv or 0) - float(old or 0)
+        for _, diffs in changed for f, old, newv in diffs if f == "amount_eur"
+    )
+    print(f"\n  NET IMPACT ON TOTAL: €{added + delta:+.2f}  "
+          f"(new €{added:+.2f}, changed Δ €{delta:+.2f})")
+
+    _print_category_summary(new, "New spend")
+    _print_skipped(skipped)
+
 def cmd_push(json_path: Path | None = None):
     watch_start = time.time()
 
@@ -221,14 +395,18 @@ def cmd_push(json_path: Path | None = None):
     shutil.copy(json_path, work_json)
     print(f"Copied to {work_json}")
 
-    # Run revolut_clean.py to generate SQL and CSV
+    # Run revolut_clean.py ONCE to generate SQL + CSV + a machine-readable report.
+    # (One run, not two — FX rates are fetched once. --quiet so we own the console output.)
     sql_file = WORK_DIR / "batches/latest.sql"
     csv_file = WORK_DIR / "batches/latest.csv"
+    report_file = WORK_DIR / "batches/latest.report.json"
     clean_script = SCRIPT_DIR / "revolut_clean.py"
 
-    print("\nCleaning transactions (SQL)...")
+    print("\nCleaning transactions...")
     result = subprocess.run(
-        [sys.executable, str(clean_script), str(work_json), "--sql", str(sql_file)],
+        [sys.executable, str(clean_script), str(work_json),
+         "--sql", str(sql_file), "--csv", str(csv_file),
+         "--report", str(report_file), "--quiet"],
         capture_output=False,
     )
     if result.returncode != 0:
@@ -237,17 +415,16 @@ def cmd_push(json_path: Path | None = None):
     if not sql_file.exists() or sql_file.stat().st_size == 0:
         sys.exit("SQL file not generated. Aborting.")
 
-    print("\nCleaning transactions (CSV)...")
-    result = subprocess.run(
-        [sys.executable, str(clean_script), str(work_json), str(csv_file)],
-        capture_output=False,
-    )
-    if result.returncode != 0:
-        sys.exit("revolut_clean.py failed on CSV pass. Aborting.")
+    try:
+        report = json.loads(report_file.read_text(encoding="utf-8"))
+    except Exception:
+        report = None
 
-    # Confirm before pushing
-    print(f"\nSQL file ready: {sql_file}")
-    answer = input("Push to D1? [Y/n] ").strip().lower()
+    # Show exactly what this push will add / change / leave alone (diffed against live D1),
+    # plus what was excluded and why — the whole point of the preview.
+    preview_changes(report, json_path)
+
+    answer = input("\nPush to D1? [Y/n] ").strip().lower()
     if answer == "n":
         print(f"Aborted. SQL file kept at {sql_file}")
         return
@@ -308,6 +485,7 @@ def cmd_push(json_path: Path | None = None):
 
     work_json.unlink(missing_ok=True)
     sql_file.unlink(missing_ok=True)
+    report_file.unlink(missing_ok=True)
     print(f"✓ Raw JSON archived to batches/{json_path.name}")
     print("✓ Done.")
 

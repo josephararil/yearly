@@ -15,8 +15,18 @@ Usage:
     # Then run against D1:
     wrangler d1 execute YOUR_DB_NAME --file=output.sql
 
+    # Combined: write SQL + CSV + a JSON preview report in one run, no human summary
+    # (this is how sync.py invokes it — FX rates are fetched once instead of twice):
+    python revolut_clean.py latest.json --sql out.sql --csv out.csv --report out.json --quiet
+
     # Legacy XLSX fallback:
     python revolut_clean.py export.xlsx
+
+Flags:
+    --sql [PATH]     write D1 upsert SQL (PATH optional; auto-named if omitted)
+    --csv [PATH]     write CSV (can be combined with --sql in a single run)
+    --report PATH    write a JSON report (kept rows + per-transaction skip detail)
+    --quiet          suppress the human-readable summary (warnings still print)
 
 Output columns match the D1 schema exactly:
     id, date, description, amount_eur, category, note, source, fun,
@@ -123,6 +133,10 @@ _fx_cache: dict = {}
 # for high-rate currencies like TRY).
 _fx_failures: set = set()
 
+# When True, suppress informational chatter (FX progress, skip summary, push hints) so the
+# orchestrator (sync.py) can print a single unified report. Warnings are always shown.
+QUIET = False
+
 def get_eur_rate(currency: str, date_str: str):
     """Return EUR rate, or None if the lookup failed. Callers must drop rows with None."""
     if currency == "EUR":
@@ -138,7 +152,8 @@ def get_eur_rate(currency: str, date_str: str):
         r.raise_for_status()
         rate = r.json()["rates"]["EUR"]
         _fx_cache[key] = rate
-        print(f"  FX: 1 {currency} = {rate:.4f} EUR on {date_str}")
+        if not QUIET:
+            print(f"  FX: 1 {currency} = {rate:.4f} EUR on {date_str}")
         return rate
     except Exception as e:
         _fx_failures.add(key)
@@ -235,13 +250,36 @@ def process_json_files(paths: list[Path]) -> list[dict]:
             if tx_id and tx_id not in all_txs:
                 all_txs[tx_id] = tx
                 loaded += 1
-        print(f"  {p.name}: {loaded} new transactions")
-    print(f"  Total unique transactions: {len(all_txs)}")
+        if not QUIET:
+            print(f"  {p.name}: {loaded} new transactions")
+    if not QUIET:
+        print(f"  Total unique transactions: {len(all_txs)}")
     return list(all_txs.values())
 
-def build_rows(transactions: list[dict]) -> list[dict]:
+def _skip_entry(tx: dict, reason: str) -> dict:
+    """One structured record describing a transaction that was excluded, for the report."""
+    date_ts = tx.get("startedDate") or tx.get("completedDate") or tx.get("updatedDate")
+    try:
+        date_str = datetime.fromtimestamp(date_ts / 1000, tz=timezone.utc).strftime("%Y-%m-%d")
+    except Exception:
+        date_str = "????-??-??"
+    desc = ((tx.get("merchant") or {}).get("name") or tx.get("description", "")).strip()
+    currency = tx.get("currency", "EUR")
+    amount = tx.get("amount", 0) / 100
+    return {
+        "date": date_str,
+        "description": desc,
+        "amount_str": f"{amount:+.2f} {currency}",
+        "reason": reason,
+    }
+
+
+def build_rows(transactions: list[dict]) -> tuple[list[dict], dict]:
+    """Return (rows_to_import, report). report carries kept rows + structured skip detail
+    so the orchestrator (sync.py) can render a single unified preview."""
     rows = []
     skipped: dict[str, int] = {}
+    skipped_detail: list[dict] = []
     fx_dropped: list[dict] = []
     # updated_at is the sync cursor used by /api/sync — must be MILLISECONDS to match
     # Date.now() in the worker and client. Writing seconds here causes the worker query
@@ -251,13 +289,14 @@ def build_rows(transactions: list[dict]) -> list[dict]:
     fx_needed = [tx for tx in transactions
                  if tx.get("amount", 0) < 0
                  and tx.get("currency", "EUR") != "EUR"]
-    if fx_needed:
+    if fx_needed and not QUIET:
         print(f"  {len(fx_needed)} foreign currency transactions — fetching FX rates...")
 
     for tx in transactions:
         skip, reason = should_skip(tx)
         if skip:
             skipped[reason] = skipped.get(reason, 0) + 1
+            skipped_detail.append(_skip_entry(tx, reason))
             continue
 
         currency = tx.get("currency", "EUR")
@@ -321,20 +360,53 @@ def build_rows(transactions: list[dict]) -> list[dict]:
     pre_year  = [r for r in rows if not r["date"].startswith(current_year)]
     rows      = [r for r in rows if r["date"].startswith(current_year)]
 
-    print(f"\n  Skipped:")
-    for reason, count in skipped.items():
-        if count:
-            print(f"    {reason}: {count}")
-    if pre_year:
-        print(f"    prior year (startedDate before {current_year}): {len(pre_year)}")
-        for r in pre_year:
-            print(f"      {r['date']}  {r['description']:<35}  €{r['amount_eur']:.2f}")
-    if fx_dropped:
-        print(f"\n  ⚠️  {len(fx_dropped)} row(s) DROPPED because FX lookup failed — add manually in the app:")
-        for r in fx_dropped:
-            print(f"      {r['date']}  {r['description']:<35}  {r['amount_raw']:.2f} {r['currency']}")
+    # Fold prior-year and FX-dropped exclusions into the same structured skip list.
+    for r in pre_year:
+        skipped_detail.append({
+            "date": r["date"],
+            "description": r["description"],
+            "amount_str": f"€{r['amount_eur']:.2f}",
+            "reason": f"prior year (before {current_year})",
+        })
+    for r in fx_dropped:
+        skipped_detail.append({
+            "date": r["date"],
+            "description": r["description"],
+            "amount_str": f"{r['amount_raw']:.2f} {r['currency']}",
+            "reason": f"FX lookup failed ({r['currency']})",
+        })
 
-    return rows
+    if not QUIET:
+        print(f"\n  Skipped:")
+        for reason, count in skipped.items():
+            if count:
+                print(f"    {reason}: {count}")
+        if pre_year:
+            print(f"    prior year (startedDate before {current_year}): {len(pre_year)}")
+            for r in pre_year:
+                print(f"      {r['date']}  {r['description']:<35}  €{r['amount_eur']:.2f}")
+        if fx_dropped:
+            print(f"\n  ⚠️  {len(fx_dropped)} row(s) DROPPED because FX lookup failed — add manually in the app:")
+            for r in fx_dropped:
+                print(f"      {r['date']}  {r['description']:<35}  {r['amount_raw']:.2f} {r['currency']}")
+
+    report = {
+        "parsed": len(transactions),
+        "kept": len(rows),
+        "rows": [
+            {
+                "id": r["id"],
+                "date": r["date"],
+                "description": r["description"],
+                "amount_eur": r["amount_eur"],
+                "category": r["category"],
+                "person": r["person"],
+            }
+            for r in rows
+        ],
+        "skipped": skipped_detail,
+    }
+    return rows, report
 
 # ---------------------------------------------------------------------------
 # XLSX legacy fallback (no enrichment columns — bare minimum)
@@ -466,6 +538,9 @@ def write_sql(rows: list[dict], output_path: str):
     lines += [""]
     Path(output_path).write_text("\n".join(lines), encoding="utf-8")
 
+def write_report(report: dict, output_path: str):
+    Path(output_path).write_text(json.dumps(report, ensure_ascii=False, indent=2), encoding="utf-8")
+
 def print_summary(rows: list[dict]):
     total = sum(r["amount_eur"] for r in rows)
     print(f"\nRows: {len(rows)}  |  Total spend: €{total:.2f}")
@@ -496,24 +571,41 @@ def print_summary(rows: list[dict]):
 # CLI
 # ---------------------------------------------------------------------------
 
+def _take_flag_path(args: list[str], flag: str, suffix: str) -> tuple[bool, str | None]:
+    """Pop `flag` (and an immediately-following PATH token if it ends in `suffix`) from args.
+    Returns (flag_present, explicit_path_or_None)."""
+    if flag not in args:
+        return False, None
+    i = args.index(flag)
+    if i + 1 < len(args) and args[i + 1].endswith(suffix):
+        path = args[i + 1]
+        del args[i:i + 2]
+        return True, path
+    del args[i]
+    return True, None
+
 def main():
+    global QUIET
     if len(sys.argv) < 2:
         print(__doc__)
         sys.exit(1)
 
     args = sys.argv[1:]
 
-    # Flags
-    sql_mode = "--sql" in args
-    args = [a for a in args if a != "--sql"]
+    # Flags. --sql/--csv may each carry an explicit PATH; both can be requested in one run
+    # (sync.py does this so FX rates are fetched once, not twice). --report writes the
+    # machine-readable preview; --quiet silences the human summary so sync.py owns the output.
+    QUIET = "--quiet" in args
+    args = [a for a in args if a != "--quiet"]
+    _, report_path = _take_flag_path(args, "--report", ".json")
+    sql_mode, sql_path = _take_flag_path(args, "--sql", ".sql")
+    csv_mode, csv_path = _take_flag_path(args, "--csv", ".csv")
 
-    # Output path: last arg if it ends in .csv or .sql
+    # Legacy: a bare trailing output path (one format only)
+    legacy_out = None
     if args and (args[-1].endswith(".csv") or args[-1].endswith(".sql")):
-        output_path = args[-1]
-        inputs = args[:-1]
-    else:
-        output_path = None
-        inputs = args
+        legacy_out = args.pop()
+    inputs = args
 
     # Collect input files
     json_files, xlsx_file = [], None
@@ -521,7 +613,8 @@ def main():
         p = Path(inp)
         if p.is_dir():
             found = sorted(p.glob("*.json"))
-            print(f"Folder {p}: {len(found)} JSON files found")
+            if not QUIET:
+                print(f"Folder {p}: {len(found)} JSON files found")
             json_files.extend(found)
         elif p.suffix.lower() == ".json":
             json_files.append(p)
@@ -533,29 +626,48 @@ def main():
     if not json_files and not xlsx_file:
         sys.exit("No JSON or XLSX files found.")
 
-    print(f"\nLoading transactions...")
-    rows = build_rows(process_json_files(json_files)) if json_files else process_xlsx(xlsx_file)
+    if not QUIET:
+        print(f"\nLoading transactions...")
+    if json_files:
+        rows, report = build_rows(process_json_files(json_files))
+    else:
+        rows = process_xlsx(xlsx_file)
+        report = {"parsed": len(rows), "kept": len(rows), "rows": [], "skipped": []}
 
     if not rows:
         sys.exit("No expense rows after filtering.")
 
-    # Default output filename
-    if not output_path:
+    # Resolve which outputs to write. Explicit flags win; otherwise fall back to the legacy
+    # single trailing path; otherwise default to CSV.
+    def auto(suffix: str) -> str:
         dates = [r["date"] for r in rows]
-        stem = f"yearly_{min(dates)[:7]}_to_{max(dates)[:7]}"
-        output_path = f"{stem}.sql" if sql_mode else f"{stem}.csv"
+        return f"yearly_{min(dates)[:7]}_to_{max(dates)[:7]}{suffix}"
 
-    if sql_mode or output_path.endswith(".sql"):
-        write_sql(rows, output_path)
-        print(f"\nOutput: {output_path}")
+    want_sql = sql_mode or (legacy_out and legacy_out.endswith(".sql"))
+    want_csv = csv_mode or (legacy_out and legacy_out.endswith(".csv"))
+    if not want_sql and not want_csv:
+        want_csv = True
+
+    written = []
+    if want_sql:
+        out = sql_path or (legacy_out if legacy_out and legacy_out.endswith(".sql") else None) or auto(".sql")
+        write_sql(rows, out)
+        written.append(out)
+    if want_csv:
+        out = csv_path or (legacy_out if legacy_out and legacy_out.endswith(".csv") else None) or auto(".csv")
+        write_csv(rows, out)
+        written.append(out)
+    if report_path:
+        write_report(report, report_path)
+
+    if not QUIET:
+        print(f"\nOutput: {', '.join(written)}")
         print_summary(rows)
-        print(f"\nTo import into D1:")
-        print(f"  wrangler d1 execute YOUR_DB_NAME --file={output_path}")
-    else:
-        write_csv(rows, output_path)
-        print(f"\nOutput: {output_path}")
-        print_summary(rows)
-        print("\nReview General rows if any, then import into Yearly.")
+        if want_sql:
+            print(f"\nTo import into D1:")
+            print(f"  wrangler d1 execute YOUR_DB_NAME --file={written[0]}")
+        else:
+            print("\nReview General rows if any, then import into Yearly.")
 
 if __name__ == "__main__":
     main()
