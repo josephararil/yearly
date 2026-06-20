@@ -157,9 +157,13 @@ Removed: "Projected finish" and "VS Target" cards (both surfaced on the Overview
 **CategoriesTab** catbar rows use `CatIcon` (24px, radius 6); expanding a category shows two
 sub-lists: "Recent in [category]" (last 5 by date, reversed) and "Largest in [category]" (top 5 by
 `amount_eur` descending), both using `TxRow` with `onClick → onEditTx`. **ActivityTab** — lists **all** transactions (`stats.txns`, including fun-tagged ones); fun tx
-show the person's name as a tag. Category filter chips cover all categories with spend (`stats.catList`);
-a "Sort" label + 6 pill buttons (Newest · Oldest · € High · € Low · A→Z · Z→A) appear below the
-category chips; active sort uses `--terra` border/background; default sort is Newest.
+show the person's name as a tag. Filters are hidden behind a compact `sliders` icon button to the
+right of the search bar; when active filters exist, a terracotta badge shows the count. Tapping the
+button toggles an inline filter panel with three sections: **Category** (All + one chip per category
+in `stats.catList`), **Sort** (6 options: Newest · Oldest · € High · € Low · A→Z · Z→A — default
+Newest), and **Show only** — two boolean toggles: **Manual** (keeps only `t.source === "manual"`)
+and **Fun** (keeps only `t.fun === true`). Active filters use `--terra` border/background; the
+filter button itself turns terracotta when any filter is active.
 
 ### `addflow.jsx`
 

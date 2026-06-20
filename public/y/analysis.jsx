@@ -641,13 +641,33 @@
     { id: "za", label: "Z → A" },
   ];
 
+  function FilterChip({ label, active, onClick }) {
+    return (
+      <button onClick={onClick} style={{
+        height: 26, padding: "0 10px", borderRadius: 99, flexShrink: 0,
+        fontFamily: "var(--mono)", fontSize: 11, fontWeight: 500,
+        cursor: "pointer", whiteSpace: "nowrap",
+        border: "1px solid " + (active ? "var(--terra)" : "var(--hair)"),
+        background: active ? "color-mix(in srgb, var(--terra) 12%, transparent)" : "transparent",
+        color: active ? "var(--terra)" : "var(--muted)",
+      }}>{label}</button>
+    );
+  }
+
   function ActivityTab({ stats, onEditTx, people }) {
     const [q, setQ] = React.useState("");
     const [fc, setFc] = React.useState(null);
     const [sort, setSort] = React.useState("date-desc");
+    const [filterManual, setFilterManual] = React.useState(false);
+    const [filterFun, setFilterFun] = React.useState(false);
+    const [showFilters, setShowFilters] = React.useState(false);
+
+    const activeCount = (fc ? 1 : 0) + (sort !== "date-desc" ? 1 : 0) + (filterManual ? 1 : 0) + (filterFun ? 1 : 0);
 
     let list = stats.txns.slice();
     if (fc) list = list.filter((t) => t.category === fc);
+    if (filterManual) list = list.filter((t) => t.source === "manual");
+    if (filterFun) list = list.filter((t) => t.fun);
     if (q.trim()) { const s = q.toLowerCase(); list = list.filter((t) => t.description.toLowerCase().includes(s)); }
     if (sort === "date-desc") list.sort((a, b) => b.date.localeCompare(a.date));
     else if (sort === "date-asc") list.sort((a, b) => a.date.localeCompare(b.date));
@@ -657,26 +677,66 @@
     else if (sort === "za") list.sort((a, b) => b.description.localeCompare(a.description));
 
     return (
-      <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
-        <Input icon={<window.Icon name="search" size={16} />} placeholder="Search descriptions…" value={q} ariaLabel="Search transactions"
-          onChange={(e) => setQ(e.target.value)} />
-        <div style={{ display: "flex", gap: 6, overflowX: "auto", paddingBottom: 2 }}>
-          <Chip pressed={!fc} onClick={() => setFc(null)}>All</Chip>
-          {stats.catList.map((c) => <Chip key={c.id} pressed={fc === c.id} onClick={() => setFc(fc === c.id ? null : c.id)}>{YData.cat(c.id).label}</Chip>)}
+      <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
+        {/* Search bar + filter toggle button */}
+        <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
+          <div style={{ flex: 1 }}>
+            <Input icon={<window.Icon name="search" size={16} />} placeholder="Search descriptions…" value={q} ariaLabel="Search transactions"
+              onChange={(e) => setQ(e.target.value)} />
+          </div>
+          <button
+            onClick={() => setShowFilters(!showFilters)}
+            style={{
+              flexShrink: 0, width: 36, height: 36, borderRadius: 10,
+              border: "1px solid " + (activeCount > 0 ? "var(--terra)" : "var(--hair)"),
+              background: activeCount > 0 ? "color-mix(in srgb, var(--terra) 10%, transparent)" : "transparent",
+              cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center",
+              position: "relative",
+            }}
+          >
+            <window.Icon name="sliders" size={16} style={{ color: activeCount > 0 ? "var(--terra)" : "var(--muted)" }} />
+            {activeCount > 0 && (
+              <span style={{
+                position: "absolute", top: -5, right: -5,
+                width: 16, height: 16, borderRadius: "50%",
+                background: "var(--terra)", color: "var(--paper)",
+                fontSize: 9, fontFamily: "var(--mono)", fontWeight: 700,
+                display: "flex", alignItems: "center", justifyContent: "center",
+                lineHeight: 1,
+              }}>{activeCount}</span>
+            )}
+          </button>
         </div>
-        <div style={{ display: "flex", gap: 5, overflowX: "auto", paddingBottom: 2, alignItems: "center" }}>
-          <span style={{ fontFamily: "var(--mono)", fontSize: 10, letterSpacing: "0.1em", textTransform: "uppercase", color: "var(--muted)", flexShrink: 0, paddingRight: 3 }}>Sort</span>
-          {SORT_OPTS.map((s) => (
-            <button key={s.id} onClick={() => setSort(s.id)} style={{
-              height: 26, padding: "0 10px", borderRadius: 99, flexShrink: 0,
-              fontFamily: "var(--mono)", fontSize: 11, fontWeight: 500,
-              cursor: "pointer", whiteSpace: "nowrap",
-              border: "1px solid " + (sort === s.id ? "var(--terra)" : "var(--hair)"),
-              background: sort === s.id ? "color-mix(in srgb, var(--terra) 12%, transparent)" : "transparent",
-              color: sort === s.id ? "var(--terra)" : "var(--muted)",
-            }}>{s.label}</button>
-          ))}
-        </div>
+
+        {/* Collapsible filter panel */}
+        {showFilters && (
+          <div style={{ display: "flex", flexDirection: "column", gap: 10, padding: "10px 12px", borderRadius: 10, background: "color-mix(in srgb, var(--ink) 4%, transparent)", border: "1px solid var(--hair)" }}>
+            {/* Category row */}
+            <div>
+              <div style={{ fontFamily: "var(--mono)", fontSize: 10, letterSpacing: "0.1em", textTransform: "uppercase", color: "var(--muted)", marginBottom: 6 }}>Category</div>
+              <div style={{ display: "flex", gap: 5, flexWrap: "wrap" }}>
+                <FilterChip label="All" active={!fc} onClick={() => setFc(null)} />
+                {stats.catList.map((c) => <FilterChip key={c.id} label={YData.cat(c.id).label} active={fc === c.id} onClick={() => setFc(fc === c.id ? null : c.id)} />)}
+              </div>
+            </div>
+            {/* Sort row */}
+            <div>
+              <div style={{ fontFamily: "var(--mono)", fontSize: 10, letterSpacing: "0.1em", textTransform: "uppercase", color: "var(--muted)", marginBottom: 6 }}>Sort</div>
+              <div style={{ display: "flex", gap: 5, flexWrap: "wrap" }}>
+                {SORT_OPTS.map((s) => <FilterChip key={s.id} label={s.label} active={sort === s.id} onClick={() => setSort(s.id)} />)}
+              </div>
+            </div>
+            {/* Extra filters row */}
+            <div>
+              <div style={{ fontFamily: "var(--mono)", fontSize: 10, letterSpacing: "0.1em", textTransform: "uppercase", color: "var(--muted)", marginBottom: 6 }}>Show only</div>
+              <div style={{ display: "flex", gap: 5, flexWrap: "wrap" }}>
+                <FilterChip label="Manual" active={filterManual} onClick={() => setFilterManual(!filterManual)} />
+                <FilterChip label="Fun" active={filterFun} onClick={() => setFilterFun(!filterFun)} />
+              </div>
+            </div>
+          </div>
+        )}
+
         <div>
           {list.length ? (
             <div className="txlist">{list.map((t) => <TxRow key={t.id} t={t} onClick={() => onEditTx(t)} people={people} />)}</div>
