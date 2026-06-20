@@ -307,6 +307,17 @@ function computeStats(store, year, asOfDate, staleDays = 0) {
     return Math.max(0, (stats.ceiling - stats.spent) / daysLeft);
   }
 
+  // Affordable daily rate from here that still lands within the ceiling — the mirror of
+  // requiredDailyToHit for the under-ceiling case. Same number, opposite framing ("room for")
+  // vs "spend ≤"). Returns null when over ceiling (use requiredDailyToHit) or not applicable.
+  function dailyHeadroom(stats) {
+    if (!stats.isCurrent) return null;
+    if (stats.projection > stats.ceiling) return null;
+    const daysLeft = stats.daysInYear - stats.doy;
+    if (daysLeft <= 0) return null;
+    return Math.max(0, (stats.ceiling - stats.spent) / daysLeft);
+  }
+
   // computeFun — rich per-person fun ledger for the UI (uses store.currentYear for YTD figures).
   // asOfDate defaults to new Date(). Balance is all-time (from each person's startMonth to asOf).
   function computeFun(store, asOfDate) {
@@ -370,6 +381,13 @@ function computeStats(store, year, asOfDate, staleDays = 0) {
     const out = [];
     const linDaily = stats.ceiling / stats.daysInYear;
 
+    // Callouts carry a `value` (interestingness, 0–1) that drives the ranking — the home voice
+    // line takes the single highest-value non-redundant callout. The taste model (from real use):
+    //   Tier 1 (~0.8–1.0) actionable, forward-looking guidance — what to DO next.
+    //   Tier 2 (~0.5–0.75) invisible momentum/comparison — quantifies a gut feel you can't see elsewhere.
+    //   Tier 3 (~0.35–0.45) local facts — true but narrow.
+    //   Tier 0 (~0.0–0.05) redundant with the Hero (ceiling restatement, buffer math) — never leads.
+
     // 1. projection trend (vs 4 weeks ago) — skip in January (doy ≤ 28) where the reference
     // date falls in the prior year, making refSpent=0 and proj4≈0 (false "everything moved up").
     const proj4 = stats.doy > 28 ? projectionAsOf(stats, 28) : null;
@@ -380,7 +398,7 @@ function computeStats(store, year, asOfDate, staleDays = 0) {
         id: "trend", severity: worse ? (Math.abs(trendD) > stats.ceiling * T.TREND_ALERT ? "alert" : "watch") : "good",
         icon: worse ? "trendingUp" : "trendingDown",
         text: `Year-end projection has moved ${worse ? "up" : "down"} ${eur0(Math.abs(trendD))} over the last 4 weeks, now ${eur0(stats.projection)}.`,
-        drill: { section: "projection" }, mag: Math.abs(trendD) / stats.ceiling + 0.2,
+        drill: { section: "projection" }, value: 0.55 + Math.min(0.2, Math.abs(trendD) / stats.ceiling), mag: Math.abs(trendD) / stats.ceiling + 0.2,
       });
     }
 
@@ -396,7 +414,7 @@ function computeStats(store, year, asOfDate, staleDays = 0) {
         id: "streak", severity: hot ? (ratio14 > T.STREAK_ALERT ? "alert" : "watch") : "good",
         icon: "activity",
         text: `Last 14 days are running ${signedPct(ratio14 - 1)} ${hot ? "above" : "below"} linear pace — ${eur0(d14)}/day vs ${eur0(linDaily)}/day.`,
-        drill: { section: "projection" }, mag: Math.abs(ratio14 - 1) + 0.15,
+        drill: { section: "projection" }, value: 0.55 + Math.min(0.2, Math.abs(ratio14 - 1) * 0.4), mag: Math.abs(ratio14 - 1) + 0.15,
       });
     }
 
@@ -420,7 +438,7 @@ function computeStats(store, year, asOfDate, staleDays = 0) {
           id: "mover", severity: up ? (Math.abs(pc) > 0.4 ? "watch" : "info") : "good",
           icon: best.cid, accent: c.color,
           text: `${c.label}: ${eur0(best.a)} in ${MONTHS_LONG[lastFull]}, ${best.b > 0 ? signedPct(pc) + " vs " + MONTHS_LONG[prior] : "new this month"}.`,
-          drill: { section: "categories", category: best.cid }, mag: Math.abs(pc) * 0.6 + 0.1,
+          drill: { section: "categories", category: best.cid }, value: 0.35 + Math.min(0.1, Math.abs(pc) * 0.1), mag: Math.abs(pc) * 0.6 + 0.1,
         });
       }
     }
@@ -433,17 +451,17 @@ function computeStats(store, year, asOfDate, staleDays = 0) {
         out.push({
           id: "share", severity: top.share > T.SHARE_WATCH ? "watch" : "info", icon: top.id, accent: c.color,
           text: `${c.label} is ${pct(top.share)} of spend so far — ${eur0(top.amount)} across ${top.count} entries.`,
-          drill: { section: "categories", category: top.id }, mag: top.share * 0.5,
+          drill: { section: "categories", category: top.id }, value: 0.35 + Math.min(0.1, top.share - T.SHARE_NOTABLE), mag: top.share * 0.5,
         });
       }
     }
 
-    // 5. buffer explanation (why projection > raw pace)
+    // 5. buffer explanation (why projection > raw pace) — Tier 0: redundant-ish, never leads.
     if (stats.bufferAmt > stats.ceiling * T.BUFFER_EXPLAIN_MIN) {
       out.push({
         id: "buffer", severity: "info", icon: "layers",
         text: `Logged spend alone projects to ${eur0(stats.projNoBuffer)}; the ${Math.round(stats.buffer * 100)}% missed-entry buffer lifts that to ${eur0(stats.projection)}.`,
-        drill: { section: "projection" }, mag: 0.05,
+        drill: { section: "projection" }, value: 0.04, mag: 0.05,
       });
     }
 
@@ -459,30 +477,81 @@ function computeStats(store, year, asOfDate, staleDays = 0) {
           severity: higher && diff > stats.ceiling * T.YOY_WATCH ? "watch" : higher ? "info" : "good",
           icon: higher ? "trendingUp" : "trendingDown",
           text: `Spending is ${eur0(Math.abs(diff))} (${signedPct(diffPct)}) ${higher ? "higher" : "lower"} than the same point in ${stats.year - 1}.`,
-          drill: { section: "projection" }, mag: Math.abs(diff) / stats.ceiling * 0.7 + 0.05,
+          drill: { section: "projection" }, value: 0.5 + Math.min(0.18, Math.abs(diff) / stats.ceiling), mag: Math.abs(diff) / stats.ceiling * 0.7 + 0.05,
         });
       }
     }
 
-    // 7. required daily pace (current year, projection over ceiling)
-    const reqDaily = requiredDailyToHit(stats);
-    if (reqDaily !== null) {
-      out.push({
-        id: "reqpace",
-        severity: stats.status === "alert" ? "watch" : "info",
-        icon: "activity",
-        text: `Spend ≤ ${eur0(reqDaily)}/day from here to finish within your ceiling.`,
-        drill: { section: "projection" },
-        mag: stats.deltaPct * 0.5 + 0.1,
-      });
+    // 7. pace guidance (Tier 1, bidirectional) — the most actionable line. Over → "spend ≤ €X/day"
+    // (corrective); under → "room for €X/day" (headroom). Same maxDaily number, framed by direction.
+    // The headroom case earns its rank by how binding it is (current rate close to the cap) and
+    // steps aside for momentum lines when there's obvious slack — a "room for €300/day" line is as
+    // redundant as the ceiling restatement when the Hero already shows you're way under.
+    const daysLeftP = stats.daysInYear - stats.doy;
+    if (stats.isCurrent && daysLeftP > 0) {
+      const over = stats.projection > stats.ceiling;
+      const maxDaily = over ? requiredDailyToHit(stats) : dailyHeadroom(stats);
+      if (maxDaily !== null && maxDaily > 0) {
+        if (over) {
+          out.push({
+            id: "pace", severity: stats.status === "alert" ? "watch" : "info", icon: "activity",
+            text: `Spend ≤ ${eur0(maxDaily)}/day from here to finish within your ceiling.`,
+            drill: { section: "projection" }, value: 0.9 + Math.min(0.08, Math.max(0, stats.deltaPct)), mag: stats.deltaPct * 0.5 + 0.1,
+          });
+        } else {
+          const closeness = stats.trailingDailyRate > 0 ? Math.min(1, stats.trailingDailyRate / maxDaily) : 0;
+          out.push({
+            id: "pace", severity: "good", icon: "activity",
+            text: `You can spend up to ${eur0(maxDaily)}/day from here and still finish within your ceiling.`,
+            drill: { section: "projection" }, value: 0.3 + 0.6 * closeness, mag: 0.1,
+          });
+        }
+      }
     }
 
-    const sev = { alert: 3, watch: 2, info: 1, good: 0 };
-    out.sort((a, b) => (sev[b.severity] - sev[a.severity]) || (b.mag - a.mag));
+    // 8. time-to-ceiling (Tier 1) — when over and the projection crosses the ceiling before
+    // year-end, name the date and how early. Forward-looking and invisible anywhere else.
+    if (stats.isCurrent && stats.projection > stats.ceiling && daysLeftP > 0 && stats.trailingDailyRate > 0) {
+      const projRate = stats.trailingDailyRate * (1 + stats.buffer);
+      const daysToHit = projRate > 0 ? (stats.ceiling - stats.spent) / projRate : -1;
+      if (daysToHit > 0 && daysToHit < daysLeftP) {
+        const hit = new Date(stats.asOf); hit.setDate(hit.getDate() + Math.round(daysToHit));
+        const earlyWeeks = Math.max(1, Math.round((daysLeftP - daysToHit) / 7));
+        out.push({
+          id: "tohit", severity: "watch", icon: "trendingUp",
+          text: `At this pace you'll reach your ${eur0(stats.ceiling)} ceiling around ${MONTHS[hit.getMonth()]} ${hit.getDate()} — about ${earlyWeeks} week${earlyWeeks === 1 ? "" : "s"} before year-end.`,
+          drill: { section: "projection" }, value: 0.78, mag: 0.5,
+        });
+      }
+    }
 
-    // 8. ceiling detector (current year only) — sacred verdict, always top
-    // Skip entirely when the store has no data yet (avoids "room to raise fun €X/mo" noise on first load).
-    let ceilingCallout = null;
+    // 9. biggest / lightest completed month so far (Tier 3) — variety; needs ≥3 completed months
+    // and the most recent full month to be the running extreme.
+    if (stats.isCurrent && curMonth >= 1) {
+      const completedMonths = stats.byMonth.slice(0, curMonth).filter((m) => m.amount > 0);
+      const lastM = stats.byMonth[curMonth - 1];
+      if (completedMonths.length >= 3 && lastM && lastM.amount > 0) {
+        const amounts = completedMonths.map((m) => m.amount);
+        const maxA = Math.max(...amounts), minA = Math.min(...amounts);
+        if (maxA !== minA && lastM.amount === maxA) {
+          out.push({
+            id: "peak", severity: "info", icon: "trendingUp",
+            text: `${MONTHS_LONG[curMonth - 1]} was your biggest month so far — ${eur0(lastM.amount)}.`,
+            drill: { section: "projection" }, value: 0.42, mag: 0.2,
+          });
+        } else if (maxA !== minA && lastM.amount === minA) {
+          out.push({
+            id: "peak", severity: "good", icon: "trendingDown",
+            text: `${MONTHS_LONG[curMonth - 1]} was your lightest month so far — ${eur0(lastM.amount)}.`,
+            drill: { section: "projection" }, value: 0.42, mag: 0.2,
+          });
+        }
+      }
+    }
+
+    // 10. ceiling verdict (current year only) — DEMOTED. The Hero already owns the ceiling headline,
+    // so this is kept in the feed (Analysis completeness) at the bottom and never becomes the voice
+    // line. Skip entirely when the store has no data yet (avoids "room to raise fun €X/mo" noise).
     if (stats.isCurrent && !(stats.upto.length === 0 && stats.funSpent === 0)) {
       if (stats.projection > stats.ceiling) {
         const monthsLeft = Math.max(1, (stats.daysInYear - stats.doy) / T.DAYS_PER_MONTH);
@@ -493,39 +562,34 @@ function computeStats(store, year, asOfDate, staleDays = 0) {
         const ceilText = trimPer <= maxFunTrim
           ? `Household projects to ${eur0(stats.projection)} against your ${eur0(stats.ceiling)} ceiling — trim fun spending by ~${eur0(trimPer)}/mo to stay within it.`
           : `Household projects to ${eur0(stats.projection)} against your ${eur0(stats.ceiling)} ceiling — even cutting the entire fun budget (${eur0(maxFunTrim)}/mo) won't close it; main spending needs to drop ~${eur0(trimPer - maxFunTrim)}/mo too.`;
-        ceilingCallout = {
-          id: "ceiling", severity, icon: "trendingUp",
-          text: ceilText,
-          drill: { section: "fun" }, mag: 1.0,
-        };
+        out.push({ id: "ceiling", severity, icon: "trendingUp", text: ceilText, drill: { section: "fun" }, value: 0.05, mag: 1.0 });
       } else if (stats.projection < stats.ceiling * T.CEILING_COMFORT) {
         const gap = stats.ceiling - stats.projection;
         const monthsLeft = Math.max(1, (stats.daysInYear - stats.doy) / T.DAYS_PER_MONTH);
         const raisePer = gap / monthsLeft;
-        ceilingCallout = {
-          id: "ceiling", severity: "good", icon: "checkCircle",
+        out.push({ id: "ceiling", severity: "good", icon: "checkCircle",
           text: `You're tracking ${eur0(gap)} under your ${eur0(stats.ceiling)} ceiling — room to raise the fun budget by ~${eur0(raisePer)}/mo if you want.`,
-          drill: { section: "fun" }, mag: 0.5,
-        };
+          drill: { section: "fun" }, value: 0.05, mag: 0.5 });
       } else {
         // T.CEILING_COMFORT–1.00 band: tight but on course
-        ceilingCallout = {
-          id: "ceiling", severity: "info", icon: "checkCircle",
+        out.push({ id: "ceiling", severity: "info", icon: "checkCircle",
           text: `Tracking ${eur0(stats.ceiling - stats.projection)} under your ${eur0(stats.ceiling)} ceiling — tight but on course.`,
-          drill: { section: "projection" }, mag: 0.5,
-        };
+          drill: { section: "projection" }, value: 0.05, mag: 0.5 });
       }
     }
 
-    if (ceilingCallout) {
-      out.unshift(ceilingCallout);
-    } else if (!out.some((c) => sev[c.severity] >= 2)) {
-      out.unshift({
+    // Calm fallback — only when nothing genuine surfaced (ceiling/buffer are redundant, don't count).
+    const hasInsight = out.some((c) => c.id !== "ceiling" && c.id !== "buffer");
+    if (!hasInsight) {
+      out.push({
         id: "calm", severity: "good", icon: "checkCircle",
         text: `Projection steady at ${eur0(stats.projection)} against your ${eur0(stats.ceiling)} ceiling — nothing notable in the data.`,
-        drill: { section: "projection" }, mag: 0,
+        drill: { section: "projection" }, value: 0.5, mag: 0,
       });
     }
+
+    const sev = { alert: 3, watch: 2, info: 1, good: 0 };
+    out.sort((a, b) => (b.value - a.value) || (sev[b.severity] - sev[a.severity]) || (b.mag - a.mag));
     return out;
   }
 
@@ -554,6 +618,6 @@ function computeStats(store, year, asOfDate, staleDays = 0) {
     dayOfYear, daysInYear, parseDate, localISO, fmtDateShort, fmtDateLong, yearTxns,
     cumulativeByDay, priorYearCumulative, aggregateByCategory,
     rateForMonth, computeStats, computeFun, projectionAsOf, buildCallouts,
-    requiredDailyToHit, neededMonthlyCap, projectedMonthEnd,
+    requiredDailyToHit, dailyHeadroom, neededMonthlyCap, projectedMonthEnd,
   };
 })();

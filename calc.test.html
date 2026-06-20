@@ -58,8 +58,8 @@
     const ids = new Set(callouts.map(c => c.id));
 
     // Rich fixture store — used wherever non-empty transaction data is needed.
-    // Designed so all 7 detectors (trend/streak/mover/share/buffer/yoy/reqpace)
-    // and the ceiling callout fire when asOf = 2026-06-07.
+    // Designed so the core detectors (trend/streak/mover/share/buffer/yoy/pace)
+    // and the (demoted) ceiling callout fire when asOf = 2026-06-07.
     //
     // ceiling(22000) − funPlanAnnual(3600) = mainTarget(18400) [decomposition, not target]
     // lumpThreshold = ceiling × 0.02 = 22000 × 0.02 = 440; r19(500) > 440 → lump
@@ -366,14 +366,18 @@
 
     // ---- 2026 rich fixture callout IDs (all detectors fire) ----
     section('2026 rich fixture — buildCallouts (all detectors)');
-    ['trend', 'streak', 'mover', 'share', 'buffer', 'yoy', 'reqpace'].forEach(id => {
+    ['trend', 'streak', 'mover', 'share', 'buffer', 'yoy', 'pace'].forEach(id => {
       assert('id "' + id + '" present', richIds.has(id), '[' + [...richIds].join(', ') + ']');
     });
     assert('no "future" callout in current year', !richIds.has('future'));
 
-    // ceiling callout
+    // ceiling callout — kept in the feed (Analysis completeness) but DEMOTED, no longer pinned top.
     assert('"ceiling" callout present (current year)', richIds.has('ceiling'), '[' + [...richIds].join(', ') + ']');
-    assert('"ceiling" callout is first (pinned top)', richCallouts[0] && richCallouts[0].id === 'ceiling');
+    assert('actionable "pace" callout leads (rich fixture is over ceiling)',
+      richCallouts[0] && richCallouts[0].id === 'pace', 'got "' + (richCallouts[0] && richCallouts[0].id) + '"');
+    assert('"ceiling" callout no longer first (demoted, value-ranked)',
+      richCallouts[0].id !== 'ceiling' && richCallouts.findIndex(c => c.id === 'ceiling') > 0,
+      'ceiling at index ' + richCallouts.findIndex(c => c.id === 'ceiling'));
 
     // ---- 2099 future-year ----
     section('2099 future year');
@@ -407,7 +411,11 @@
     const overStats = YCalc.computeStats(overCeilingStore, 2026, asOf2026);
     const overCallouts = YCalc.buildCallouts(overCeilingStore, overStats);
     assert('ceiling detector present when combined > ceiling', overCallouts.some(c => c.id === 'ceiling'));
-    assert('ceiling detector is top callout when over', overCallouts[0] && overCallouts[0].id === 'ceiling');
+    // Demoted: ceiling is no longer force-pinned to the top — a higher-value detector precedes it
+    // whenever one fires (here a cool-pace streak does), else it stands alone.
+    const overCeilIdx = overCallouts.findIndex(c => c.id === 'ceiling');
+    assert('ceiling no longer pinned top (value-ranked)', overCallouts.length === 1 || overCeilIdx > 0,
+      'ceiling at index ' + overCeilIdx + ' of ' + overCallouts.length);
     const overCeil = overCallouts.find(c => c.id === 'ceiling');
     assert('ceiling severity watch/alert when over', overCeil && (overCeil.severity === 'watch' || overCeil.severity === 'alert'));
     assert('ceiling drill is fun section', overCeil && overCeil.drill && overCeil.drill.section === 'fun');
@@ -458,15 +466,15 @@
     assert('§5.6 clamp: clamped text still contains "ceiling"',
       bigOverCeil && bigOverCeil.text.includes('ceiling'));
 
-    // §5.1 — reqpace text (use richCallouts — reqpace is designed to fire there)
-    // "Main budget:" prefix stripped; text mentions "ceiling" and "Spend ≤"
-    const reqpaceCallout = richCallouts.find(c => c.id === 'reqpace');
-    assert('§5.1: reqpace text does not start with "Main budget:"',
-      reqpaceCallout && !reqpaceCallout.text.startsWith('Main budget:'),
-      reqpaceCallout ? reqpaceCallout.text.substring(0, 60) : 'no reqpace callout');
-    assert('§5.1: reqpace text contains "ceiling"',
-      reqpaceCallout && reqpaceCallout.text.includes('ceiling'),
-      reqpaceCallout ? reqpaceCallout.text.substring(0, 80) : 'no reqpace callout');
+    // §5.1 — pace text (use richCallouts — over-ceiling, so the corrective "spend ≤" framing fires)
+    // text mentions "ceiling" and "Spend ≤"
+    const paceCallout = richCallouts.find(c => c.id === 'pace');
+    assert('§5.1: pace text uses corrective framing when over ("Spend ≤")',
+      paceCallout && paceCallout.text.startsWith('Spend ≤'),
+      paceCallout ? paceCallout.text.substring(0, 60) : 'no pace callout');
+    assert('§5.1: pace text contains "ceiling"',
+      paceCallout && paceCallout.text.includes('ceiling'),
+      paceCallout ? paceCallout.text.substring(0, 80) : 'no pace callout');
 
     // §5.1 — trend text (use richCallouts — trend is designed to fire there)
     // "Main budget:" prefix stripped; text mentions "projection"

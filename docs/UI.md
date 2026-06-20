@@ -81,12 +81,25 @@ Internal: `WishlistAddSheet` (name + price + owner Chip picker), `PersonCard` (s
 
 ## Screens
 
-- `y/home.jsx` (Overview — hero + FunStrip + `MonthCurve` monthly chart; no callouts)
+- `y/home.jsx` (Overview — hero + `VoiceLine` + FunStrip + `MonthCurve` monthly chart)
 - `y/analysis.jsx` (Projection/Categories/Activity/Fun tabs; charts are hand-built SVG that double
   as the Recharts spec)
 - `y/settings.jsx` (ceiling/buffer/years/fun-budget/density/templates/CSV import-export/JSON
   backup-restore/clear)
 - `y/addflow.jsx` (Quick keypad + Manual add, Edit sheet, category picker, fun toggle)
+
+### `home.jsx` — `VoiceLine`
+
+The app's "voice" — one orthogonal, plain-language insight rendered directly under the `StatusHero`
+(inside the same `.screen` child, with a hairline top border so it reads as part of the hero block,
+not a separate section). `HomeScreen` now receives `callouts` + `onCallout` and picks
+`callouts.find(c => !["ceiling","buffer","calm","final","future"].includes(c.id))` — the single
+highest-`value` callout that isn't redundant with the Hero. Renders a severity dot + `YUI.rich(text)`
+(numbers in mono `.num`) + a `→`, tappable to drill into Analysis via `onCallout` (same routing as
+`CalloutCard`). Stays silent (renders nothing) when no callout qualifies, and is hidden on
+complete/future years (their single `final`/`future` callouts are filtered out). The small inline
+`Fine / Tight / Slow down` chip in the "This month" header (`pulse-verdict`, month-cap vs
+projected-month-end) is unchanged and independent of the voice line.
 
 ### `home.jsx` — `MonthCurve`
 
