@@ -149,7 +149,7 @@
 
         <div className="scroll" ref={scrollRef}>
           {route === "home" && (
-            <YHome.HomeScreen stats={stats} fun={fun} store={store} onOpenFun={onOpenFun} />
+            <YHome.HomeScreen stats={stats} fun={fun} store={store} callouts={callouts} onCallout={onCallout} onOpenFun={onOpenFun} />
           )}
           {route === "analysis" && (
             <YAnalysis.AnalysisScreen stats={stats} focus={analysisFocus} onEditTx={openEdit}

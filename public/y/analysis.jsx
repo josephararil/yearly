@@ -552,14 +552,17 @@
               );
             })()}
             {(() => {
-              const req = YCalc.requiredDailyToHit(stats);
-              if (req === null) return null;
+              // Same maxDaily number, framed by direction: a cut target when over the ceiling,
+              // headroom when under. Mirrors the home pace-guidance callout.
+              const over = YCalc.requiredDailyToHit(stats);
+              const room = over === null ? YCalc.dailyHeadroom(stats) : null;
+              if (over === null && room === null) return null;
               return (
                 <StatCard
                   label="To finish on target"
-                  value={`≤ ${eur0(req)}/day`}
+                  value={over !== null ? `≤ ${eur0(over)}/day` : `room ${eur0(room)}/day`}
                   sub={`${stats.daysInYear - stats.doy} days left`}
-                  color="var(--watch)"
+                  color={over !== null ? "var(--watch)" : "var(--good)"}
                 />
               );
             })()}

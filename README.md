@@ -25,7 +25,7 @@ whole thing hackable from any text editor.
 - [The mental model](#the-mental-model)
 - [How the numbers work](#how-the-numbers-work) — projection, buffer, uncertainty band, status
 - [The fun budget](#the-fun-budget)
-- [The callout engine](#the-callout-engine) — the 8 detectors + threshold table
+- [The callout engine](#the-callout-engine) — the 10 detectors + value model + threshold table
 - [Categories](#categories)
 - [Screens](#screens)
 - [Design system — Broadsheet](#design-system--broadsheet)
@@ -203,24 +203,47 @@ covers it). **"Bought it"** logs a fun-tagged transaction for the price and remo
 
 `buildCallouts(store, stats)` is a pure `(store, stats) → Callout[]` function — the heart of the
 app. Each callout is a number-led analytical sentence with a severity (`alert > watch > info >
-good`), an icon, and a `drill` target. Tapping one jumps to the relevant Analysis tab. Results are
-ranked by severity, then by a magnitude score.
+good`), an icon, a `drill` target, and a **`value`** (interestingness, 0–1). Tapping one jumps to
+the relevant Analysis tab. Results are **ranked by `value`** (severity then magnitude break ties).
 
-There are **8 detectors** for the current year. The **ceiling verdict (#8) is always prepended
-first.**
+`value` encodes a deliberate taste model — what's *worth saying* given the Hero already shows the
+projected number and over/under-ceiling delta at a glance:
 
-| # | Detector | Fires when | Says (example) |
+| Tier | `value` | What it is | Examples |
 |---|---|---|---|
-| 1 | **Projection trend** | `doy > 28` and the projection moved > 1.2% of `ceiling` over 4 weeks | "Year-end projection has moved up €420 over the last 4 weeks, now €21,800." |
-| 2 | **14-day pace streak** | last-14-day daily rate is > 1.15× or < 0.70× the linear daily pace | "Last 14 days are running +28% above linear pace — €78/day vs €61/day." |
-| 3 | **Category mover** | a category changed > €60 month-over-month (and had ≥ €50 the prior month) | "Restaurants: €340 in May, +60% vs April." |
-| 4 | **Top-category share** | the largest category is > 26% of YTD spend | "Groceries is 27% of spend so far — €3,120 across 84 entries." |
-| 5 | **Buffer explanation** | the buffer adds > 1% of `ceiling` | "Logged spend alone projects to €20,900; the 4% missed-entry buffer lifts that to €21,700." |
-| 6 | **Year-over-year** | prior year has total spend at the same point | "Spending is €640 (+9%) higher than the same point in 2025." |
-| 7 | **Required pace** | `projection > ceiling` | "Spend ≤ €58/day from here to finish within your ceiling." |
-| 8 | **Ceiling verdict** | always (current year) | see below — *always first* |
+| 1 | ~0.8–1.0 | Actionable, forward-looking guidance | pace guidance, time-to-ceiling |
+| 2 | ~0.5–0.75 | Invisible momentum / comparison (quantifies a gut feel) | trend, streak, YoY |
+| 3 | ~0.35–0.45 | Local facts (true but narrow) | category mover, top share, biggest/lightest month |
+| 0 | ~0.0–0.05 | Redundant with the Hero — never leads | ceiling restatement, buffer math |
 
-**The ceiling verdict (#8)** is the sacred line, and has three states:
+The **home voice line** (under the Hero) renders the single highest-`value` callout whose id is not
+in `{ceiling, buffer, calm, final, future}` — i.e. the most useful thing that *isn't* already
+obvious from the big number. If none qualifies, the line stays silent.
+
+There are **10 detectors** for the current year:
+
+| # | Detector (id) | Fires when | Says (example) |
+|---|---|---|---|
+| 1 | **Projection trend** (`trend`) | `doy > 28` and the projection moved > 1.2% of `ceiling` over 4 weeks | "Year-end projection has moved up €420 over the last 4 weeks, now €21,800." |
+| 2 | **14-day pace streak** (`streak`) | last-14-day daily rate is > 1.15× or < 0.70× the linear daily pace | "Last 14 days are running +28% above linear pace — €78/day vs €61/day." |
+| 3 | **Category mover** (`mover`) | a category changed > €60 month-over-month (and had ≥ €50 the prior month) | "Restaurants: €340 in May, +60% vs April." |
+| 4 | **Top-category share** (`share`) | the largest category is > 26% of YTD spend | "Groceries is 27% of spend so far — €3,120 across 84 entries." |
+| 5 | **Buffer explanation** (`buffer`) | the buffer adds > 1% of `ceiling` | "Logged spend alone projects to €20,900; the 4% missed-entry buffer lifts that to €21,700." |
+| 6 | **Year-over-year** (`yoy`) | prior year has total spend at the same point | "Spending is €640 (+9%) higher than the same point in 2025." |
+| 7 | **Pace guidance** (`pace`) | current year, days remaining, `maxDaily > 0` (`maxDaily = (ceiling − spent) / daysLeft`) | over → "Spend ≤ €58/day from here to finish within your ceiling."; under → "You can spend up to €78/day from here and still finish within your ceiling." |
+| 8 | **Time-to-ceiling** (`tohit`) | `projection > ceiling` and the projected curve crosses `ceiling` before year-end | "At this pace you'll reach your €25,000 ceiling around Nov 12 — about 7 weeks before year-end." |
+| 9 | **Biggest / lightest month** (`peak`) | ≥ 3 completed months and the most recent full month is the running max/min | "May was your biggest month so far — €2,100." |
+| 10 | **Ceiling verdict** (`ceiling`) | always (current year) — **demoted** (`value 0.05`), kept for Analysis completeness | see below |
+
+**Pace guidance (#7)** is bidirectional: the same `maxDaily` number framed as a cut target when
+over, or headroom when under. The headroom case earns its rank by how *binding* it is (current rate
+close to the cap) and steps aside for momentum lines when there's obvious slack — a "room for
+€300/day" line is as redundant as the ceiling restatement when the Hero already shows you're far
+under.
+
+**The ceiling verdict (#10)** is no longer pinned to the top — the Hero owns that headline, so the
+restatement sits at the bottom of the feed (`value 0.05`) and never becomes the voice line. It still
+has three states:
 
 - **Over** (`projection > ceiling`): "Household projects to €X against your €Y ceiling — trim
   fun spending by ~€Z/mo to stay within it." If trimming fun alone can't close the gap, it instead
@@ -233,7 +256,8 @@ first.**
 
 **Special cases:** a **completed year** gets a single review callout comparing `spent + funSpent` vs
 the ceiling ("Finished under the ceiling by €X — €Y against a €Z ceiling."). A **future year** gets a
-single "hasn't started yet" line. If nothing reaches `watch`/`alert`, a calm fallback line is shown.
+single "hasn't started yet" line. If nothing genuine surfaces at all (only ceiling/buffer), a calm
+fallback line is shown.
 
 **Overview density** (Settings → Display) controls how many callouts the Overview lists: `minimal`
 shows the top ≤2, `balanced` the top 4, `all` everything. The Analysis "What's happening" section
