@@ -49,6 +49,35 @@
     );
   }
 
+  // Save-as-template toggle — saves the manual entry as a Quick template on commit.
+  function SaveAsTemplateField({ saveAsTemplate, setSaveAsTemplate }) {
+    return (
+      <div className="field">
+        <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 4 }}>
+          <label style={{ margin: 0 }}>Save as template</label>
+          <button
+            onClick={() => setSaveAsTemplate((v) => !v)}
+            style={{
+              width: 40, height: 22, borderRadius: 11, border: "none", cursor: "pointer",
+              background: saveAsTemplate ? "var(--terra)" : "var(--hair)",
+              position: "relative", flexShrink: 0, transition: "background 0.15s",
+            }}
+            aria-checked={saveAsTemplate} role="switch">
+            <span style={{
+              position: "absolute", top: 2, left: saveAsTemplate ? 20 : 2,
+              width: 18, height: 18, borderRadius: "50%",
+              background: "var(--paper)", transition: "left 0.15s",
+              boxShadow: "0 1px 3px rgba(0,0,0,0.18)",
+            }} />
+          </button>
+        </div>
+        <p style={{ margin: 0, fontSize: 11, color: "var(--ink-2)", lineHeight: 1.4 }}>
+          Adds this expense as a Quick template for future logging.
+        </p>
+      </div>
+    );
+  }
+
   // One-off toggle — marks a transaction as excluded from the spending-trend forecast.
   function OneOffField({ oneOff, setOneOff }) {
     return (
@@ -145,7 +174,7 @@
     );
   }
 
-  function AddSheet({ open, onClose, store, onSave }) {
+  function AddSheet({ open, onClose, store, onSave, onSaveTemplate }) {
     const [mode, setMode] = React.useState("Quick");
     const [step, setStep] = React.useState("grid"); // grid | entry (quick)
     const [tpl, setTpl] = React.useState(null);
@@ -157,9 +186,10 @@
     const [funOn, setFunOn] = React.useState(false);
     const [funPerson, setFunPerson] = React.useState(defaultPerson());
     const [oneOff, setOneOff] = React.useState(false);
+    const [saveAsTemplate, setSaveAsTemplate] = React.useState(false);
 
     React.useEffect(() => {
-      if (open) { setMode("Quick"); setStep("grid"); setTpl(null); setAmount(""); setDraft(blank()); setFunOn(false); setFunPerson(defaultPerson()); setOneOff(false); }
+      if (open) { setMode("Quick"); setStep("grid"); setTpl(null); setAmount(""); setDraft(blank()); setFunOn(false); setFunPerson(defaultPerson()); setOneOff(false); setSaveAsTemplate(false); }
     }, [open]);
 
     const commit = (t) => {
@@ -170,6 +200,12 @@
       };
       if (funOn) { tx.fun = true; tx.person = funPerson; }
       if (oneOff) tx.oneoff = true;
+      if (saveAsTemplate && t.description && t.description.trim() && onSaveTemplate) {
+        const tplObj = { id: YData.uid(), name: t.description.trim(), category: t.category };
+        const amt = parseFloat(t.amount);
+        if (amt > 0) tplObj.defaultAmount = Math.round(amt * 100) / 100;
+        onSaveTemplate(tplObj);
+      }
       onSave(tx);
       onClose();
     };
@@ -236,6 +272,7 @@
           <TxForm draft={draft} set={set} />
           <FunFields funOn={funOn} setFunOn={setFunOn} funPerson={funPerson} setFunPerson={setFunPerson} store={store} />
           <OneOffField oneOff={oneOff} setOneOff={setOneOff} />
+          <SaveAsTemplateField saveAsTemplate={saveAsTemplate} setSaveAsTemplate={setSaveAsTemplate} />
           <Button variant="primary" block disabled={!valid} onClick={() => commit(draft)}>
             Add expense
           </Button>

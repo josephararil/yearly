@@ -173,6 +173,15 @@ pattern). EditSheet pre-populates from `txn.oneoff`. Caption: "Excluded from the
 forecast — still counts in totals. Large amounts are excluded automatically." The oneoff flag causes
 `isLump()` in calc.jsx to exclude the tx from the blended rate while keeping it in `spent`.
 
+`AddSheet` (Manual mode only) also exposes a **Save as template toggle** (same pill switch style,
+below One-off). Off by default; resets to off whenever the sheet reopens. When on, `commit()` builds
+a template object `{ id, name: description.trim(), category, defaultAmount? }` (amount included only
+when > 0) and calls the `onSaveTemplate` prop before saving the transaction. `onSaveTemplate` is
+wired in `app.jsx` to `addTemplate`, which appends to `store.templates`; since this is a settings-only
+mutation (transactions ref unchanged), `useStore` automatically calls `YSync.markSettingsDirty()`,
+syncing the new template server-side. The new template immediately appears in the Quick grid on next
+open. Caption: "Adds this expense as a Quick template for future logging."
+
 ### `settings.jsx`
 
 Footer shows `APP_VERSION` constant (`'v47'` currently, defined at top of IIFE — **update it with

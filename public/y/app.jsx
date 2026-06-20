@@ -94,6 +94,9 @@
       setStore((s) => ({ ...s, transactions: [...s.transactions, tx] }));
       YSync.enqueueTx(tx);
     };
+    const addTemplate = (tpl) => {
+      setStore((s) => ({ ...s, templates: [...s.templates, tpl] }));
+    };
     const saveTx = (tx) => {
       setStore((s) => ({ ...s, transactions: s.transactions.map((x) => (x.id === tx.id ? tx : x)) }));
       YSync.enqueueTx(tx);
@@ -162,7 +165,7 @@
         <Toast open={showSyncToast} message="Data synced" onDismiss={() => setShowSyncToast(false)} />
         <NavBar route={route} onRoute={setRoute} onAdd={() => setAddOpen(true)} />
 
-        <YAdd.AddSheet open={addOpen} onClose={() => setAddOpen(false)} store={store} onSave={addTx} />
+        <YAdd.AddSheet open={addOpen} onClose={() => setAddOpen(false)} store={store} onSave={addTx} onSaveTemplate={addTemplate} />
         <YAdd.EditSheet open={!!editTx} txn={editTx} onClose={() => setEditTx(null)} onSave={saveTx} onDelete={delTx} store={store} />
         <YearMenu open={yearOpen} onClose={() => setYearOpen(false)} store={store} viewYear={viewYear} setViewYear={setViewYear} />
       </div>
