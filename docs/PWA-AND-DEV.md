@@ -122,6 +122,28 @@ console.log(s.mainTarget === 21400 ? 'PASS' : 'FAIL');
 node _tmp_test.js
 ```
 
+## Dev-only sample data — `y/devseed.jsx`
+
+The real store starts empty (`YData.buildSeed()` has no transactions), so a fresh local session has
+nothing to render and changes are hard to verify. `public/y/devseed.jsx` seeds a realistic year of
+spend — daily/weekly purchases, monthly bills, per-person fun spend, a one-off lump, plus a prior
+year for YoY/`priorCum` — relative to *today* (current year lands modestly over its €25k ceiling, so
+the pace / time-to-ceiling callouts fire).
+
+**It is dev-only and never ships active:**
+- `index.html` `document.write`s its `<script>` tag **only when `location.hostname` is a local host**
+  (`localhost`/`127.0.0.1`/`0.0.0.0`/`::1`). In production the tag is never written, so the file is
+  never requested, cached, or executed. It is **not** in `sw.js` `PRECACHE`.
+- `devseed.jsx` re-checks the hostname itself (defence-in-depth) and **only writes when no store
+  exists yet** — it never clobbers real data you pulled or edited locally. To re-trigger it, clear
+  the `yearly:store:v1` key (Settings → clear, or devtools) and reload.
+- It only touches `localStorage` — it never calls the API. The static dev server has no `/api`
+  (every sync call 404s into a silent no-op), and against a real backend `YSync.bootstrap()` adopts
+  server data instead of pushing, so the fixture can't reach D1.
+
+The tag must load **before `app.jsx`** (which reads the store on mount) — that's why the loader sits
+immediately above the `app.jsx` script in `index.html`.
+
 ## Claude Code preview — how to deploy locally for testing
 
 The app lives inside `public/`, but the Python server must be started from the **repo root** (not
