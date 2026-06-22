@@ -1,7 +1,7 @@
 // home.jsx — calm overview: status hero + fun strip + monthly spend curve.
 (function () {
   const { YUI, YFun, YCalc } = window;
-  const { StatusHero, SectionH } = YUI;
+  const { StatusHero, SectionH, rich } = YUI;
   const { FunStrip } = YFun;
 
   const MONTHS_SHORT = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
@@ -316,7 +316,27 @@
     );
   }
 
-  function HomeScreen({ stats, fun, store, onOpenFun }) {
+  // The app's "voice" — one orthogonal, plain-language insight under the Hero. Takes the single
+  // highest-value callout that isn't redundant with the Hero (the ceiling restatement / buffer math)
+  // or the complete/future single-liners. When nothing earns it, the line stays silent.
+  function VoiceLine({ callout, onClick }) {
+    const dot = callout.severity === "alert" ? "var(--terra)"
+              : callout.severity === "watch" ? "var(--amber)"
+              : "var(--sage)";
+    return (
+      <button onClick={onClick} style={{
+        display: "flex", gap: 10, alignItems: "flex-start", width: "100%",
+        marginTop: 16, paddingTop: 14, textAlign: "left", cursor: "pointer",
+        background: "transparent", border: "none", borderTop: "1px solid var(--hair)",
+      }}>
+        <span style={{ display: "inline-block", marginTop: 6, width: 7, height: 7, borderRadius: "50%", background: dot, flexShrink: 0 }} />
+        <span style={{ flex: 1, fontSize: 14, fontFamily: "var(--sans)", color: "var(--ink-2)", lineHeight: 1.5 }}>{rich(callout.text)}</span>
+        <span style={{ color: "var(--muted)", fontSize: 14, marginTop: 1, flexShrink: 0 }}>{"→"}</span>
+      </button>
+    );
+  }
+
+  function HomeScreen({ stats, fun, store, callouts, onCallout, onOpenFun }) {
     const verdict = (!stats.isFuture && !stats.complete) ? (() => {
       const cap = YCalc.neededMonthlyCap(stats);
       const proj = YCalc.projectedMonthEnd(stats);
@@ -325,10 +345,17 @@
                                  { cls: 'under', text: 'Fine ▸' };
     })() : null;
 
+    const voice = callouts
+      ? callouts.find((c) => !["ceiling", "buffer", "calm", "final", "future"].includes(c.id))
+      : null;
+
     return (
       <div className="screen stagger">
         {stats.isCurrent && stats.staleDays >= 7 && <StaleBanner staleDays={stats.staleDays} />}
-        <StatusHero stats={stats} />
+        <div>
+          <StatusHero stats={stats} />
+          {voice && <VoiceLine callout={voice} onClick={() => onCallout && onCallout(voice)} />}
+        </div>
 
         <div>
           <div className="section-h">

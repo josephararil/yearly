@@ -41,6 +41,17 @@
   <script type="text/babel" src="y/addflow.jsx"></script>
   <script type="text/babel" src="y/analysis.jsx"></script>
   <script type="text/babel" src="y/settings.jsx"></script>
+  <!-- DEV-ONLY sample data: injected on localhost ONLY (must run before app.jsx reads the store).
+       In production this hostname check is false, so the tag is never written and y/devseed.jsx is
+       never requested, cached, or executed — it is not part of the shipped app. -->
+  <script>
+    (function () {
+      var h = location.hostname;
+      if (h === "localhost" || h === "127.0.0.1" || h === "0.0.0.0" || h === "::1" || h === "[::1]") {
+        document.write('<script type="text/babel" src="y/devseed.jsx"><\/script>');
+      }
+    })();
+  </script>
   <script type="text/babel" src="y/app.jsx"></script>
 
   <script>

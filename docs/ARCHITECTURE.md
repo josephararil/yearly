@@ -32,7 +32,7 @@ formula, status thresholds, and each callout detector.
   pipeline last ran: `projDays = daysRemaining + staleDays`. Only applied when `isCurrent`;
   ignored for complete/future years. When `staleDays === 0` output is byte-identical to the
   pre-stale baseline.
-- `buildCallouts(store, stats)` — the ranked detector engine (8 detectors).
+- `buildCallouts(store, stats)` — the value-ranked detector engine (10 detectors).
 - `cumulativeByDay(txns)` → `number[366]` (shared with `analysis.jsx`).
 - `priorYearCumulative(store, year, asOfDate)` → number (prior year spend at same day-of-year).
 - `rateForMonth(person, ym)` → number (latest applicable rate for a person in a "YYYY-MM";
@@ -118,22 +118,36 @@ applies unchanged.
 `priorCum` (number[366] | null) and `priorSpent` (number | null) — prior year total spend.
 Future-year guard: spent 0, projection 0, status "good"; `isFuture` in returned stats.
 
-### `buildCallouts` — 8 detectors
+### `buildCallouts` — 10 detectors, value-ranked
 
-See README for the authoritative spec. Quick index:
-- #1 trend (doy>28 guard, 4-week change in total `projection`; threshold = 1.2% of `ceiling`)
-- #2 streak (14-day pace vs ceiling-linear baseline)
-- #3 mover (MoM category change — includes fun spend in categories)
-- #4 share (top category % of total spend)
-- #5 buffer explanation (threshold = 1% of `ceiling`)
-- #6 yoy (total spent vs prior year at same doy; threshold = 8% of `ceiling`)
-- #7 reqpace (when `projection > ceiling` — ceiling-centric text)
-- #8 ceiling (sacred verdict vs `stats.projection`, always first)
+See README for the authoritative spec. Each callout carries a **`value`** (0–1, interestingness);
+the list is sorted by `value` desc (severity then `mag` break ties) — **not** severity-first as
+before. The taste tiers: T1 actionable (~0.8–1.0), T2 invisible momentum/comparison (~0.5–0.75),
+T3 local facts (~0.35–0.45), T0 redundant-with-Hero (~0.0–0.05). Quick index:
+- #1 trend (doy>28 guard, 4-week change in total `projection`; threshold = 1.2% of `ceiling`) — T2
+- #2 streak (14-day pace vs ceiling-linear baseline) — T2
+- #3 mover (MoM category change — includes fun spend in categories) — T3
+- #4 share (top category % of total spend) — T3
+- #5 buffer explanation (threshold = 1% of `ceiling`) — T0
+- #6 yoy (total spent vs prior year at same doy; threshold = 8% of `ceiling`) — T2
+- #7 **pace** (bidirectional; replaces old `reqpace`) — `maxDaily = (ceiling − spent)/daysLeft`;
+  over → "Spend ≤ €X/day", under → "room for €X/day". Over: T1. Under: value scales with
+  bindingness (`trailingDailyRate / maxDaily`), so obvious slack demotes it below momentum.
+- #8 **tohit** (new) — when over and the projected curve crosses `ceiling` before year-end, names
+  the date + weeks early. Uses `trailingDailyRate × (1 + buffer)`. T1.
+- #9 **peak** (new) — biggest/lightest completed month (≥3 completed months, last full month is the
+  running extreme). T3.
+- #10 ceiling (verdict vs `stats.projection`) — **demoted** to `value 0.05`, no longer pinned first.
+
+Two helpers back the pace logic: `requiredDailyToHit(stats)` (over case) and the mirror
+`dailyHeadroom(stats)` (under case) — same `(ceiling − spent)/daysLeft`, opposite gate. Both are
+also consumed by the Analysis "In numbers" bidirectional "To finish on target" StatCard.
 
 Ceiling callout states: `projection > ceiling` → watch/alert — text "trim fun ~€Z/mo" when
 overBy/monthsLeft ≤ funPlanAnnual/12, else "even cutting entire fun budget won't close it; main
 spending needs to drop ~€W/mo too"; between 0.94×–1× → `info` "tight but on course"; < 0.94× →
-good "room to raise fun budget". Always prepended first; replaces calm fallback.
+good "room to raise fun budget". Now pushed like any other callout (not prepended). Calm fallback
+fires only when nothing genuine surfaced (ceiling/buffer don't count).
 Complete year: single `{id:"final"}` callout compares `stats.spent` (total) vs `ceiling`.
 Future year: single `{id:"future"}` callout.
 
