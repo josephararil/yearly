@@ -203,11 +203,10 @@ def _trunc(s: str, n: int) -> str:
     s = s or ""
     return s if len(s) <= n else s[: n - 1] + "…"
 
-def query_d1_rows(min_date: str) -> dict | None:
-    """Read current D1 state for rows on/after min_date, keyed by id. Returns None on any
-    failure (auth stale, offline) so the caller can degrade gracefully instead of blocking
-    the push. Queried by date range, not an id list, to stay well under the shell command
-    length limit on large batches."""
+def query_d1_rows(min_date: str) -> tuple[dict | None, str]:
+    """Read current D1 state for rows on/after min_date, keyed by id.
+    Returns (results_dict, "") on success, or (None, error_message) on failure.
+    Queried by date range to stay under shell command length limits on large batches."""
     cmd = (
         f'npx wrangler d1 execute {D1_DATABASE} --remote --json '
         f'--command "SELECT id, date, description, amount_eur, category, fun, person, note, deleted '
@@ -218,10 +217,21 @@ def query_d1_rows(min_date: str) -> dict | None:
         # default (cp1252) raises UnicodeDecodeError in the reader thread and loses output.
         result = subprocess.run(cmd, cwd=SCRIPT_DIR, shell=True, capture_output=True,
                                 encoding="utf-8", errors="replace", timeout=60)
-    except Exception:
-        return None
+    except Exception as e:
+        return None, f"Exception running wrangler: {e}"
+
     if result.returncode != 0:
-        return None
+        stderr = (result.stderr or "").strip()
+        stdout = (result.stdout or "").strip()
+        parts = []
+        if stderr:
+            parts.append(f"stderr:\n{stderr}")
+        if stdout:
+            parts.append(f"stdout:\n{stdout}")
+        if not parts:
+            parts.append(f"wrangler exited with code {result.returncode} (no output)")
+        return None, "\n".join(parts)
+
     out = result.stdout or ""
     try:
         data = json.loads(out)
@@ -229,16 +239,18 @@ def query_d1_rows(min_date: str) -> dict | None:
         # Tolerate any leading banner text wrangler may print before the JSON array.
         start, end = out.find("["), out.rfind("]")
         if start == -1 or end == -1:
-            return None
+            return None, f"Could not parse wrangler output as JSON:\n{out[:800]}"
         try:
             data = json.loads(out[start:end + 1])
-        except Exception:
-            return None
+        except Exception as e:
+            return None, f"JSON parse error: {e}\nOutput:\n{out[:800]}"
+
     try:
         results = data[0]["results"]  # shape: [{ "results": [...], "success": true, ... }]
-    except Exception:
-        return None
-    return {r["id"]: r for r in results}
+    except Exception as e:
+        return None, f"Unexpected response shape: {e}\nData: {str(data)[:800]}"
+
+    return {r["id"]: r for r in results}, ""
 
 def _print_skipped(skipped: list):
     if not skipped:
@@ -291,15 +303,31 @@ def preview_changes(report: dict | None, json_path: Path):
     print(f"  Parsed    : {report.get('parsed', '?')} transactions → "
           f"{len(rows)} to import after filters")
 
+    d1_error: str | None = None  # None = not attempted; "" = success; non-empty = error
     db = None
     if rows:
         min_date = min(r["date"] for r in rows)
         print(f"\n  Reading live D1 ({D1_DATABASE}) to diff…")
-        db = query_d1_rows(min_date)
+        db, d1_error = query_d1_rows(min_date)
+
+    if d1_error is not None and db is None:
+        print("\n  ✗ D1 query failed — cannot show diff.")
+        for line in d1_error.splitlines():
+            print(f"    {line}")
+        auth_keywords = ("login", "auth", "unauthorized", "403", "unauthenticated", "token", "oauth")
+        if any(k in d1_error.lower() for k in auth_keywords):
+            print("\n  Looks like an auth issue. Re-authenticate with:")
+            print("    npx wrangler login")
+            print("  Then re-run: python sync.py push")
+        _print_category_summary(rows, "Push set (no diff — D1 unreadable)")
+        _print_skipped(skipped)
+        answer = input("\n  Continue push without D1 diff? [y/N] ").strip().lower()
+        if answer != "y":
+            sys.exit("Aborted. Fix the D1 connection and retry.")
+        return
 
     if db is None:
-        print("  ⚠️  Could not read D1 (auth stale or offline?). "
-              "Showing the batch without a diff.")
+        # rows was empty — nothing to diff
         _print_category_summary(rows, "Push set")
         _print_skipped(skipped)
         return
