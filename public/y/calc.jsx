@@ -31,6 +31,7 @@
     BUFFER_EXPLAIN_MIN:  0.01,  // explain the buffer only when it adds > 1% of ceiling (otherwise noise)
     LUMP_PCT:            0.02,  // transactions > 2% of ceiling excluded from extrapolated rate (winsorization)
     MONTH_BAND_DEFAULT_CV: 0.35, // fallback daily coefficient-of-variation for the month cone when <2 historical months exist
+    BAND_WINDOW_WEEKS:   16,    // yearly uncertainty band: sigma from the most recent N complete weeks only (recency window)
     DAYS_PER_MONTH:      30.4,  // average month length for "months remaining" arithmetic
     YOY_WATCH:           0.08,  // YTD spend > prior year same point by > 8% of ceiling → watch
   };
@@ -219,10 +220,16 @@ function computeStats(store, year, asOfDate, staleDays = 0) {
     const deltaPct = ceiling > 0 ? delta / ceiling : 0;
 
     // Forecast uncertainty band — current incomplete year only, requires ≥4 complete weeks of
-    // recurring (non-lump) data. sigmaWeek = sample std-dev of weekly recurring totals (zero
-    // weeks counted). bandAmt = sigmaWeek × √weeksRemaining × (1+buffer). All null when
-    // insufficient data. projLow is floored at spent so the optimistic bound never understates
-    // what was actually logged.
+    // recurring (non-lump) data. sigmaWeek = sample std-dev of the most recent BAND_WINDOW_WEEKS
+    // complete weeks' recurring totals (zero weeks counted) — NOT the full year-to-date. A flat
+    // year-to-date sample lets a single atypical week (e.g. a big January stock-up) inflate the
+    // band for the rest of the year even after months of dead-steady spending since; windowing to
+    // the recent past lets that influence fade out once the household's behavior has moved on,
+    // same recency philosophy as the trailing-60-day rate blend above. Early in the year, before
+    // BAND_WINDOW_WEEKS have elapsed, the window is just "all weeks so far" — unchanged from
+    // before. bandAmt = sigmaWeek × √weeksRemaining × (1+buffer). All null when insufficient data.
+    // projLow is floored at spent so the optimistic bound never understates what was actually
+    // logged.
     let projLow = null, projHigh = null, bandAmt = null;
     if (!isFuture && !complete) {
       const nCompleteWeeks = Math.floor((doy - 1) / 7);
@@ -232,9 +239,11 @@ function computeStats(store, year, asOfDate, staleDays = 0) {
           const wk = Math.floor((dayOfYear(parseDate(t.date)) - 1) / 7);
           if (wk < nCompleteWeeks) weekTotals[wk] += t.amount_eur;
         });
-        const n = nCompleteWeeks;
-        const mean = weekTotals.reduce((a, v) => a + v, 0) / n;
-        const sigmaWeek = Math.sqrt(weekTotals.reduce((a, v) => a + (v - mean) ** 2, 0) / (n - 1));
+        const windowStart = Math.max(0, nCompleteWeeks - T.BAND_WINDOW_WEEKS);
+        const windowed = weekTotals.slice(windowStart);
+        const n = windowed.length;
+        const mean = windowed.reduce((a, v) => a + v, 0) / n;
+        const sigmaWeek = n >= 2 ? Math.sqrt(windowed.reduce((a, v) => a + (v - mean) ** 2, 0) / (n - 1)) : 0;
         const weeksRemaining = projDays / 7;
         bandAmt = sigmaWeek * Math.sqrt(weeksRemaining) * (1 + buffer);
         projLow = Math.max(spent, projection - bandAmt);

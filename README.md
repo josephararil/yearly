@@ -123,15 +123,23 @@ real money, they just shouldn't set your daily pace.
 ### Forecast uncertainty band
 
 Once **≥4 complete weeks** of recurring data exist (current incomplete year only), the projection
-gets an honest ± range from your week-to-week volatility:
+gets an honest ± range from your **recent** week-to-week volatility:
 
 ```
-sigmaWeek      = sample std-dev of weekly recurring totals (n−1 divisor, empty weeks count as 0)
+recentWeeks    = the most recent min(nCompleteWeeks, 16) complete weeks — NOT the full year-to-date
+sigmaWeek      = sample std-dev of recentWeeks' recurring totals (n−1 divisor, empty weeks count as 0)
 weeksRemaining = projDays / 7              // projDays = daysRemaining + staleDays
 bandAmt        = sigmaWeek × √(weeksRemaining) × (1 + buffer)
 projLow        = max(spent, projection − bandAmt)      // floored: never below money already spent
 projHigh       = projection + bandAmt
 ```
+
+**Why a 16-week recency window, not the full year-to-date:** a flat year-to-date sample lets a
+single atypical week — a big January stock-up, an unusually chaotic month — inflate the band for
+the rest of the year, even after months of dead-steady spending since. Windowing to the trailing
+~4 months lets that influence fade out once the household's behavior has settled, the same
+recency philosophy already used for the projection's own trailing-60-day rate blend. Before 16
+weeks have elapsed, the window is just "all weeks so far" — early-year behavior is unchanged.
 
 When `staleDays > 0`, `weeksRemaining` is wider, which widens the band. The wider band lowers
 `projLow`, making the `alert` verdict harder to trip while data is stale — correctly reflecting

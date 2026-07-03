@@ -108,10 +108,17 @@ Decomposition fields: `mainSpent`, `funSpent`, `funProjection`.
 
 `stats.txns` / `stats.upto` contain **all** transactions for the year (main + fun).
 
-**Forecast uncertainty band** (`projLow`/`projHigh`/`bandAmt`): computed from sample std-dev of
-weekly recurring totals when ≥4 complete weeks are available (current incomplete year only).
-`bandAmt = sigmaWeek × √weeksRemaining × (1+buffer)`; `projLow = max(spent, projection −
-bandAmt)`. All three are `null` when data is insufficient (<4 weeks, or complete/future year).
+**Forecast uncertainty band** (`projLow`/`projHigh`/`bandAmt`): computed from the sample std-dev of
+the most recent `T.BAND_WINDOW_WEEKS` (16) complete weeks of recurring totals — **not** the full
+year-to-date — once ≥4 complete weeks are available (current incomplete year only). Before 16 weeks
+have elapsed the window is just "all weeks so far," so early-year behavior is unchanged; once more
+than 16 weeks of history exist, older weeks roll out of the sample. This recency window exists
+because a flat year-to-date sample lets a single atypical week (e.g. a big January stock-up)
+inflate the band for the rest of the year even after months of dead-steady spending since —
+windowing lets that influence fade out on the same trailing-window philosophy as the
+`trailingDailyRate` blend above. `bandAmt = sigmaWeek × √weeksRemaining × (1+buffer)`; `projLow =
+max(spent, projection − bandAmt)`. All three are `null` when data is insufficient (<4 weeks, or
+complete/future year).
 
 **Monthly uncertainty cone** (`monthEndBand`, consumed by `MonthCurve` in `home.jsx`): every month
 restarts from zero data points, so unlike the yearly band it can't gate on a minimum-weeks

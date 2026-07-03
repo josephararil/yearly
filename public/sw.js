@@ -1,5 +1,5 @@
 // Bump this version whenever the app shell changes to invalidate the old cache.
-const CACHE_NAME = 'yearly-v54';
+const CACHE_NAME = 'yearly-v55';
 // Logo cache is intentionally never deleted on app updates — logos are stable per-merchant URL.
 const LOGO_CACHE = 'yearly-logos-v1';
 
