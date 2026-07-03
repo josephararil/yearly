@@ -140,6 +140,43 @@ reduced forecast confidence during the blind period.
 `projLow / projHigh / bandAmt` are `null` when fewer than 4 weeks have elapsed, or for
 complete/future years.
 
+### Monthly uncertainty cone
+
+The "This month" chart gets its own cone, computed by `monthEndBand(stats, store)`. It's
+deliberately more volatile than the yearly band — every month restarts from **zero data points**,
+so on day 1 there's nothing yet to measure and the cone must lean entirely on the household's own
+**historical months** (min/avg/max/spread of past recurring-spend totals); by month-end, with the
+whole month observed, it converges to nothing. Two independent variance sources are summed:
+
+```
+// 1) within-month day-to-day noise, projected over the days still to come
+daySigma  = blend(thisMonth'sOwnDailyStdDev, impliedDailyStdDevFromHistoricalMonths)
+projDays  = daysRemaining + staleDays                 // same staleness widening as the yearly band
+varDaily  = daySigma² × projDays
+
+// 2) cross-month "what kind of month is this" uncertainty, fading as the month fills in
+histStd       = sample std-dev of the household's own historical month totals (recurring spend only)
+residualFrac  = daysRemaining / daysInMonth
+varMonthLevel = (histStd × residualFrac)²
+
+bandAmt = √(varDaily + varMonthLevel) × (1 + buffer)
+low     = max(spentSoFar, projectedMonthEnd − bandAmt)
+high    = projectedMonthEnd + bandAmt
+```
+
+`daySigma` trusts this month's own in-month day-to-day std-dev more as days accumulate (from ~0%
+weight on day 1 to full weight after a week); before that, and whenever fewer than 2 historical
+months exist, it falls back to a std-dev implied by the spread across past months (or, with only
+one historical month, a flat 35% coefficient-of-variation guess). Lump-sum transactions
+(`oneoff:true` or > 2% of `ceiling`) are excluded from every variance input — same winsorization as
+the yearly band — so one big purchase doesn't blow the cone out for the rest of the month.
+
+Net effect: **large on day 1** (nothing known yet, full historical spread applies), **wider the
+longer `staleDays` runs** (less trustworthy recent data → wider `projDays`), **narrowing as the
+month gathers its own data points**, and **gone on the last day** (`null` — nothing left to be
+uncertain about). `null` also when there's no statistical basis at all (the very first month of
+use, day 1-2, zero historical months to regress toward).
+
 ### Status (green / amber / red)
 
 Status escalates conservatively so the number doesn't flap day to day. All thresholds are vs the
@@ -325,7 +362,9 @@ Top to bottom:
   goal with a progress bar. Tappable → Analysis Fun tab.
 - **This month** — `MonthCurve`, an interactive day-by-day cumulative chart for the current month
   with toggleable Pace / Projection / Target / Month-end / Prev-month series and an explanatory
-  legend.
+  legend. The Projection line carries its own **uncertainty cone** (see below) — a translucent
+  triangle, same treatment as the year chart's band, that starts wide on day 1 and narrows to
+  nothing by month-end.
 
 ### Analysis — the deep surface ([`analysis.jsx`](public/y/analysis.jsx))
 
