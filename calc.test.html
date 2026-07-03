@@ -973,15 +973,18 @@
       sparse21.projection.toFixed(0) + ' < ' + (sparse21.mainTarget * 1.08).toFixed(0));
     assert('(c) sparse: status === "watch" (old 1.08 threshold)', sparse21.status === 'watch', 'got "' + sparse21.status + '"');
 
-    // (d) projLow never below spent: late-year asOf with one early tx and zero spend since.
+    // (d) projLow never below spent: late-year asOf with one recent-ish tx and zero spend since.
     //     High sigmaWeek (all-in-one-week pattern) × small remaining days → bandAmt > projection−spent.
     //     projLow = max(spent, projection−bandAmt) must equal spent.
-    //     asOf=Dec 1 (doy=335, daysRemaining=30); 1 tx on Jan 4 of €480 (<lumpThreshold 500).
+    //     asOf=Dec 1 (doy=335, daysRemaining=30); 1 tx on Sep 15 of €480 (<lumpThreshold 500),
+    //     placed inside the 16-week recency window (weeks 31-46 of 47) so it still contributes to
+    //     sigmaWeek under the windowed band — a tx this far back from January would have rolled
+    //     out of the window and no longer exercise the clamp (see BAND_WINDOW_WEEKS in calc.jsx).
     const clampStore21 = {
       currentYear:2026, people:[], wishlist:[],
       years:{'2026':{ceiling:25000, buffer:0.04}}, density:'balanced', templates:[],
       transactions: [
-        { id:'cl1', date:'2026-01-04', description:'OneOff', amount_eur:480, category:'groceries', source:'manual' },
+        { id:'cl1', date:'2026-09-15', description:'OneOff', amount_eur:480, category:'groceries', source:'manual' },
       ],
     };
     const asOfClamp21 = new Date('2026-12-01T12:00:00Z'); // doy=335, daysRemaining=30
