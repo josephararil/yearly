@@ -175,7 +175,7 @@
   }
 
   function AddSheet({ open, onClose, store, onSave, onSaveTemplate }) {
-    const [mode, setMode] = React.useState("Quick");
+    const [mode, setMode] = React.useState("Manual");
     const [step, setStep] = React.useState("grid"); // grid | entry (quick)
     const [tpl, setTpl] = React.useState(null);
     const [amount, setAmount] = React.useState("");
@@ -189,7 +189,7 @@
     const [saveAsTemplate, setSaveAsTemplate] = React.useState(false);
 
     React.useEffect(() => {
-      if (open) { setMode("Quick"); setStep("grid"); setTpl(null); setAmount(""); setDraft(blank()); setFunOn(false); setFunPerson(defaultPerson()); setOneOff(false); setSaveAsTemplate(false); }
+      if (open) { setMode("Manual"); setStep("grid"); setTpl(null); setAmount(""); setDraft(blank()); setFunOn(false); setFunPerson(defaultPerson()); setOneOff(false); setSaveAsTemplate(false); }
     }, [open]);
 
     const commit = (t) => {
