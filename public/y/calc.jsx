@@ -30,6 +30,7 @@
     MOVER_MIN_BASE:      50,    // category must have ≥ €50 in the last full month to be eligible
     BUFFER_EXPLAIN_MIN:  0.01,  // explain the buffer only when it adds > 1% of ceiling (otherwise noise)
     LUMP_PCT:            0.02,  // transactions > 2% of ceiling excluded from extrapolated rate (winsorization)
+    MONTH_BAND_DEFAULT_CV: 0.35, // fallback daily coefficient-of-variation for the month cone when <2 historical months exist
     DAYS_PER_MONTH:      30.4,  // average month length for "months remaining" arithmetic
     YOY_WATCH:           0.08,  // YTD spend > prior year same point by > 8% of ceiling → watch
   };
@@ -613,11 +614,88 @@ function computeStats(store, year, asOfDate, staleDays = 0) {
     return Math.max(0, (stats.ceiling - spentBefore) / (12 - m));
   }
 
+  // Uncertainty cone for the current month's projected total (mirrors the yearly forecast band,
+  // but at month scale — every month restarts from zero data points, so it must lean on the
+  // household's *historical* months early on, then hand off to this month's own data as it accrues).
+  // Two independent variance sources, summed:
+  //   1) within-month day-to-day noise projected over the remaining days (→ 0 as the month ends)
+  //   2) cross-month "what kind of month is this" uncertainty, drawn from the spread of the
+  //      household's own historical month totals (→ 0 as more of this month becomes known fact)
+  // staleDays (unsynced Revolut data) widens (1) exactly like the yearly band widens with it.
+  // Lump-sum transactions (oneoff, or > LUMP_PCT of ceiling) are excluded from both variance
+  // sources — same winsorization as the yearly band — so a single big purchase doesn't blow the
+  // cone out for the rest of the month. Returns null when there's no statistical basis at all
+  // (first month of use, day 1-2, nothing to measure yet).
+  function monthEndBand(stats, store) {
+    if (stats.complete || stats.isFuture) return null;
+    const asOf = stats.asOf;
+    const year = asOf.getFullYear(), month = asOf.getMonth();
+    const dayOfMonth = asOf.getDate();
+    const daysInMonth = new Date(year, month + 1, 0).getDate();
+    const daysRemaining = daysInMonth - dayOfMonth;
+    if (daysRemaining <= 0) return null;
+
+    const monthStr = String(year) + "-" + String(month + 1).padStart(2, "0");
+    const lumpThreshold = stats.ceiling > 0 ? stats.ceiling * T.LUMP_PCT : Infinity;
+    const isLump = (t) => !!t.oneoff || t.amount_eur > lumpThreshold;
+
+    // This month's day-by-day recurring totals so far (day 1..dayOfMonth).
+    const dailyTotals = Array(dayOfMonth).fill(0);
+    stats.upto.filter((t) => t.date.startsWith(monthStr) && !isLump(t)).forEach((t) => {
+      const d = new Date(t.date + "T00:00:00").getDate();
+      if (d >= 1 && d <= dayOfMonth) dailyTotals[d - 1] += t.amount_eur;
+    });
+
+    // Historical completed months, all-time, recurring spend only — the sample this month's
+    // uncertainty regresses toward. (Later Jan/Feb months lean on Nov/Dec of last year, etc.)
+    const totalsByYm = {};
+    (store.transactions || []).forEach((t) => {
+      const ym = t.date.slice(0, 7);
+      if (ym < monthStr && !isLump(t)) totalsByYm[ym] = (totalsByYm[ym] || 0) + t.amount_eur;
+    });
+    const hist = Object.values(totalsByYm);
+    const histN = hist.length;
+    const histMean = histN > 0 ? hist.reduce((a, v) => a + v, 0) / histN : null;
+    const histStd = histN >= 2 ? Math.sqrt(hist.reduce((a, v) => a + (v - histMean) ** 2, 0) / (histN - 1)) : 0;
+    const histMin = histN > 0 ? Math.min(...hist) : null;
+    const histMax = histN > 0 ? Math.max(...hist) : null;
+
+    // In-month day-to-day sigma, once there's enough of this month to measure it (≥3 days).
+    const dayMean = dailyTotals.reduce((a, v) => a + v, 0) / dayOfMonth;
+    const inMonthDaySigma = dayOfMonth >= 3
+      ? Math.sqrt(dailyTotals.reduce((a, v) => a + (v - dayMean) ** 2, 0) / (dayOfMonth - 1))
+      : null;
+    // Implied daily sigma from cross-month spread, assuming ~iid days within a month
+    // (Var(sum of N iid) = N × Var(day)). Only meaningful once ≥2 historical months exist.
+    const histDaySigma = histN >= 2 ? histStd / Math.sqrt(daysInMonth) : null;
+    const wDay = Math.min(1, dayOfMonth / 7); // trust in-month noise more after ~a week of data
+
+    let daySigma;
+    if (inMonthDaySigma != null && histDaySigma != null) daySigma = inMonthDaySigma * wDay + histDaySigma * (1 - wDay);
+    else if (inMonthDaySigma != null) daySigma = inMonthDaySigma;
+    else if (histDaySigma != null) daySigma = histDaySigma;
+    else if (histMean != null) daySigma = (histMean / daysInMonth) * T.MONTH_BAND_DEFAULT_CV; // only 1 historical month — rough guess
+    else daySigma = null; // no signal at all (day 1-2 of the app's very first month)
+    if (daySigma == null) return null;
+
+    const projDays = daysRemaining + (stats.staleDays || 0);
+    const varDaily = daySigma * daySigma * projDays;
+    const residualFrac = daysRemaining / daysInMonth;
+    const varMonthLevel = histN >= 2 ? (histStd * residualFrac) ** 2 : 0;
+
+    const spentSoFar = stats.upto.filter((t) => t.date.startsWith(monthStr)).reduce((a, t) => a + t.amount_eur, 0);
+    const bandAmt = Math.sqrt(varDaily + varMonthLevel) * (1 + stats.buffer);
+    const mid = projectedMonthEnd(stats);
+    const low = Math.max(spentSoFar, mid - bandAmt);
+    const high = mid + bandAmt;
+    return { low, high, bandAmt, mid, histN, histMean, histMin, histMax };
+  }
+
   window.YCalc = {
     MONTHS, MONTHS_LONG, eur0, eur2, eurAuto, signedEur, pct, signedPct,
     dayOfYear, daysInYear, parseDate, localISO, fmtDateShort, fmtDateLong, yearTxns,
     cumulativeByDay, priorYearCumulative, aggregateByCategory,
     rateForMonth, computeStats, computeFun, projectionAsOf, buildCallouts,
-    requiredDailyToHit, dailyHeadroom, neededMonthlyCap, projectedMonthEnd,
+    requiredDailyToHit, dailyHeadroom, neededMonthlyCap, projectedMonthEnd, monthEndBand,
   };
 })();

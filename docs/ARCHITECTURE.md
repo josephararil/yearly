@@ -45,6 +45,10 @@ formula, status thresholds, and each callout detector.
 - `projectedMonthEnd(stats)` → number (current-month daily-rate extrapolation from today to
   month-end; equals `byMonth[m].amount` for complete/future years — shared by MonthCurve and
   StatusHero pulse line).
+- `monthEndBand(stats, store)` → `{low, high, bandAmt, mid, histN, histMean, histMin, histMax} |
+  null` — the monthly uncertainty cone (see below). `null` on complete/future years, on the last
+  day of the month, or when there is no statistical basis at all (first month of use, day 1-2,
+  zero historical months).
 - plus the standard formatters.
 
 All magic-number thresholds are named in the `T` constants object at the top of the IIFE —
@@ -108,6 +112,29 @@ Decomposition fields: `mainSpent`, `funSpent`, `funProjection`.
 weekly recurring totals when ≥4 complete weeks are available (current incomplete year only).
 `bandAmt = sigmaWeek × √weeksRemaining × (1+buffer)`; `projLow = max(spent, projection −
 bandAmt)`. All three are `null` when data is insufficient (<4 weeks, or complete/future year).
+
+**Monthly uncertainty cone** (`monthEndBand`, consumed by `MonthCurve` in `home.jsx`): every month
+restarts from zero data points, so unlike the yearly band it can't gate on a minimum-weeks
+threshold — it must lean on the household's own **historical months** early on, then hand off to
+the current month's own data as it accrues. Two independent variance sources are summed:
+1. within-month day-to-day noise, projected over the remaining days of the month
+   (`daySigma² × projDays`, `projDays = daysRemaining + staleDays` — same staleness widening as the
+   yearly band);
+2. cross-month "what kind of month is this" uncertainty, drawn from the sample std-dev of the
+   household's own historical month totals (all-time, recurring-only), decayed by
+   `(daysRemaining/daysInMonth)²` so it fades to 0 as the month fills in with actual data.
+
+`daySigma` blends this month's own in-month day-to-day std-dev (once ≥3 days are logged) with an
+implied daily std-dev backed out of the historical month-to-month spread (`histStd/√daysInMonth`,
+assuming ~iid days), weighted toward in-month data once ≥7 days have elapsed. With fewer than 2
+historical months, a flat coefficient-of-variation fallback (`T.MONTH_BAND_DEFAULT_CV × histMean /
+daysInMonth`) stands in for the missing spread estimate. Lump-sum transactions are excluded from
+every variance input via the same `isLump()` winsorization as the yearly band, so one big purchase
+doesn't blow the cone out for the rest of the month. `bandAmt = √(varDaily + varMonthLevel) ×
+(1+buffer)`; `low = max(spentSoFar, mid − bandAmt)`, `high = mid + bandAmt`, `mid =
+projectedMonthEnd(stats)`. Net effect: wide on day 1 (nothing known yet, full historical spread
+applies), wider the longer `staleDays` runs, and converging to `null` (no band drawn) on the last
+day of the month.
 
 **Status gating** (all vs `ceiling`): when the band exists, `status` is "good" if `projection ≤
 ceiling`; "alert" if `projLow > ceiling` (even the optimistic bound misses); "watch" otherwise.

@@ -115,6 +115,13 @@ below the chart (colored dot + label + description for each series). Toggle chip
 / Target / Month-end / Prev-month (prev month chip only shown when prior-month data exists; Month-end
 only shown for incomplete months). For past/future years it shows a plain text fallback.
 
+When `YCalc.monthEndBand(stats, store)` returns non-null and Projection is on, a semi-transparent
+triangular band (vertices: today→spentSoFar, month-end→band.high, month-end→band.low, `--chart-proj`
+at 10% opacity, same visual treatment as the yearly `ProjectionChart` band) is drawn beneath the
+dashed Projection line — the month-scale uncertainty cone. See
+[ARCHITECTURE.md](ARCHITECTURE.md#the-brain--ycalcjsx-windowycalc) for the statistical model
+(`monthEndBand`). Legend gains a "Range (±€X)" entry whenever the band is present.
+
 ### `analysis.jsx` — `AnalysisScreen`
 
 Receives `fun`, `store`, `setStore`, `addTx` in addition to `stats`/`focus`/`onEditTx`; renders

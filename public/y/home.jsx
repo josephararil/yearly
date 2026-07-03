@@ -20,7 +20,7 @@
     );
   }
 
-  function MonthCurve({ stats }) {
+  function MonthCurve({ stats, store }) {
     const W = 340, H = 280, padL = 40, padR = 14, padT = 14, padB = 24;
     const svgRef = React.useRef(null);
     const [hover, setHover] = React.useState(null);
@@ -67,6 +67,7 @@
     const neededMonthly = YCalc.neededMonthlyCap(stats);
     const monthlyDailyRate = dayOfMonth > 0 ? spentSoFar / dayOfMonth : 0;
     const projectedEnd = YCalc.projectedMonthEnd(stats);
+    const band = isPartialMonth ? YCalc.monthEndBand(stats, store) : null;
 
     // Previous month cumulative (same year only; skipped for January)
     let hasPrevData = false, prevDaysInMonth = 30, prevDayCum = null;
@@ -88,7 +89,7 @@
     }
     const prevTotal = hasPrevData ? prevDayCum[prevDaysInMonth] : 0;
 
-    const maxY = Math.max(neededMonthly, projectedEnd, spentSoFar, prevTotal, 1) * 1.12;
+    const maxY = Math.max(neededMonthly, projectedEnd, spentSoFar, prevTotal, band ? band.high : 0, 1) * 1.12;
     const x0 = padL, x1 = W - padR, y0 = padT, y1 = H - padB;
     const sx = (d) => x0 + ((d - 1) / Math.max(1, daysInMonth - 1)) * (x1 - x0);
     // Prev month scaled proportionally to the same x-range regardless of day count diff
@@ -157,6 +158,7 @@
       { color: "var(--chart-target)", label: `Target (${eurK(neededMonthly)})`, desc: "allowance per month to finish the year within your ceiling, given prior months' spend" },
       { color: "var(--chart-proj)", label: "Projection", desc: "extrapolated trend from your current daily rate" },
       ...(isPartialMonth ? [{ color: "var(--chart-proj)", label: `Month-end (${eurK(projectedEnd)})`, desc: "estimated total for this month if today's rate continues" }] : []),
+      ...(band ? [{ color: "var(--chart-proj)", label: `Range (±${eurK(band.bandAmt)})`, desc: "forecast uncertainty — day-to-day noise plus the spread across your own past months, narrowing to zero by month-end" }] : []),
       ...(hasPrevData ? [{ color: "var(--amber)", label: `${prevMonthName} (${eurK(prevTotal)})`, desc: "last month's spending curve for comparison (scaled to same width)" }] : []),
     ];
 
@@ -237,6 +239,14 @@
           {actPts.length > 1 && (
             <polyline points={actLine} fill="none" stroke="var(--chart-actual)"
               strokeWidth="2.6" strokeLinecap="round" strokeLinejoin="round" />
+          )}
+
+          {/* Uncertainty cone — rendered beneath the projection line */}
+          {showProj && isPartialMonth && band && (
+            <polygon
+              points={`${sx(dayOfMonth)},${sy(spentSoFar)} ${sx(daysInMonth)},${sy(band.high)} ${sx(daysInMonth)},${sy(band.low)}`}
+              fill="var(--chart-proj)" opacity="0.10" stroke="none"
+            />
           )}
 
           {/* Projection line */}
@@ -364,7 +374,7 @@
             <span className="spacer" />
           </div>
           <div style={{ marginTop: 14 }}>
-            <MonthCurve stats={stats} />
+            <MonthCurve stats={stats} store={store} />
           </div>
         </div>
 
