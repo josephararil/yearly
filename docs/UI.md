@@ -113,13 +113,17 @@ Internal: `TripAddSheet` (name + price), `nearestTrip(items, balance)` goal pick
 
 The app's "voice" — one orthogonal, plain-language insight rendered directly under the `StatusHero`
 (inside the same `.screen` child, with a hairline top border so it reads as part of the hero block,
-not a separate section). `HomeScreen` now receives `callouts` + `onCallout` and picks
-`callouts.find(c => !["ceiling","buffer","calm","final","future"].includes(c.id))` — the single
-highest-`value` callout that isn't redundant with the Hero. Renders a severity dot + `YUI.rich(text)`
-(numbers in mono `.num`) + a `→`, tappable to drill into Analysis via `onCallout` (same routing as
-`CalloutCard`). Stays silent (renders nothing) when no callout qualifies, and is hidden on
-complete/future years (their single `final`/`future` callouts are filtered out). The small inline
-`Fine / Tight / Slow down` chip in the "This month" header (`pulse-verdict`, month-cap vs
+not a separate section). `HomeScreen` now receives `callouts` + `onCallout` and filters to
+`callouts.filter(c => !["ceiling","buffer","calm","final","future"].includes(c.id))` (the
+non-redundant-with-the-Hero subset, in `buildCallouts`'s stable value-sorted order), then picks one
+entry via `dayIndex % eligible.length` (`dayIndex = Math.floor(Date.now() / 86400000)`, i.e. days
+since the Unix epoch) — a deterministic daily rotation through the list rather than always showing
+the single highest-`value` callout. Same callout all day; advances once per day to a different entry
+(round-robin, not random, so it never jumps back to a callout it just showed). Renders a severity dot
++ `YUI.rich(text)` (numbers in mono `.num`) + a `→`, tappable to drill into Analysis via `onCallout`
+(same routing as `CalloutCard`). Stays silent (renders nothing) when no callout qualifies, and is
+hidden on complete/future years (their single `final`/`future` callouts are filtered out). The small
+inline `Fine / Tight / Slow down` chip in the "This month" header (`pulse-verdict`, month-cap vs
 projected-month-end) is unchanged and independent of the voice line.
 
 ### `home.jsx` — `MonthCurve`

@@ -296,9 +296,12 @@ projected number and over/under-ceiling delta at a glance:
 | 3 | ~0.35–0.45 | Local facts (true but narrow) | category mover, top share, biggest/lightest month |
 | 0 | ~0.0–0.05 | Redundant with the Hero — never leads | ceiling restatement, buffer math |
 
-The **home voice line** (under the Hero) renders the single highest-`value` callout whose id is not
-in `{ceiling, buffer, calm, final, future}` — i.e. the most useful thing that *isn't* already
-obvious from the big number. If none qualifies, the line stays silent.
+The **home voice line** (under the Hero) rotates daily through the callouts whose id is not in
+`{ceiling, buffer, calm, final, future}` — i.e. the useful things that *aren't* already obvious from
+the big number — instead of always showing the single highest-`value` one. The rotation is a
+deterministic day-index round-robin over that list (stable value-sorted order), so it's fresh from
+day to day without being random or repeating the same callout back-to-back. If none qualifies, the
+line stays silent.
 
 There are **10 detectors** for the current year:
 
