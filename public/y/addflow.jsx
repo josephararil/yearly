@@ -76,22 +76,40 @@
     );
   }
 
-  // Collapsed "Tags & options" disclosure wrapping Fun/Travel/One-off/Save-as-template toggles.
+  // Collapsed "Tags & options" disclosure — Fun/Travel/One-off/Save-as-template are presented as a
+  // row of icon tiles rather than four identical-looking switches. Tapping a tile toggles it; each
+  // active tile's caption (and the fun-budget owner picker) appears stacked below the row.
   function OptionsDisclosure({
     open, setOpen, funOn, setFunOn, funPerson, setFunPerson, travelOn, setTravelOn,
     oneOff, setOneOff, saveAsTemplate, setSaveAsTemplate, store, showOneOff, showSaveAsTemplate,
   }) {
-    const active = [];
-    if (funOn) active.push("FUN");
-    if (travelOn) active.push("TRAVEL");
-    if (showOneOff && oneOff) active.push("ONE-OFF");
-    if (showSaveAsTemplate && saveAsTemplate) active.push("TEMPLATE");
+    const people = (store && store.people) || [];
+    const tiles = [
+      {
+        key: "fun", icon: "entertainment", label: "Fun budget", chip: "FUN", on: funOn, toggle: () => setFunOn(!funOn),
+        caption: "Counts against this month's fun money.",
+      },
+      {
+        key: "travel", icon: "travel", label: "Travel budget", chip: "TRAVEL", on: travelOn, toggle: () => setTravelOn(!travelOn),
+        caption: "Tagged to the travel envelope, not monthly spend.",
+      },
+      showOneOff && {
+        key: "oneOff", icon: "calendar", label: "One-off", chip: "ONE-OFF", on: oneOff, toggle: () => setOneOff(!oneOff),
+        caption: "Excluded from the spending-trend forecast — still counts in totals. Large amounts are excluded automatically.",
+      },
+      showSaveAsTemplate && {
+        key: "template", icon: "layers", label: "Save as template", chip: "TEMPLATE", on: saveAsTemplate, toggle: () => setSaveAsTemplate(!saveAsTemplate),
+        caption: "Adds this to your Quick templates for one-tap logging.",
+      },
+    ].filter(Boolean);
+    const activeTiles = tiles.filter((t) => t.on);
+
     return (
       <div className="field">
         <button type="button" className="opts-summary" onClick={() => setOpen((o) => !o)} aria-expanded={open}>
           <span>Tags & options</span>
           <span style={{ display: "flex", alignItems: "center", gap: 8 }}>
-            {active.length > 0 && <span className="opts-chips">{active.join(" · ")}</span>}
+            {activeTiles.length > 0 && <span className="opts-chips">{activeTiles.map((t) => t.chip).join(" · ")}</span>}
             <window.Icon name="chevronDown" size={16} style={{
               color: "var(--muted)", transform: open ? "rotate(180deg)" : "none",
               transition: "transform var(--dur-fast) var(--ease)",
@@ -100,10 +118,28 @@
         </button>
         <div className={"opts-body" + (open ? " open" : "")}>
           <div className="opts-body-inner">
-            <FunFields funOn={funOn} setFunOn={setFunOn} funPerson={funPerson} setFunPerson={setFunPerson} store={store} />
-            <TravelField travelOn={travelOn} setTravelOn={setTravelOn} />
-            {showOneOff && <OneOffField oneOff={oneOff} setOneOff={setOneOff} />}
-            {showSaveAsTemplate && <SaveAsTemplateField saveAsTemplate={saveAsTemplate} setSaveAsTemplate={setSaveAsTemplate} />}
+            <div className="opt-tiles" style={{ gridTemplateColumns: "repeat(" + tiles.length + ", 1fr)" }}>
+              {tiles.map((t) => (
+                <button key={t.key} type="button" className={"opt-tile" + (t.on ? " on" : "")}
+                  onClick={t.toggle} aria-pressed={t.on}>
+                  {t.on && <span className="opt-tile-check"><window.Icon name="check" size={9} /></span>}
+                  <window.Icon name={t.icon} size={20} />
+                  <span className="opt-tile-label">{t.label}</span>
+                </button>
+              ))}
+            </div>
+            {activeTiles.length > 0 && (
+              <div className="opt-details">
+                {activeTiles.map((t) => <p key={t.key} className="toggle-caption">{t.caption}</p>)}
+                {funOn && people.length > 0 && (
+                  <div style={{ display: "flex", gap: 7, flexWrap: "wrap" }}>
+                    {people.map((p) => (
+                      <Chip key={p.id} pressed={funPerson === p.id} onClick={() => setFunPerson(p.id)}>{p.name}</Chip>
+                    ))}
+                  </div>
+                )}
+              </div>
+            )}
           </div>
         </div>
       </div>
@@ -185,65 +221,6 @@
           </div>
         </div>
       </div>
-    );
-  }
-
-  // Shared toggle row — one switch used by Fun/Travel/One-off/Save-as-template. Caption states the
-  // consequence of turning the flag on, and only renders while the toggle is on (saves height).
-  function ToggleRow({ label, caption, checked, onChange, children }) {
-    return (
-      <div className="field toggle-row">
-        <div className="toggle-row-top">
-          <label style={{ margin: 0 }}>{label}</label>
-          <button type="button" className={"toggle-switch" + (checked ? " on" : "")}
-            onClick={() => onChange(!checked)} aria-checked={checked} role="switch">
-            <span className="toggle-knob"><span className="toggle-check">✓</span></span>
-          </button>
-        </div>
-        {checked && caption && <p className="toggle-caption">{caption}</p>}
-        {children}
-      </div>
-    );
-  }
-
-  // Save-as-template toggle — saves the manual entry as a Quick template on commit.
-  function SaveAsTemplateField({ saveAsTemplate, setSaveAsTemplate }) {
-    return (
-      <ToggleRow label="Save as template" checked={saveAsTemplate} onChange={setSaveAsTemplate}
-        caption="Adds this to your Quick templates for one-tap logging." />
-    );
-  }
-
-  // One-off toggle — marks a transaction as excluded from the spending-trend forecast.
-  function OneOffField({ oneOff, setOneOff }) {
-    return (
-      <ToggleRow label="One-off" checked={oneOff} onChange={setOneOff}
-        caption="Excluded from the spending-trend forecast — still counts in totals. Large amounts are excluded automatically." />
-    );
-  }
-
-  // Fun budget toggle + owner picker, used in both AddSheet and EditSheet.
-  function FunFields({ funOn, setFunOn, funPerson, setFunPerson, store }) {
-    const people = (store && store.people) || [];
-    return (
-      <ToggleRow label="Fun budget" checked={funOn} onChange={setFunOn}
-        caption="Counts against this month's fun money.">
-        {funOn && people.length > 0 && (
-          <div style={{ display: "flex", gap: 7 }}>
-            {people.map((p) => (
-              <Chip key={p.id} pressed={funPerson === p.id} onClick={() => setFunPerson(p.id)}>{p.name}</Chip>
-            ))}
-          </div>
-        )}
-      </ToggleRow>
-    );
-  }
-
-  // Travel budget toggle — family-wide (no owner), used in both AddSheet and EditSheet.
-  function TravelField({ travelOn, setTravelOn }) {
-    return (
-      <ToggleRow label="Travel budget" checked={travelOn} onChange={setTravelOn}
-        caption="Tagged to the travel envelope, not monthly spend." />
     );
   }
 

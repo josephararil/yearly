@@ -281,27 +281,27 @@ button, input, select, textarea { font-family: inherit; }
 
 .date-rel { font: 10.5px var(--mono); color: var(--muted); text-transform: uppercase; letter-spacing: 0.06em; white-space: nowrap; }
 
-/* shared toggle row — Fun / Travel / One-off / Save-as-template */
-.toggle-row-top { display: flex; align-items: center; justify-content: space-between; }
+/* tags & options — icon-tile toggles for Fun / Travel / One-off / Save-as-template */
 .toggle-caption { margin: 0; font-size: 11px; color: var(--ink-2); line-height: 1.4; }
-.toggle-switch {
-  width: 40px; height: 22px; padding: 0; border-radius: 11px; border: none; cursor: pointer;
-  background: var(--hair); position: relative; flex-shrink: 0;
-  transition: background var(--dur-fast) var(--ease);
+.opt-tiles { display: grid; gap: 8px; }
+.opt-tile {
+  position: relative; display: flex; flex-direction: column; align-items: center; gap: 6px;
+  padding: 12px 4px 10px; border-radius: 13px; border: 1px solid var(--hair);
+  background: var(--paper); color: var(--muted); cursor: pointer;
+  transition: border-color var(--dur-fast) var(--ease), background var(--dur-fast) var(--ease), color var(--dur-fast) var(--ease);
 }
-.toggle-switch.on { background: var(--terra); }
-.toggle-knob {
-  position: absolute; top: 2px; left: 2px; width: 18px; height: 18px; border-radius: 50%;
-  background: var(--paper); box-shadow: 0 1px 3px rgba(0,0,0,0.18);
-  display: flex; align-items: center; justify-content: center;
-  transition: left var(--dur-fast) var(--ease);
+.opt-tile.on {
+  border-color: var(--terra); background: color-mix(in srgb, var(--terra) 12%, transparent); color: var(--ink);
 }
-.toggle-switch.on .toggle-knob { left: 20px; }
-.toggle-check {
-  font: 8px var(--mono); color: var(--terra); line-height: 1; opacity: 0;
-  transition: opacity var(--dur-fast) var(--ease);
+.opt-tile-label {
+  font-family: var(--mono); font-size: 9.5px; letter-spacing: 0.04em; text-transform: uppercase;
+  text-align: center; line-height: 1.2;
 }
-.toggle-switch.on .toggle-check { opacity: 1; }
+.opt-tile-check {
+  position: absolute; top: -6px; right: -6px; width: 16px; height: 16px; border-radius: 50%;
+  background: var(--terra); color: var(--paper); display: flex; align-items: center; justify-content: center;
+}
+.opt-details { display: flex; flex-direction: column; gap: 8px; margin-top: 10px; }
 
 /* tags & options disclosure */
 .opts-summary {

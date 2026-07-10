@@ -248,20 +248,20 @@ first) to the front, canonical order for the rest; it's exported on `window.YAdd
 `settings.jsx`'s template editor (which must pass `store` for the recency ordering to do anything).
 
 **`OptionsDisclosure`** — collapsed "Tags & options" row showing mono chips for any active flag (FUN ·
-TRAVEL · ONE-OFF · TEMPLATE); expands to the four toggles built from one shared `ToggleRow` component
-(pill switch, checked state fades in a check glyph). Each caption states the consequence and only
-renders while its toggle is on:
-- **Fun budget** — `FunFields`, reveals a Chip owner picker (Joseph/Marti) when on. `commit()`/
+TRAVEL · ONE-OFF · TEMPLATE); expands to a row of icon tiles (`.opt-tiles`/`.opt-tile`, one per flag —
+entertainment/travel/calendar/layers icons), each toggled by tapping the tile (active state = terra
+border/tint + a small check badge, no separate switch control). Captions for whichever tiles are
+active stack below the row (`.opt-details`), each stating the consequence:
+- **Fun budget** — reveals a Chip owner picker (Joseph/Marti) below the tile row when on. `commit()`/
   `onSave()` write `fun:true` + `person`; `EditSheet` pre-populates from `txn.fun`/`txn.person` and
   deletes both keys when toggled off.
-- **Travel budget** — `TravelField`, family-wide (no owner picker). Writes/deletes `travel:true`
-  the same way.
-- **One-off** — `OneOffField`. Writes/deletes `oneoff:true`; causes `isLump()` in `calc.jsx` to
-  exclude the tx from the blended rate while keeping it in `spent`.
-- **Save as template** — `SaveAsTemplateField`, `AddSheet` only (`OptionsDisclosure` takes
-  `showOneOff`/`showSaveAsTemplate` booleans; `EditSheet` passes `showSaveAsTemplate={false}`). When
-  on, `commit()` builds `{ id, name: description.trim(), category, defaultAmount? }` (amount only when
-  > 0) and calls `onSaveTemplate` before saving. Wired in `app.jsx` to `addTemplate` (appends to
+- **Travel budget** — family-wide (no owner picker). Writes/deletes `travel:true` the same way.
+- **One-off** — writes/deletes `oneoff:true`; causes `isLump()` in `calc.jsx` to exclude the tx from
+  the blended rate while keeping it in `spent`.
+- **Save as template** — `AddSheet` only (`OptionsDisclosure` takes `showOneOff`/`showSaveAsTemplate`
+  booleans, which also control which tiles render; `EditSheet` passes `showSaveAsTemplate={false}`).
+  When on, `commit()` builds `{ id, name: description.trim(), category, defaultAmount? }` (amount only
+  when > 0) and calls `onSaveTemplate` before saving. Wired in `app.jsx` to `addTemplate` (appends to
   `store.templates`); since transactions are untouched, `useStore` calls `YSync.markSettingsDirty()`
   to sync the new template server-side.
 
