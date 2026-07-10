@@ -223,7 +223,7 @@ function TxRow({ t, onClick, people }) {
     );
   }
 
-  function Sheet({ open, onClose, title, headRight, children }) {
+  function Sheet({ open, onClose, title, headRight, footer, children }) {
     const [mounted, setMounted] = React.useState(open);
     const [shown, setShown] = React.useState(false);
     React.useEffect(() => {
@@ -247,7 +247,8 @@ function TxRow({ t, onClick, people }) {
               {headRight}
             </div>
           )}
-          <div className="sheet-scroll">{children}</div>
+          <div className={"sheet-scroll" + (footer ? " has-footer" : "")}>{children}</div>
+          {footer && <div className="sheet-footer">{footer}</div>}
         </div>
       </>
     );

@@ -1,6 +1,6 @@
 // settings.jsx — target, buffer, years, templates, CSV import/export, clear.
 (function () {
-  const APP_VERSION = 'v58';
+  const APP_VERSION = 'v62';
   const { YData, YCalc, YUI } = window;
   const { eur0, signedPct, computeStats, localISO } = YCalc;
   const { Sheet, DeltaChip } = YUI;
@@ -162,7 +162,7 @@
         <Sheet open={open} onClose={() => setEdit(null)} title={store.templates.some((x) => x.id === t.id) ? "Edit template" : "New template"}>
           <div className="field"><label>Name</label><input className="inp" value={t.name} onChange={(e) => set({ name: e.target.value })} placeholder="e.g. Billa" /></div>
           <div className="field"><label>Default amount (optional)</label><input className="inp inp-num" inputMode="decimal" value={t.defaultAmount || ""} onChange={(e) => set({ defaultAmount: e.target.value.replace(/[^\d.]/g, "") })} placeholder="leave blank to type each time" /></div>
-          <div className="field"><label>Category</label><window.YAdd.CategoryPicker value={t.category} onChange={(category) => set({ category })} /></div>
+          <div className="field"><label>Category</label><window.YAdd.CategoryPicker value={t.category} onChange={(category) => set({ category })} store={store} /></div>
           <Button variant="primary" block disabled={!t.name.trim()}
             onClick={() => save({ id: t.id, name: t.name.trim(), category: t.category, defaultAmount: t.defaultAmount ? parseFloat(t.defaultAmount) : undefined })}>Save template</Button>
         </Sheet>
