@@ -66,7 +66,6 @@
 
     const spentSoFar = dayCum[dayOfMonth];
     const neededMonthly = YCalc.neededMonthlyCap(stats);
-    const monthlyDailyRate = dayOfMonth > 0 ? spentSoFar / dayOfMonth : 0;
     const projectedEnd = YCalc.projectedMonthEnd(stats);
     const band = isPartialMonth ? YCalc.monthEndBand(stats, store) : null;
 
@@ -142,7 +141,10 @@
       if (day <= dayOfMonth) {
         val = dayCum[day];
       } else if (showProj) {
-        val = spentSoFar + monthlyDailyRate * (day - dayOfMonth);
+        // Interpolate along the same line drawn on the chart (dayOfMonth,spentSoFar) →
+        // (daysInMonth,projectedEnd) — projectedEnd already excludes oneoff/lump tx from the
+        // extrapolated rate, so the hover value must match it rather than re-deriving a raw rate.
+        val = spentSoFar + (projectedEnd - spentSoFar) * (day - dayOfMonth) / Math.max(1, daysInMonth - dayOfMonth);
         isProj = true;
       } else {
         val = dayCum[dayOfMonth];
