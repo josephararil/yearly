@@ -1,8 +1,9 @@
 // home.jsx — calm overview: status hero + fun strip + monthly spend curve.
 (function () {
-  const { YUI, YFun, YCalc } = window;
+  const { YUI, YFun, YTravel, YCalc } = window;
   const { StatusHero, SectionH, rich } = YUI;
   const { FunStrip } = YFun;
+  const { TravelStrip } = YTravel;
 
   const MONTHS_SHORT = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
   const eurK = (v) => (Math.abs(v) >= 1000 ? "€" + (v / 1000).toFixed(v % 1000 === 0 ? 0 : 1) + "k" : "€" + Math.round(v));
@@ -346,7 +347,7 @@
     );
   }
 
-  function HomeScreen({ stats, fun, store, callouts, onCallout, onOpenFun }) {
+  function HomeScreen({ stats, fun, travel, store, callouts, onCallout, onOpenFun, onOpenTravel }) {
     const verdict = (!stats.isFuture && !stats.complete) ? (() => {
       const cap = YCalc.neededMonthlyCap(stats);
       const proj = YCalc.projectedMonthEnd(stats);
@@ -381,6 +382,11 @@
         <div>
           <SectionH title="Fun budget" />
           <FunStrip fun={fun} store={store} onOpen={onOpenFun} />
+        </div>
+
+        <div>
+          <SectionH title="Travel budget" />
+          <TravelStrip travel={travel} store={store} onOpen={onOpenTravel} />
         </div>
       </div>
     );

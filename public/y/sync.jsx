@@ -46,6 +46,7 @@
       original_currency: tx.original_currency || null,
       deleted: tx.deleted ? 1 : 0,
       oneoff: tx.oneoff ? 1 : 0,
+      travel: tx.travel ? 1 : 0,
     };
   }
 
@@ -73,6 +74,7 @@
     if (row.fun)               tx.fun               = true;
     if (row.person)            tx.person            = row.person;
     if (row.oneoff)            tx.oneoff            = true;
+    if (row.travel)            tx.travel            = true;
     if (row.original_amount  != null) tx.original_amount  = row.original_amount;
     if (row.original_currency)        tx.original_currency = row.original_currency;
     if (row.merchant_logo)            tx.merchant_logo     = row.merchant_logo;

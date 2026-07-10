@@ -38,6 +38,7 @@ formula, status thresholds, and each callout detector.
 - `rateForMonth(person, ym)` → number (latest applicable rate for a person in a "YYYY-MM";
   0 before startMonth).
 - `computeFun(store, asOfDate?)` → per-person fun ledger (see below).
+- `computeTravel(store, asOfDate?)` → family-wide travel ledger (see below).
 - `projectionAsOf` (trend detector).
 - `requiredDailyToHit(stats)` → number|null (daily cap to finish on mainTarget; null when N/A).
 - `neededMonthlyCap(stats)` → number (`max(0, (mainTarget − spentBeforeCurrentMonth) / (12 −
@@ -195,6 +196,18 @@ p.startMonth + "-01"` — pre-startMonth transactions are excluded (no matching 
 classification** (current / complete / future) is relative to `asOf.getFullYear()`, not `new
 Date().getFullYear()`, so historical `asOfDate` values classify consistently.
 
+### `computeTravel(store, asOfDate?)`
+
+Exported, family-wide analogue of `computeFun` — the travel budget is one household allowance, not
+a per-person split. Reads `store.travel` (`{rates:[{from,amount}], startMonth, balanceAdjustment}`;
+same shape a `person` uses, so `rateForMonth(travel, ym)` works unchanged). Returns: `balance`
+(all-time = accrued − travel-tagged spend + `balanceAdjustment`), `accrued`, `spentAllTime`,
+`monthlyRate`, `usedThisMonth`, `travelSpentYTD`, `travelProjection` (**uncapped** linear YTD
+extrapolation — unlike `funProjection`, travel has no allowance cap), `travelCatList`, `startMonth`.
+Balance only counts travel txns with `t.date >= travel.startMonth + "-01"`. Travel-tagged spend
+still counts in `computeStats`'s `spent`/`projection` vs the ceiling; travel does **not** feed
+`funPlanAnnual`/`mainTarget` or any callout — it is a pure psychological overlay.
+
 ## Store shape — `y/data.jsx` (`window.YData`)
 
 The persisted store shape, the fixed 18-category list (`CATEGORIES`, id→icon→color), default
@@ -206,18 +219,24 @@ templates, and `loadStore`/`saveStore`/`resetStore`/`migrateStore`.
   `balanceAdjustment` is an additive offset to the computed balance (set via "Correct balance"
   in Settings → Fun budget); 0 when absent. Default: Joseph €100/mo, Marti €200/mo.
 - `store.wishlist`: `[{id, owner, name, price, note?, createdMonth}]` — per-person wishlist items.
-- Transaction fields: optional `fun:true` and `person:"joseph"|"marti"` (only on fun tx).
+- `store.travel`: `{rates:[{from:"YYYY-MM", amount}], startMonth:"YYYY-MM", balanceAdjustment?}` —
+  the single family-wide travel allowance (same shape as one `person`). Configured in Settings →
+  Travel budget. `store.travelWishlist`: `[{id, name, price, createdMonth}]` — trip goals (no owner).
+- Transaction fields: optional `fun:true` and `person:"joseph"|"marti"` (only on fun tx); optional
+  `travel:true` (family-wide travel tag, independent of the `Travel` category and of `fun`).
   Optional `oneoff:true` — excludes the tx from the blended rate used in projection (still
   counts in `spent`). Always absent on Revolut import (defaults to 0); toggled in-app via Manual
   add / edit sheet. Optional Revolut-sourced fields: `merchant_logo` (URL string),
   `merchant_city` (string).
 - `years[y].ceiling` — renamed from `years[y].target` (sacred household ceiling, never derived).
 
-`buildSeed()` — returns a blank store: `transactions: []`, `wishlist: []`, default year ceilings
-(2024 €21k / 2025 €23k / 2026 €25k), default people rates, default templates. No sample data.
+`buildSeed()` — returns a blank store: `transactions: []`, `wishlist: []`, `travelWishlist: []`,
+`travel` (€0/mo default), default year ceilings (2024 €21k / 2025 €23k / 2026 €25k), default people
+rates, default templates. No sample data.
 
-`migrateStore(s)` (exported, idempotent): `years[y].target` → `ceiling`; injects `people` and
-`wishlist` defaults if missing; sets `density` default; normalizes all `transactions[*].category`
+`migrateStore(s)` (exported, idempotent): `years[y].target` → `ceiling`; injects `people`,
+`wishlist`, `travel`, and `travelWishlist` defaults if missing; sets `density` default; normalizes
+all `transactions[*].category`
 to lowercase IDs (fixes Revolut title-case import: `"Groceries"` → `"groceries"`). Called by
 `loadStore` and by JSON restore.
 
@@ -305,13 +324,14 @@ ones.
 `App` is the single stateful root. `store` (persisted via a `setStore` that writes the whole
 object to localStorage on every mutation) is the only durable state; `route` / `viewYear` /
 `analysisFocus` / `addOpen` / `editTx` / `yearOpen` / `deletedTx` / `showToast` are ephemeral UI
-state. Three memoized derivations drive everything visible: `stats =
-YCalc.computeStats(store, viewYear)`, `callouts = YCalc.buildCallouts(store, stats)`, and `fun =
-YCalc.computeFun(store)` (all-time per-person fun ledger, recomputed on any store change).
-`onOpenFun` sets `analysisFocus = { section:"fun" }` and routes to Analysis → Fun tab. `fun`,
-`store`, `setStore`, and `addTx` are passed to `AnalysisScreen` (for `FunTab`); `fun`, `store`,
-and `onOpenFun` are passed to `HomeScreen` (for `FunStrip`). `store` is also passed to `EditSheet`
-so it can read `store.people` for the fun toggle owner picker.
+state. Four memoized derivations drive everything visible: `stats =
+YCalc.computeStats(store, viewYear)`, `callouts = YCalc.buildCallouts(store, stats)`, `fun =
+YCalc.computeFun(store)` (all-time per-person fun ledger), and `travel = YCalc.computeTravel(store)`
+(family-wide travel ledger) — all recomputed on any store change. `onOpenFun`/`onOpenTravel` set
+`analysisFocus = { section:"fun"|"travel" }` and route to the matching Analysis tab. `fun`, `travel`,
+`store`, `setStore`, and `addTx` are passed to `AnalysisScreen` (for `FunTab`/`TravelTab`); `fun`,
+`travel`, `store`, `onOpenFun`, and `onOpenTravel` are passed to `HomeScreen` (for the strips).
+`store` is also passed to `EditSheet` so it can read `store.people` for the fun toggle owner picker.
 
 **Sync wiring in `app.jsx`:** on mount, `YSync.init({ getStore: () => storeRef.current,
 applyServer: setStore })` + `YSync.start()` + `YSync.bootstrap()`. `storeRef` is kept current via

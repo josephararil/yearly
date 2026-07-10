@@ -25,6 +25,7 @@ whole thing hackable from any text editor.
 - [The mental model](#the-mental-model)
 - [How the numbers work](#how-the-numbers-work) — projection, buffer, uncertainty band, status
 - [The fun budget](#the-fun-budget)
+- [The travel budget](#the-travel-budget)
 - [The callout engine](#the-callout-engine) — the 10 detectors + value model + threshold table
 - [Categories](#categories)
 - [Screens](#screens)
@@ -244,6 +245,40 @@ covers it). **"Bought it"** logs a fun-tagged transaction for the price and remo
 
 ---
 
+## The travel budget
+
+A second discretionary overlay that works exactly like the fun budget, with one difference: it is
+**family-wide** — a single household travel allowance, not a per-person split. Its purpose is
+purely psychological — moderating trip spending. If you haven't travelled in a while and see €1,000
+available, book something; if you're at −€400, hold off.
+
+- **One monthly allowance** (`store.travel`), configured in Settings → *Travel budget*. It accrues
+  every month from a `startMonth`, exactly like a person's fun rate, via a forward-only
+  `rates: [{from, amount}]` schedule (changing the amount appends an entry from the current month).
+- **A transaction tag `t.travel`** — independent of the `Travel` *category* and of the fun tag.
+  Tagging a transaction draws down the budget. Toggle it in the add/edit sheet.
+- **Running balance** is all-time and as-of-now, and can go negative ("owe back"):
+
+  ```
+  balance = Σ accrued allowance (startMonth → now)
+          − Σ travel-tagged spend
+          + balanceAdjustment            // optional manual correction
+  ```
+
+- **Not allowance-capped.** Unlike `funProjection`, the travel year-end figure is an honest
+  uncapped linear extrapolation of YTD travel spend — the point is to see whether the year is
+  tracking over or under the drip.
+- **A trips wishlist** (`store.travelWishlist`, no owner): places you'd like to go, with a target
+  cost and a "ready now / N mos" estimate against the balance. **"Booked it"** logs a travel-tagged
+  transaction for the cost and removes the trip.
+
+Travel-tagged transactions are **real household spend and count toward the ceiling** like any other.
+Travel is a pure overlay: it does **not** feed `funPlanAnnual`, `mainTarget`, or any callout.
+`computeTravel(store)` produces the ledger; UI is `y/travel.jsx` (`TravelStrip` on Overview,
+`TravelTab` in Analysis).
+
+---
+
 ## The callout engine
 
 `buildCallouts(store, stats)` is a pure `(store, stats) → Callout[]` function — the heart of the
@@ -368,6 +403,9 @@ Top to bottom:
   `mainTarget` and `ceiling` ticks; and a monthly "pulse" line (this month's spend vs its cap).
 - **Fun strip** — one hairline row per person: name, all-time balance (sage/terra), nearest wishlist
   goal with a progress bar. Tappable → Analysis Fun tab.
+- **Travel strip** (`TravelStrip`) — a glanceable indicator: the family-wide travel balance
+  available (sage/terra), the monthly allowance and this-month usage, and the nearest trip goal.
+  Tappable → Analysis Travel tab.
 - **This month** — `MonthCurve`, an interactive day-by-day cumulative chart for the current month
   with toggleable Pace / Projection / Target / Month-end / Prev-month series and an explanatory
   legend. The Projection line carries its own **uncertainty cone** (see below) — a translucent
@@ -376,7 +414,7 @@ Top to bottom:
 
 ### Analysis — the deep surface ([`analysis.jsx`](public/y/analysis.jsx))
 
-A segmented control: **Projection · Categories · Activity · Fun**.
+A segmented control: **Projection · Categories · Activity · Fun · Travel**.
 
 - **Projection** — a full-year interactive line chart (actual cumulative + dashed projection + pace
   + ceiling + prior-year, with the uncertainty band drawn as a translucent triangle), a per-month
@@ -385,23 +423,27 @@ A segmented control: **Projection · Categories · Activity · Fun**.
   total fun budget, target fun/mo, a "FIRE portfolio" curiosity at the 4% rule, and more).
 - **Categories** — every category with spend, ranked, as an expandable bar row (share %, entry
   count, MoM change). Expanding shows the most recent and largest transactions in that category.
-- **Activity** — search by description, filter chips for every category, a 6-way sort, and the full
-  transaction list (fun tx included, tagged with the person's name), each row tappable to edit.
+- **Activity** — search by description, filter chips for every category, a 6-way sort, "show only"
+  filters (Manual / Fun / Travel), and the full transaction list, each row tappable to edit.
 - **Fun** — per-person cards (balance, monthly rate, this-month usage, all-time spent), a fun-only
   category breakdown, and each person's wishlist with progress bars, ETAs, and a "Bought it" action.
+- **Travel** — a family-wide balance card (available, this-month usage, spent YTD + uncapped
+  projection), a trips wishlist with progress bars, ETAs, and a "Booked it" action, and a
+  travel-only category breakdown.
 
 ### Add / Edit ([`addflow.jsx`](public/y/addflow.jsx))
 
 A bottom sheet with a **Quick | Manual** toggle. **Quick** is a grid of template tiles → a custom
 numeric keypad for fast thumb entry. **Manual** is description + amount + an 18-category picker +
-date + note. Both expose a **Fun budget toggle** (reveals a Joseph/Marti owner picker) and a
-**One-off toggle** (writes `oneoff:true`, excluding the tx from the trend forecast). Editing a
-transaction opens the same form with Delete + Save.
+date + note. Both expose a **Fun budget toggle** (reveals a Joseph/Marti owner picker), a
+**Travel budget toggle** (writes `travel:true`), and a **One-off toggle** (writes `oneoff:true`,
+excluding the tx from the trend forecast). Editing a transaction opens the same form with Delete + Save.
 
 ### Settings ([`settings.jsx`](public/y/settings.jsx))
 
 Grouped rows: **This year** (household ceiling, missed-entry buffer slider, past-years detail) ·
-**Fun budget** (per-person rate config, forward-only) · **Display** (Overview density) · **Data**
+**Fun budget** (per-person rate config, forward-only) · **Travel budget** (one household monthly
+allowance + balance correction) · **Display** (Overview density) · **Data**
 (template manager, CSV import with duplicate detection, CSV export, JSON backup/restore, "Sync now")
 · **Danger zone** (clear all data, type-to-confirm). Footer shows the app version.
 
@@ -468,6 +510,8 @@ Persisted to `localStorage` under `yearly:store:v1` (and mirrored to D1 via sync
   },
   "people":   [ /* Person[] */ ],
   "wishlist": [ /* WishlistItem[] */ ],
+  "travel":   { "rates": [ { "from": "2026-01", "amount": 150 } ], "startMonth": "2026-01", "balanceAdjustment": 0 },
+  "travelWishlist": [ /* TripItem[] */ ],
   "templates":[ /* Template[] */ ],
   "transactions": [ /* Transaction[] */ ]
 }
@@ -487,6 +531,7 @@ Persisted to `localStorage` under `yearly:store:v1` (and mirrored to D1 via sync
   note?: string;
   fun?: true;                   // present on fun-budget tx only
   person?: "joseph" | "marti";  // required when fun === true
+  travel?: true;                // present on travel-budget tx only (family-wide, no owner)
   oneoff?: true;                // excluded from the trend rate (still counts in spent)
   merchant_logo?: string;       // Revolut-sourced
   merchant_city?: string;       // Revolut-sourced
@@ -497,11 +542,12 @@ Persisted to `localStorage` under `yearly:store:v1` (and mirrored to D1 via sync
 forward-only dated allowance schedule. Defaults: Joseph €100/mo, Marti €200/mo, both from `2026-01`.
 
 **WishlistItem** — `{ id, owner, name, price, note?, createdMonth }`.
+**TripItem** — `{ id, name, price, createdMonth }` (travel wishlist; family-wide, no owner).
 **Template** — `{ id, name, category, defaultAmount?, icon? }` (the Quick-log tiles).
 
 Actuals are **always computed from transactions**, never stored as aggregates. Old backups (with
-`target` instead of `ceiling`, or missing `people`/`wishlist`) are upgraded by `migrateStore` on load
-and on JSON restore.
+`target` instead of `ceiling`, or missing `people`/`wishlist`/`travel`) are upgraded by `migrateStore`
+on load and on JSON restore.
 
 ---
 
@@ -524,10 +570,11 @@ and on JSON restore.
 │       ├── calc.jsx            THE BRAIN: projection math, fun math, callout engine → YCalc
 │       ├── ui.jsx              Shared primitives (StatusHero, TxRow, CalloutCard, Toast…) → YUI
 │       ├── fun.jsx             Fun-budget UI (FunStrip + FunTab) → YFun
-│       ├── home.jsx            Overview screen (hero + fun strip + MonthCurve) → YHome
+│       ├── travel.jsx          Travel-budget UI (TravelStrip + TravelTab + trips wishlist) → YTravel
+│       ├── home.jsx            Overview screen (hero + fun/travel strips + MonthCurve) → YHome
 │       ├── addflow.jsx         Add/Edit sheets, Quick keypad, category picker → YAdd
-│       ├── analysis.jsx        Analysis screen (Projection/Categories/Activity/Fun) → YAnalysis
-│       ├── settings.jsx        Settings, years, fun config, import/export, version footer → YSettings
+│       ├── analysis.jsx        Analysis screen (Projection/Categories/Activity/Fun/Travel) → YAnalysis
+│       ├── settings.jsx        Settings, years, fun/travel config, import/export, version footer → YSettings
 │       ├── app.jsx             Stateful root: routing, year switch, store + sync wiring
 │       ├── tokens.css          Broadsheet design tokens (colors, fonts, spacing, shadows)
 │       └── app.css             All app styling, built on the tokens — the visual source of truth
@@ -539,7 +586,9 @@ and on JSON restore.
 │   ├── 0001_init.sql           transactions + settings tables
 │   ├── 0002_revolut_fields.sql Revolut enrichment columns (merchant city/logo/mcc, fees, card label…)
 │   ├── 0003_oneoff_flag.sql    oneoff INTEGER column
-│   └── 0004_fix_updated_at_seconds.sql  Retro-fix legacy rows stamped in seconds → milliseconds
+│   ├── 0004_fix_updated_at_seconds.sql  Retro-fix legacy rows stamped in seconds → milliseconds
+│   ├── 0005_meta.sql           meta key/value table (pipeline freshness signal)
+│   └── 0006_travel_flag.sql    travel INTEGER column (family-wide travel-budget tag)
 │
 ├── scripts/                    Revolut import pipeline (Python + Windows .bat helpers)
 │   ├── revolut_clean.py        Core: Revolut JSON → cleaned SQL/CSV (FX, category rules, skip logic)

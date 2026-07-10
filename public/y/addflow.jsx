@@ -141,6 +141,32 @@
     );
   }
 
+  // Travel budget toggle — family-wide (no owner), used in both AddSheet and EditSheet.
+  function TravelField({ travelOn, setTravelOn }) {
+    return (
+      <div className="field">
+        <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 0 }}>
+          <label style={{ margin: 0 }}>Travel budget</label>
+          <button
+            onClick={() => setTravelOn((v) => !v)}
+            style={{
+              width: 40, height: 22, borderRadius: 11, border: "none", cursor: "pointer",
+              background: travelOn ? "var(--terra)" : "var(--hair)",
+              position: "relative", flexShrink: 0, transition: "background 0.15s",
+            }}
+            aria-checked={travelOn} role="switch">
+            <span style={{
+              position: "absolute", top: 2, left: travelOn ? 20 : 2,
+              width: 18, height: 18, borderRadius: "50%",
+              background: "var(--paper)", transition: "left 0.15s",
+              boxShadow: "0 1px 3px rgba(0,0,0,0.18)",
+            }} />
+          </button>
+        </div>
+      </div>
+    );
+  }
+
   // Manual / edit form
   function TxForm({ draft, set, showDescription = true }) {
     return (
@@ -185,11 +211,12 @@
     const defaultPerson = () => (store.people && store.people[0] && store.people[0].id) || "marti";
     const [funOn, setFunOn] = React.useState(false);
     const [funPerson, setFunPerson] = React.useState(defaultPerson());
+    const [travelOn, setTravelOn] = React.useState(false);
     const [oneOff, setOneOff] = React.useState(false);
     const [saveAsTemplate, setSaveAsTemplate] = React.useState(false);
 
     React.useEffect(() => {
-      if (open) { setMode("Manual"); setStep("grid"); setTpl(null); setAmount(""); setDraft(blank()); setFunOn(false); setFunPerson(defaultPerson()); setOneOff(false); setSaveAsTemplate(false); }
+      if (open) { setMode("Manual"); setStep("grid"); setTpl(null); setAmount(""); setDraft(blank()); setFunOn(false); setFunPerson(defaultPerson()); setTravelOn(false); setOneOff(false); setSaveAsTemplate(false); }
     }, [open]);
 
     const commit = (t) => {
@@ -199,6 +226,7 @@
         note: t.note || undefined, source: "manual",
       };
       if (funOn) { tx.fun = true; tx.person = funPerson; }
+      if (travelOn) tx.travel = true;
       if (oneOff) tx.oneoff = true;
       if (saveAsTemplate && t.description && t.description.trim() && onSaveTemplate) {
         const tplObj = { id: YData.uid(), name: t.description.trim(), category: t.category };
@@ -256,6 +284,7 @@
           <input className="inp" style={{ marginTop: 10 }} value={draft.note || ""} placeholder="Note (optional)"
             onChange={(e) => set({ note: e.target.value })} />
           <FunFields funOn={funOn} setFunOn={setFunOn} funPerson={funPerson} setFunPerson={setFunPerson} store={store} />
+          <TravelField travelOn={travelOn} setTravelOn={setTravelOn} />
           <div style={{ marginTop: 16 }}>
             <Button variant="primary" block disabled={!valid}
               onClick={() => commit({ ...draft, amount, description: tpl.name, category: tpl.category })}>
@@ -271,6 +300,7 @@
         <div>
           <TxForm draft={draft} set={set} />
           <FunFields funOn={funOn} setFunOn={setFunOn} funPerson={funPerson} setFunPerson={setFunPerson} store={store} />
+          <TravelField travelOn={travelOn} setTravelOn={setTravelOn} />
           <OneOffField oneOff={oneOff} setOneOff={setOneOff} />
           <SaveAsTemplateField saveAsTemplate={saveAsTemplate} setSaveAsTemplate={setSaveAsTemplate} />
           <Button variant="primary" block disabled={!valid} onClick={() => commit(draft)}>
@@ -294,12 +324,14 @@
     const defaultPerson = () => (store && store.people && store.people[0] && store.people[0].id) || "marti";
     const [funOn, setFunOn] = React.useState(false);
     const [funPerson, setFunPerson] = React.useState(defaultPerson());
+    const [travelOn, setTravelOn] = React.useState(false);
     const [oneOff, setOneOff] = React.useState(false);
     React.useEffect(() => {
       if (txn) {
         setDraft({ description: txn.description, amount: String(txn.amount_eur), category: txn.category, date: txn.date, note: txn.note || "" });
         setFunOn(!!txn.fun);
         setFunPerson(txn.person || defaultPerson());
+        setTravelOn(!!txn.travel);
         setOneOff(!!txn.oneoff);
       }
     }, [txn]);
@@ -310,6 +342,7 @@
       <Sheet open={open} onClose={onClose} title="Edit expense">
         <TxForm draft={draft} set={set} />
         <FunFields funOn={funOn} setFunOn={setFunOn} funPerson={funPerson} setFunPerson={setFunPerson} store={store || {}} />
+        <TravelField travelOn={travelOn} setTravelOn={setTravelOn} />
         <OneOffField oneOff={oneOff} setOneOff={setOneOff} />
         <div style={{ display: "flex", gap: 10 }}>
           <Button variant="secondary" onClick={() => { onDelete(txn.id); onClose(); }} icon={<window.Icon name="trash" size={16} />}>Delete</Button>
@@ -318,6 +351,7 @@
               onClick={() => {
                 const updated = { ...txn, description: draft.description, amount_eur: Math.round(parseFloat(draft.amount) * 100) / 100, category: draft.category, date: draft.date, note: draft.note || undefined };
                 if (funOn) { updated.fun = true; updated.person = funPerson; } else { delete updated.fun; delete updated.person; }
+                if (travelOn) { updated.travel = true; } else { delete updated.travel; }
                 if (oneOff) { updated.oneoff = true; } else { delete updated.oneoff; }
                 onSave(updated); onClose();
               }}>

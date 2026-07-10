@@ -51,7 +51,7 @@ Full local-dev notes (the no-backend 404 handling, reload-loop fix) are in
    appear in preview, **assume stale cache first** — rule it out before debugging logic. Full SW +
    preview workflow: [docs/PWA-AND-DEV.md](docs/PWA-AND-DEV.md).
 2. **`APP_VERSION` (`settings.jsx` footer) and `CACHE_NAME` (`sw.js`) move together** — currently
-   `v55` / `yearly-v55`. Bump both on every release.
+   `v57` / `yearly-v57`. Bump both on every release.
 3. **`localISO(d)`, never `toISOString()`** for dates in `calc.jsx` — `toISOString()` is UTC and
    silently drops Dec 31 transactions in UTC+ timezones (EET).
 3b. **`updated_at` is milliseconds everywhere** — `Date.now()` in the worker, `Date.now()` for the
@@ -75,11 +75,11 @@ Every `y/*.jsx` file is an IIFE that **reads its dependencies off `window` and a
 export to `window`** — no imports/exports.
 
 1. **Load order is significant** and fixed in `index.html`: `icons → ds → data → sync → calc → ui →
-   fun → home → addflow → analysis → settings → app`. Adding a module means adding its `<script
-   type="text/babel">` tag there in dependency order.
+   fun → travel → home → addflow → analysis → settings → app`. Adding a module means adding its
+   `<script type="text/babel">` tag there in dependency order.
 2. Cross-module calls go through globals: `window.YData`, `window.YCalc`, `window.YSync`,
-   `window.YUI`, `window.YFun`, `window.YHome`, `window.YAnalysis`, `window.YSettings`,
-   `window.YAdd`, plus `window.Icon`/`window.YIcons`. Aperture primitives come from
+   `window.YUI`, `window.YFun`, `window.YTravel`, `window.YHome`, `window.YAnalysis`,
+   `window.YSettings`, `window.YAdd`, plus `window.Icon`/`window.YIcons`. Aperture primitives come from
    `window.ApertureDesignSystem_72a4cd` (defined locally in `y/ds.jsx`).
 
 The app is self-contained — no `_ds/` directory needed. Details in
@@ -98,6 +98,13 @@ The essentials every session needs:
 - `spent` / `projection` (in stats) — **total household spend (main + fun)**; measured vs `ceiling`.
 - `mainSpent` / `funSpent` — decomposition fields for the Fun tab and ceiling-callout advice only.
 - `funProjection` — capped fun projection (allowance-limited); used in the Fun tab and the "trim fun" callout advice.
+- **Travel budget** — a second, family-wide overlay that mirrors fun but with a single household
+  allowance (`store.travel = { rates[], startMonth, balanceAdjustment }`, no per-person split) and
+  its own transaction tag `t.travel`. `computeTravel(store)` returns the all-time `balance`
+  (green/deficit), YTD spend, uncapped linear projection, and category breakdown. It is a **pure
+  psychological overlay**: travel-tagged spend still counts in `spent`/`projection` vs the ceiling,
+  but travel does **not** feed `funPlanAnnual`/`mainTarget` or any callout. UI lives in `y/travel.jsx`
+  (`window.YTravel`: home `TravelStrip`, Analysis `TravelTab` + trips wishlist `store.travelWishlist`).
 - `staleDays` — whole days since the Revolut pipeline last ran; `0` when unknown. Extends the
   projection horizon: `projDays = daysRemaining + staleDays`. Passed as 4th arg to `computeStats`
   (default 0); only applied when `isCurrent`. Also widens the uncertainty band (`weeksRemaining =
