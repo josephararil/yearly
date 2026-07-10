@@ -372,6 +372,54 @@ function computeStats(store, year, asOfDate, staleDays = 0) {
     return { people: personData, funSpentYTD, funProjection, funCatList };
   }
 
+  // computeTravel — family-wide travel-budget ledger for the UI. Mirrors computeFun but with a
+  // single household allowance (no per-person split, no ownership). Balance is all-time (from
+  // travel.startMonth to asOf) so you can bank budget across months and years for a bigger trip.
+  // Travel-tagged transactions are real household spend and count toward the ceiling exactly like
+  // fun-tagged ones — the travel/main split is metadata that powers this ledger only.
+  function computeTravel(store, asOfDate) {
+    const asOf = asOfDate || new Date();
+    const asOfStr = localISO(asOf);
+    const currentYM = asOfStr.slice(0, 7);
+    const year = Number(store.currentYear);
+    const doy = Math.max(1, dayOfYear(asOf));
+    const travel = store.travel || { rates: [], startMonth: currentYM, balanceAdjustment: 0 };
+
+    // Accrue the monthly rate from startMonth to currentYM inclusive (rateForMonth reads the same
+    // .rates/.startMonth shape as a person).
+    let accrued = 0;
+    let ym = travel.startMonth;
+    while (ym && ym <= currentYM) {
+      accrued += rateForMonth(travel, ym);
+      const [y, m] = ym.split("-").map(Number);
+      ym = m === 12 ? (y + 1) + "-01" : y + "-" + String(m + 1).padStart(2, "0");
+    }
+    const allTravelTxns = (store.transactions || [])
+      .filter((t) => t.travel && t.date <= asOfStr && t.date >= travel.startMonth + "-01");
+    const spentAllTime = allTravelTxns.reduce((a, t) => a + t.amount_eur, 0);
+    const balance = accrued - spentAllTime + (travel.balanceAdjustment || 0);
+    const monthlyRate = rateForMonth(travel, currentYM);
+    const usedThisMonth = allTravelTxns
+      .filter((t) => t.date.slice(0, 7) === currentYM)
+      .reduce((a, t) => a + t.amount_eur, 0);
+
+    // Travel figures for the current year
+    const yearStr = String(year);
+    const travelYearTxns = (store.transactions || []).filter((t) => t.travel && t.date.slice(0, 4) === yearStr && t.date <= asOfStr);
+    const travelSpentYTD = travelYearTxns.reduce((a, t) => a + t.amount_eur, 0);
+    const realYear = asOf.getFullYear();
+    const complete = year < realYear;
+    const isFuture = year > realYear;
+    // Simple linear YTD projection. Unlike fun, travel is NOT allowance-capped — the point is to
+    // see whether the year's actual travel spend is tracking over or under the drip, so an honest
+    // uncapped extrapolation is what's wanted.
+    const travelProjection = isFuture ? 0 : complete ? travelSpentYTD : (doy > 0 ? (travelSpentYTD / doy) * daysInYear(year) : 0);
+
+    const { catList: travelCatList } = aggregateByCategory(travelYearTxns, travelSpentYTD);
+
+    return { balance, accrued, spentAllTime, monthlyRate, usedThisMonth, travelSpentYTD, travelProjection, travelCatList, startMonth: travel.startMonth };
+  }
+
   // ---- Callout engine ----
   function buildCallouts(store, stats) {
     if (stats.complete) {
@@ -704,7 +752,7 @@ function computeStats(store, year, asOfDate, staleDays = 0) {
     MONTHS, MONTHS_LONG, eur0, eur2, eurAuto, signedEur, pct, signedPct,
     dayOfYear, daysInYear, parseDate, localISO, fmtDateShort, fmtDateLong, yearTxns,
     cumulativeByDay, priorYearCumulative, aggregateByCategory,
-    rateForMonth, computeStats, computeFun, projectionAsOf, buildCallouts,
+    rateForMonth, computeStats, computeFun, computeTravel, projectionAsOf, buildCallouts,
     requiredDailyToHit, dailyHeadroom, neededMonthlyCap, projectedMonthEnd, monthEndBand,
   };
 })();

@@ -1,6 +1,6 @@
 // analysis.jsx — the deep surface: projection chart, category diagnostics, activity, fun.
 (function () {
-  const { YData, YCalc, YUI, YFun } = window;
+  const { YData, YCalc, YUI, YFun, YTravel } = window;
   const { eur0, eurAuto, signedEur, signedPct, pct, MONTHS, fmtDateShort } = YCalc;
   const { TxRow, CatIcon, CalloutCard, SectionH } = YUI;
   const DS = window.ApertureDesignSystem_72a4cd || {};
@@ -663,14 +663,16 @@
     const [sort, setSort] = React.useState("date-desc");
     const [filterManual, setFilterManual] = React.useState(false);
     const [filterFun, setFilterFun] = React.useState(false);
+    const [filterTravel, setFilterTravel] = React.useState(false);
     const [showFilters, setShowFilters] = React.useState(false);
 
-    const activeCount = (fc ? 1 : 0) + (sort !== "date-desc" ? 1 : 0) + (filterManual ? 1 : 0) + (filterFun ? 1 : 0);
+    const activeCount = (fc ? 1 : 0) + (sort !== "date-desc" ? 1 : 0) + (filterManual ? 1 : 0) + (filterFun ? 1 : 0) + (filterTravel ? 1 : 0);
 
     let list = stats.txns.slice();
     if (fc) list = list.filter((t) => t.category === fc);
     if (filterManual) list = list.filter((t) => t.source === "manual");
     if (filterFun) list = list.filter((t) => t.fun);
+    if (filterTravel) list = list.filter((t) => t.travel);
     if (q.trim()) { const s = q.toLowerCase(); list = list.filter((t) => t.description.toLowerCase().includes(s)); }
     if (sort === "date-desc") list.sort((a, b) => b.date.localeCompare(a.date));
     else if (sort === "date-asc") list.sort((a, b) => a.date.localeCompare(b.date));
@@ -735,6 +737,7 @@
               <div style={{ display: "flex", gap: 5, flexWrap: "wrap" }}>
                 <FilterChip label="Manual" active={filterManual} onClick={() => setFilterManual(!filterManual)} />
                 <FilterChip label="Fun" active={filterFun} onClick={() => setFilterFun(!filterFun)} />
+                <FilterChip label="Travel" active={filterTravel} onClick={() => setFilterTravel(!filterTravel)} />
               </div>
             </div>
           </div>
@@ -750,23 +753,25 @@
     );
   }
 
-  function AnalysisScreen({ stats, focus, onEditTx, fun, store, setStore, addTx, callouts, onCallout }) {
+  function AnalysisScreen({ stats, focus, onEditTx, fun, travel, store, setStore, addTx, callouts, onCallout }) {
     const [tab, setTab] = React.useState("Projection");
     React.useEffect(() => {
       if (focus && focus.section === "categories") setTab("Categories");
       else if (focus && focus.section === "projection") setTab("Projection");
       else if (focus && focus.section === "activity") setTab("Activity");
       else if (focus && focus.section === "fun") setTab("Fun");
+      else if (focus && focus.section === "travel") setTab("Travel");
     }, [focus]);
     return (
       <div className="screen">
         <div style={{ position: "sticky", top: 0, zIndex: 5, paddingBottom: 4 }}>
-          <SegmentedControl options={["Projection", "Categories", "Activity", "Fun"]} value={tab} fill onChange={setTab} />
+          <SegmentedControl options={["Projection", "Categories", "Activity", "Fun", "Travel"]} value={tab} fill onChange={setTab} />
         </div>
         {tab === "Projection" && <ProjectionTab stats={stats} fun={fun} store={store} callouts={callouts} onCallout={onCallout} />}
         {tab === "Categories" && <CategoriesTab stats={stats} focusCategory={focus && focus.category} onEditTx={onEditTx} people={store && store.people || []} />}
         {tab === "Activity" && <ActivityTab stats={stats} onEditTx={onEditTx} people={store && store.people || []} />}
         {tab === "Fun" && <YFun.FunTab fun={fun} store={store} setStore={setStore} addTx={addTx} />}
+        {tab === "Travel" && <YTravel.TravelTab travel={travel} store={store} setStore={setStore} addTx={addTx} />}
       </div>
     );
   }

@@ -60,6 +60,8 @@
       density: "balanced",
       people: DEFAULT_PEOPLE.map((p) => ({ ...p, rates: p.rates.slice() })),
       wishlist: [],
+      travel: { rates: [{ from: "2026-01", amount: 0 }], startMonth: "2026-01", balanceAdjustment: 0 },
+      travelWishlist: [],
       years: {
         "2024": { ceiling: 21000, buffer: 0.04 },
         "2025": { ceiling: 23000, buffer: 0.04 },
@@ -93,6 +95,13 @@
     }
     // wishlist default
     if (!s.wishlist) s.wishlist = [];
+    // travel budget defaults (family-wide; startMonth mirrors the people migration)
+    if (!s.travel) {
+      const earliest = s.years ? Object.keys(s.years).sort()[0] || "2026" : "2026";
+      const from = earliest + "-01";
+      s.travel = { rates: [{ from, amount: 0 }], startMonth: from, balanceAdjustment: 0 };
+    }
+    if (!s.travelWishlist) s.travelWishlist = [];
     // density default
     if (!s.density) s.density = "balanced";
     // normalize transaction categories (Revolut stores title-case labels like "Groceries")

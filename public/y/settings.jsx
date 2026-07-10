@@ -1,6 +1,6 @@
 // settings.jsx — target, buffer, years, templates, CSV import/export, clear.
 (function () {
-  const APP_VERSION = 'v56';
+  const APP_VERSION = 'v57';
   const { YData, YCalc, YUI } = window;
   const { eur0, signedPct, computeStats, localISO } = YCalc;
   const { Sheet, DeltaChip } = YUI;
@@ -431,6 +431,91 @@
     );
   }
 
+  // ---------- Travel budget config (family-wide) ----------
+  function TravelConfigSheet({ open, onClose, store, setStore }) {
+    const currentYM = new Date().toISOString().slice(0, 7);
+    const travel = store.travel || { rates: [], startMonth: currentYM, balanceAdjustment: 0 };
+    const latestRate = (() => {
+      let best = 0;
+      (travel.rates || []).forEach((r) => { if (r.from <= currentYM) best = r.amount; });
+      return best;
+    })();
+    const [v, setV] = React.useState(String(latestRate));
+    const [balMode, setBalMode] = React.useState(false);
+    const currentBalance = React.useMemo(() => {
+      if (!open) return 0;
+      return YCalc.computeTravel(store).balance;
+    }, [open, store]);
+    const [balVal, setBalVal] = React.useState("");
+    React.useEffect(() => {
+      if (open) {
+        setV(String(latestRate));
+        setBalMode(false);
+        setBalVal(String(Math.round(currentBalance)));
+      }
+    }, [open]);
+
+    const save = () => {
+      const amount = parseInt(v) || 0;
+      setStore((s) => {
+        const t = s.travel || { rates: [], startMonth: currentYM, balanceAdjustment: 0 };
+        const rates = (t.rates || []).slice();
+        const idx = rates.findIndex((r) => r.from === currentYM);
+        if (idx >= 0) rates[idx] = { from: currentYM, amount };
+        else rates.push({ from: currentYM, amount });
+        rates.sort((a, b) => (a.from < b.from ? -1 : 1));
+        // Back-calculate the adjustment that preserves the balance shown to the user.
+        const existingAdj = t.balanceAdjustment || 0;
+        const rawBalance = currentBalance - existingAdj;
+        const targetBalance = parseInt(balVal);
+        const newAdj = isNaN(targetBalance) ? existingAdj : targetBalance - rawBalance;
+        return { ...s, travel: { ...t, rates, balanceAdjustment: Math.round(newAdj) } };
+      });
+      onClose();
+    };
+
+    return (
+      <Sheet open={open} onClose={onClose} title="Travel budget">
+        <p className="muted" style={{ fontSize: 13, marginTop: 0, lineHeight: 1.5 }}>
+          A household travel allowance that accrues from {currentYM} onwards — past months keep their old rate. Tag a
+          transaction as “Travel” to draw it down.
+        </p>
+        <div className="amount-display"><span className="cur">€</span><span className="num">{v || "0"}</span></div>
+        <input className="inp inp-num" inputMode="numeric" value={v}
+          onChange={(e) => setV(e.target.value.replace(/[^\d]/g, ""))}
+          style={{ textAlign: "center", fontSize: 18, marginBottom: 20 }} />
+
+        <div style={{ borderTop: "1px solid var(--hair)", paddingTop: 16, marginBottom: 16 }}>
+          <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 6 }}>
+            <span style={{ fontFamily: "var(--mono)", fontSize: 11, color: "var(--muted)", textTransform: "uppercase", letterSpacing: "0.07em" }}>Current balance</span>
+            <span style={{ fontFamily: "var(--mono)", fontSize: 13, color: currentBalance < 0 ? "var(--terra)" : "var(--sage)" }}>
+              {currentBalance < 0 ? "−€" + Math.round(Math.abs(currentBalance)) : "€" + Math.round(currentBalance)}
+            </span>
+          </div>
+          <button className="linklike" style={{ fontSize: 12, color: "var(--ink-2)" }}
+            onClick={() => setBalMode((b) => !b)}>
+            {balMode ? "Hide balance correction" : "Correct balance…"}
+          </button>
+          {balMode && (
+            <div style={{ marginTop: 10 }}>
+              <p className="muted" style={{ fontSize: 12, marginTop: 0, marginBottom: 10, lineHeight: 1.5 }}>
+                Override the calculated balance. Enter the actual travel budget available right now. Future accruals and spending apply on top.
+              </p>
+              <div className="field">
+                <label>Set balance to (€)</label>
+                <input className="inp inp-num" inputMode="numeric" value={balVal}
+                  onChange={(e) => setBalVal(e.target.value.replace(/[^-\d]/g, ""))}
+                  style={{ textAlign: "center", fontSize: 18 }} />
+              </div>
+            </div>
+          )}
+        </div>
+
+        <Button variant="primary" block onClick={save}>Save</Button>
+      </Sheet>
+    );
+  }
+
   function DensitySheet({ open, onClose, store, setStore }) {
     const OPTIONS = [
       { value: "minimal", label: "Minimal", sub: "Up to 2 alert/watch callouts" },
@@ -496,6 +581,7 @@
   function SettingsScreen({ store, setStore, stats, lastSyncTs }) {
     const [sub, setSub] = React.useState(null);
     const [funPersonSub, setFunPersonSub] = React.useState(null); // person id | null
+    const [travelOpen, setTravelOpen] = React.useState(false);
     const [syncing, setSyncing] = React.useState(false);
     const cur = store.years[String(store.currentYear)];
     const density = store.density || "balanced";
@@ -527,6 +613,21 @@
               {eur0(stats.ceiling)} ceiling = {eur0(stats.mainTarget)} main + {eur0(stats.funPlanAnnual)}/yr fun
             </div>
           )}
+        </div>
+
+        <div className="section-h"><h2>Travel budget</h2></div>
+        <div className="panel" style={{ overflow: "hidden" }}>
+          {(() => {
+            const currentYM = new Date().toISOString().slice(0, 7);
+            const rates = (store.travel && store.travel.rates) || [];
+            let rate = 0;
+            rates.forEach((r) => { if (r.from <= currentYM) rate = r.amount; });
+            const bal = YCalc.computeTravel(store).balance;
+            const balStr = bal < 0 ? "−" + eur0(Math.abs(bal)) + " owed" : eur0(bal) + " available";
+            return (
+              <Row icon="travel" title="Monthly travel allowance" sub={balStr} value={eur0(rate) + "/mo"} onClick={() => setTravelOpen(true)} />
+            );
+          })()}
         </div>
 
         <div className="section-h"><h2>Display</h2></div>
@@ -598,6 +699,7 @@
         <ImportSheet open={sub === "import"} onClose={() => setSub(null)} store={store} setStore={setStore} />
         <ClearSheet open={sub === "clear"} onClose={() => setSub(null)} />
         <FunConfigSheet open={!!funPersonOpen} onClose={() => setFunPersonSub(null)} person={funPersonOpen} store={store} setStore={setStore} stats={stats} />
+        <TravelConfigSheet open={travelOpen} onClose={() => setTravelOpen(false)} store={store} setStore={setStore} />
       </div>
     );
   }

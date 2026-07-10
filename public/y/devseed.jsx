@@ -78,6 +78,11 @@
       const mFun = new Date(Y, m, 17);
       if (mFun <= end) tx.push(mk(iso(mFun), "entertainment", 70 + wob(m * 2, 60), { fun: true, person: "marti" }));
     }
+    // A couple of travel-tagged trips across the year (exercises the travel budget ledger).
+    const trip1 = new Date(Y, 2, 21);
+    if (trip1 <= end) tx.push(mk(iso(trip1), "travel", 320 * scale, { travel: true }));
+    const trip2 = new Date(Y, 7, 4);
+    if (trip2 <= end) tx.push(mk(iso(trip2), "travel", 540 * scale, { travel: true }));
     // One genuine one-off lump (exercises winsorization — counts in spend, excluded from the rate).
     const lump = new Date(Y, 4, 12);
     if (lump <= end) tx.push(mk(iso(lump), "travel", 1100 * scale, { oneoff: true }));
@@ -96,6 +101,11 @@
       { id: "marti",  name: "Marti",  rates: [{ from, amount: 200 }], startMonth: from },
     ],
     wishlist: [],
+    travel: { rates: [{ from, amount: 150 }], startMonth: from, balanceAdjustment: 0 },
+    travelWishlist: [
+      { id: "dev-trip-1", name: "Weekend in Rome", price: 800, createdMonth: from },
+      { id: "dev-trip-2", name: "Ski trip", price: 2200, createdMonth: from },
+    ],
     years: {
       [Y - 2]: { ceiling: 21000, buffer: 0.04 },
       [Y - 1]: { ceiling: 23000, buffer: 0.04 },

@@ -79,11 +79,32 @@ all-time balance in sage/terra, nearest wishlist goal name+pct+thin bar). Whole 
 
 Internal: `WishlistAddSheet` (name + price + owner Chip picker), `PersonCard` (stats + wishlist).
 
+## `y/travel.jsx` (`window.YTravel`) — travel budget UI
+
+The family-wide analogue of `fun.jsx` (one household allowance, no per-person split, no owner).
+
+`TravelStrip({ travel, store, onOpen })` — compact Overview indicator: an "Available" headline
+(large mono balance, sage/terra), a meta line (`€X/mo · €Y used this month`), and the nearest trip
+goal name+pct+thin bar. Whole strip tappable → `onOpen()`. When the allowance is unconfigured
+(rate 0, balance 0, no travel spend) it shows a quiet "Set an allowance in Settings →" prompt.
+
+`TravelTab({ travel, store, setStore, addTx })` — the Analysis workshop:
+- One family-wide stats block: Available balance (sage/terra), this-month used with over/under
+  indicator, Spent YTD with the uncapped `~€X/yr` projection.
+- Trips wishlist: trip name, price, progress bar (clamped 0–100%), months-to-afford ETA
+  (`max(0, ceil((price−balance)/rate))`; "ready now" / "—"). "Booked it" logs a travel-tagged
+  `travel` category tx via `addTx` and removes the trip from `store.travelWishlist`. Remove (✕)
+  deletes without booking. "Add" opens `TripAddSheet` (name + price, no owner).
+- Travel category breakdown: catbar-* rows fed from `travel.travelCatList`, each followed by its
+  individual `travel:true` transactions (same treatment as the fun breakdown).
+
+Internal: `TripAddSheet` (name + price), `nearestTrip(items, balance)` goal picker.
+
 ## Screens
 
-- `y/home.jsx` (Overview — hero + `VoiceLine` + FunStrip + `MonthCurve` monthly chart)
-- `y/analysis.jsx` (Projection/Categories/Activity/Fun tabs; charts are hand-built SVG that double
-  as the Recharts spec)
+- `y/home.jsx` (Overview — hero + `VoiceLine` + FunStrip + TravelStrip + `MonthCurve` monthly chart)
+- `y/analysis.jsx` (Projection/Categories/Activity/Fun/Travel tabs; charts are hand-built SVG that
+  double as the Recharts spec)
 - `y/settings.jsx` (ceiling/buffer/years/fun-budget/density/templates/CSV import-export/JSON
   backup-restore/clear)
 - `y/addflow.jsx` (Quick keypad + Manual add, Edit sheet, category picker, fun toggle)
@@ -124,10 +145,10 @@ dashed Projection line — the month-scale uncertainty cone. See
 
 ### `analysis.jsx` — `AnalysisScreen`
 
-Receives `fun`, `store`, `setStore`, `addTx` in addition to `stats`/`focus`/`onEditTx`; renders
-`<YFun.FunTab>` on the "Fun" segment; focus effect handles `focus.section === "fun"` →
-`setTab("Fun")`. Focus routing: `"categories"` → Categories, `"projection"` → Projection,
-`"activity"` → Activity, `"fun"` → Fun.
+Receives `fun`, `travel`, `store`, `setStore`, `addTx` in addition to `stats`/`focus`/`onEditTx`;
+renders `<YFun.FunTab>` on the "Fun" segment and `<YTravel.TravelTab>` on the "Travel" segment.
+Focus routing: `"categories"` → Categories, `"projection"` → Projection, `"activity"` → Activity,
+`"fun"` → Fun, `"travel"` → Travel. The Activity tab's "show only" filters include Fun and Travel.
 
 **ProjectionChart** — H=252, interactive: pointer/touch events (pointer move + down, leave, up,
 cancel) show a vertical crosshair with a floating tooltip (€ value + month/day label); on the
@@ -181,18 +202,21 @@ show the person's name as a tag. Filters are hidden behind a compact `sliders` i
 right of the search bar; when active filters exist, a terracotta badge shows the count. Tapping the
 button toggles an inline filter panel with three sections: **Category** (All + one chip per category
 in `stats.catList`), **Sort** (6 options: Newest · Oldest · € High · € Low · A→Z · Z→A — default
-Newest), and **Show only** — two boolean toggles: **Manual** (keeps only `t.source === "manual"`)
-and **Fun** (keeps only `t.fun === true`). Active filters use `--terra` border/background; the
-filter button itself turns terracotta when any filter is active.
+Newest), and **Show only** — three boolean toggles: **Manual** (keeps only `t.source === "manual"`),
+**Fun** (keeps only `t.fun === true`), and **Travel** (keeps only `t.travel === true`). Active
+filters use `--terra` border/background; the filter button itself turns terracotta when any filter
+is active.
 
 ### `addflow.jsx`
 
 Both `AddSheet` and `EditSheet` (Manual mode only; not Quick keypad) expose a **Fun budget toggle**
 (pill switch, off by default). When on, a Chip owner picker (Joseph/Marti) appears. `commit()`/
 `save()` write `fun:true` + `person` when the toggle is on; EditSheet pre-populates toggle state from
-`txn.fun`/`txn.person`. `EditSheet` accepts a `store` prop for reading `store.people`. Both Manual
-AddSheet and EditSheet also expose a **One-off toggle** (same pill switch style, below the Fun
-toggle). When on, `oneoff:true` is written to the transaction; off omits the key (matching the `fun`
+`txn.fun`/`txn.person`. `EditSheet` accepts a `store` prop for reading `store.people`. Both also
+expose a **Travel budget toggle** (`TravelField`, family-wide — no owner picker) directly below the
+Fun toggle; when on, `commit()`/`save()` write `travel:true` (EditSheet deletes the key when off,
+pre-populates from `txn.travel`). Both Manual AddSheet and EditSheet also expose a **One-off toggle**
+(same pill switch style, below the Travel toggle). When on, `oneoff:true` is written to the transaction; off omits the key (matching the `fun`
 pattern). EditSheet pre-populates from `txn.oneoff`. Caption: "Excluded from the spending-trend
 forecast — still counts in totals. Large amounts are excluded automatically." The oneoff flag causes
 `isLump()` in calc.jsx to exclude the tx from the blended rate while keeping it in `spent`.
@@ -208,7 +232,7 @@ open. Caption: "Adds this expense as a Quick template for future logging."
 
 ### `settings.jsx`
 
-Footer shows `APP_VERSION` constant (`'v47'` currently, defined at top of IIFE — **update it with
+Footer shows `APP_VERSION` constant (`'v57'` currently, defined at top of IIFE — **update it with
 every release**). `TargetSheet` (now labelled "Household ceiling") and `BufferSheet` accept a `year`
 prop (defaults to `store.currentYear`); `TargetSheet` reads/writes `years[y].ceiling`. `BufferSheet`
 computes its own stats internally (unchanged). `YearsSheet` has tappable year rows that drill into a
@@ -222,6 +246,11 @@ modifies past entries, keeps `rates` sorted) and optionally corrects the balance
 balance…" toggle reveals a "Set balance to €X" input that back-calculates and stores
 `p.balanceAdjustment` so the displayed balance equals the entered value, with future accruals and
 spending applied on top. The derived split is shown inline: `ceiling = main + fun/yr`.
+
+**"Travel budget" section** — one `Row` (icon `travel`) showing the current `€X/mo` allowance and
+the available balance, opening `TravelConfigSheet`. It works exactly like `FunConfigSheet` but on
+`store.travel` (family-wide, single allowance): forward-only rate append/update for the current
+YYYY-MM, plus the same "Correct balance…" → `travel.balanceAdjustment` back-calculation.
 
 `DensitySheet` — a picker for Overview density (minimal/balanced/all); writes to `store.density`.
 
