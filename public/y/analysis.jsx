@@ -2,7 +2,7 @@
 (function () {
   const { YData, YCalc, YUI, YFun, YTravel } = window;
   const { eur0, eurAuto, signedEur, signedPct, pct, MONTHS, fmtDateShort } = YCalc;
-  const { TxRow, CatIcon, CalloutCard, SectionH } = YUI;
+  const { TxRow, CatIcon, CalloutCard, SectionH, ChartExplain } = YUI;
   const DS = window.ApertureDesignSystem_72a4cd || {};
   const SegmentedControl = DS.SegmentedControl, Input = DS.Input, Chip = DS.Chip;
 
@@ -405,27 +405,12 @@
           {showReq && canShowReq && <LegendItem c="var(--chart-proj)" dash="5 4" label="Needed/mo" />}
         </div>
 
-        {/* verbose legend */}
-        {(() => {
-          const items = [
-            { color: "var(--chart-actual)", label: "Bars", desc: "monthly total spend (main + fun)" },
-            ...(avgMonthly > 0 ? [{ color: "var(--chart-pace)", label: `Avg (${eurK(avgMonthly)}/mo)`, desc: "monthly average over completed months" }] : []),
-            ...(canShowPeak ? [{ color: "var(--amber)", label: `Peak (${eurK(maxMonthly)})`, desc: "highest single month so far" }] : []),
-            ...(canShowReq ? [{ color: "var(--chart-proj)", label: `Needed/mo (${eurK(requiredMonthlyAvg)})`, desc: "monthly cap required to finish the year within your ceiling" }] : []),
-          ];
-          return (
-            <div style={{ marginTop: 14, borderTop: "1px solid var(--hair)", paddingTop: 10 }}>
-              {items.map(({ color, label, desc }) => (
-                <div key={label} style={{ display: "flex", gap: 8, alignItems: "flex-start", marginBottom: 6 }}>
-                  <span style={{ display: "inline-block", marginTop: 4, width: 7, height: 7, borderRadius: "50%", background: color, flexShrink: 0 }} />
-                  <span style={{ fontSize: 11, fontFamily: "var(--mono)", color: "var(--muted)", lineHeight: 1.5 }}>
-                    <span style={{ color: "var(--ink)", fontWeight: 600 }}>{label}</span>{" — "}{desc}
-                  </span>
-                </div>
-              ))}
-            </div>
-          );
-        })()}
+        <ChartExplain storageKey="monthly-breakdown" items={[
+          { color: "var(--chart-actual)", label: "Bars", desc: "monthly total spend (main + fun)" },
+          ...(avgMonthly > 0 ? [{ color: "var(--chart-pace)", label: `Avg (${eurK(avgMonthly)}/mo)`, desc: "monthly average over completed months" }] : []),
+          ...(canShowPeak ? [{ color: "var(--amber)", label: `Peak (${eurK(maxMonthly)})`, desc: "highest single month so far" }] : []),
+          ...(canShowReq ? [{ color: "var(--chart-proj)", label: `Needed/mo (${eurK(requiredMonthlyAvg)})`, desc: "monthly cap required to finish the year within your ceiling" }] : []),
+        ]} />
       </div>
     );
   }
@@ -474,27 +459,15 @@
           <div className="section-h" style={{ marginTop: 0, marginBottom: 10 }}><h2>This year</h2></div>
           <ProjectionChart stats={stats} />
           <ChartLegend stats={stats} />
-          {!stats.isFuture && (() => {
-            const items = [
+          {!stats.isFuture && (
+            <ChartExplain storageKey="this-year" items={[
               { color: "var(--chart-actual)", label: `Actual (${eur0(stats.spent)})`, desc: "cumulative total spend (main + fun) year-to-date" },
               ...(!stats.complete ? [{ color: "var(--chart-proj)", label: `Projected (→${eur0(stats.projection)})`, desc: "year-end extrapolation at your current blended daily rate" }] : []),
               ...(stats.projLow != null ? [{ color: "var(--chart-proj)", label: `Range (±${eur0(stats.bandAmt)})`, desc: "forecast uncertainty band based on weekly spending variance" }] : []),
               { color: "var(--chart-pace)", label: `Pace (→${eur0(stats.ceiling)})`, desc: "ideal on-track trajectory from Jan 1 to the ceiling" },
               ...(stats.priorCum ? [{ color: "var(--chart-target)", label: `${stats.year - 1} (${eur0(stats.priorSpent)})`, desc: "prior year's total spend at the same day of year" }] : []),
-            ];
-            return (
-              <div style={{ marginTop: 14, borderTop: "1px solid var(--hair)", paddingTop: 10 }}>
-                {items.map(({ color, label, desc }) => (
-                  <div key={label} style={{ display: "flex", gap: 8, alignItems: "flex-start", marginBottom: 6 }}>
-                    <span style={{ display: "inline-block", marginTop: 4, width: 7, height: 7, borderRadius: "50%", background: color, flexShrink: 0 }} />
-                    <span style={{ fontSize: 11, fontFamily: "var(--mono)", color: "var(--muted)", lineHeight: 1.5 }}>
-                      <span style={{ color: "var(--ink)", fontWeight: 600 }}>{label}</span>{" — "}{desc}
-                    </span>
-                  </div>
-                ))}
-              </div>
-            );
-          })()}
+            ]} />
+          )}
         </div>
 
         {!stats.isFuture && <MonthlyBarsChart stats={stats} />}

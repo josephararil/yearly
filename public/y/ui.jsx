@@ -285,5 +285,46 @@ function TxRow({ t, onClick, people }) {
     );
   }
 
-  window.YUI = { CatIcon, DeltaChip, StatusHero, CalloutCard, TxRow, Sheet, SectionH, Toast, rich, tint };
+  // Collapsible line-by-line chart legend. Open/closed state persists per storageKey across reloads.
+  function ChartExplain({ storageKey, items }) {
+    const lsKey = "yearly:explain:" + storageKey;
+    const [open, setOpen] = React.useState(() => {
+      try {
+        const raw = localStorage.getItem(lsKey);
+        return raw === null ? true : raw === "1";
+      } catch (e) { return true; }
+    });
+    const toggle = () => setOpen((o) => {
+      const next = !o;
+      try { localStorage.setItem(lsKey, next ? "1" : "0"); } catch (e) {}
+      return next;
+    });
+    return (
+      <div style={{ marginTop: 14, borderTop: "1px solid var(--hair)", paddingTop: 10 }}>
+        <button onClick={toggle} style={{
+          display: "flex", alignItems: "center", gap: 5, width: "100%",
+          background: "transparent", border: "none", padding: 0, cursor: "pointer",
+          fontSize: 10, fontFamily: "var(--mono)", color: "var(--muted)",
+          textTransform: "uppercase", letterSpacing: "0.07em",
+        }}>
+          <Icon name={open ? "chevronDown" : "chevronRight"} size={12} />
+          <span>What's this?</span>
+        </button>
+        {open && (
+          <div style={{ marginTop: 10 }}>
+            {items.map(({ color, label, desc }) => (
+              <div key={label} style={{ display: "flex", gap: 8, alignItems: "flex-start", marginBottom: 6 }}>
+                <span style={{ display: "inline-block", marginTop: 4, width: 7, height: 7, borderRadius: "50%", background: color, flexShrink: 0 }} />
+                <span style={{ fontSize: 11, fontFamily: "var(--mono)", color: "var(--muted)", lineHeight: 1.5 }}>
+                  <span style={{ color: "var(--ink)", fontWeight: 600 }}>{label}</span>{" — "}{desc}
+                </span>
+              </div>
+            ))}
+          </div>
+        )}
+      </div>
+    );
+  }
+
+  window.YUI = { CatIcon, DeltaChip, StatusHero, CalloutCard, TxRow, Sheet, SectionH, Toast, rich, tint, ChartExplain };
 })();
