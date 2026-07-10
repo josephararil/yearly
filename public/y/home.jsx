@@ -356,9 +356,14 @@
                                  { cls: 'under', text: 'Fine ▸' };
     })() : null;
 
-    const voice = callouts
-      ? callouts.find((c) => !["ceiling", "buffer", "calm", "final", "future"].includes(c.id))
-      : null;
+    // Rotate through the eligible callouts one-per-day (stable sorted order from buildCallouts),
+    // instead of always showing the single highest-value one — keeps the Overview line fresh
+    // without being random or repeating the same one back-to-back.
+    const eligible = callouts
+      ? callouts.filter((c) => !["ceiling", "buffer", "calm", "final", "future"].includes(c.id))
+      : [];
+    const dayIndex = Math.floor(Date.now() / 86400000);
+    const voice = eligible.length ? eligible[dayIndex % eligible.length] : null;
 
     return (
       <div className="screen stagger">
