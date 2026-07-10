@@ -107,7 +107,8 @@ Internal: `TripAddSheet` (name + price), `nearestTrip(items, balance)` goal pick
   double as the Recharts spec)
 - `y/settings.jsx` (ceiling/buffer/years/fun-budget/density/templates/CSV import-export/JSON
   backup-restore/clear)
-- `y/addflow.jsx` (Quick keypad + Manual add, Edit sheet, category picker, fun toggle)
+- `y/addflow.jsx` (unified "Log an expense" sheet: amount hero, template accelerator strip, category
+  picker, Tags & options disclosure, Edit sheet)
 
 ### `home.jsx` — `VoiceLine`
 
@@ -223,30 +224,60 @@ is active.
 
 ### `addflow.jsx`
 
-Both `AddSheet` and `EditSheet` (Manual mode only; not Quick keypad) expose a **Fun budget toggle**
-(pill switch, off by default). When on, a Chip owner picker (Joseph/Marti) appears. `commit()`/
-`save()` write `fun:true` + `person` when the toggle is on; EditSheet pre-populates toggle state from
-`txn.fun`/`txn.person`. `EditSheet` accepts a `store` prop for reading `store.people`. Both also
-expose a **Travel budget toggle** (`TravelField`, family-wide — no owner picker) directly below the
-Fun toggle; when on, `commit()`/`save()` write `travel:true` (EditSheet deletes the key when off,
-pre-populates from `txn.travel`). Both Manual AddSheet and EditSheet also expose a **One-off toggle**
-(same pill switch style, below the Travel toggle). When on, `oneoff:true` is written to the transaction; off omits the key (matching the `fun`
-pattern). EditSheet pre-populates from `txn.oneoff`. Caption: "Excluded from the spending-trend
-forecast — still counts in totals. Large amounts are excluded automatically." The oneoff flag causes
-`isLump()` in calc.jsx to exclude the tx from the blended rate while keeping it in `spent`.
+Redesigned (2026-07) around one unified form shared by `AddSheet` and `EditSheet` — there is no
+Quick/Manual mode split anymore. Body order top → bottom: `TemplateStrip` (AddSheet only) →
+`AmountHero` → `CategoryField` → Description → Note → Date → `OptionsDisclosure`. `Sheet` (`ui.jsx`)
+takes an optional `footer` prop rendered as a flex sibling below `.sheet-scroll` (not an overlay —
+`.sheet` is `display:flex; flex-direction:column`, so the footer takes its own row and the scroll area
+shrinks to fit via `flex:1; min-height:0`); both `AddSheet` and `EditSheet` pass their primary CTA row
+as `footer` so it stays pinned while the form scrolls underneath.
 
-`AddSheet` (Manual mode only) also exposes a **Save as template toggle** (same pill switch style,
-below One-off). Off by default; resets to off whenever the sheet reopens. When on, `commit()` builds
-a template object `{ id, name: description.trim(), category, defaultAmount? }` (amount included only
-when > 0) and calls the `onSaveTemplate` prop before saving the transaction. `onSaveTemplate` is
-wired in `app.jsx` to `addTemplate`, which appends to `store.templates`; since this is a settings-only
-mutation (transactions ref unchanged), `useStore` automatically calls `YSync.markSettingsDirty()`,
-syncing the new template server-side. The new template immediately appears in the Quick grid on next
-open. Caption: "Adds this expense as a Quick template for future logging."
+**`AmountHero` + `NumPad`** — the single amount UI in the app (no separate manual text input). Big
+serif-adjacent display (€ + `.num`, dims to a placeholder "0.00" when empty) driven by a 3-col `NumPad`
+grid (1–9, ".", "0", "00", plus a full-width backspace row). Backspace: tap deletes one char,
+long-press (500ms) clears to zero; touch handlers call `preventDefault()` to suppress the synthetic
+mouse events mobile browsers fire after `touchend`, avoiding a double-delete. The display formats the
+integer part with thousands separators (`formatAmountDisplay`); the raw value stays a plain numeric
+string for `tx.amount`. Decimal input is capped to 2 places and the "." key disables once a decimal
+point exists.
+
+**`CategoryField`** — collapsed "CATEGORY — ● label" summary row that expands inline to
+`CategoryPicker`, a wrap-flow of auto-width chips (not a fixed grid). `CategoryPicker` sorts the
+selected category plus the 3 most-recently-used categories (scanned from `store.transactions`, newest
+first) to the front, canonical order for the rest; it's exported on `window.YAdd` and also used by
+`settings.jsx`'s template editor (which must pass `store` for the recency ordering to do anything).
+
+**`OptionsDisclosure`** — collapsed "Tags & options" row showing mono chips for any active flag (FUN ·
+TRAVEL · ONE-OFF · TEMPLATE); expands to a row of icon tiles (`.opt-tiles`/`.opt-tile`, one per flag —
+entertainment/travel/calendar/layers icons), each toggled by tapping the tile (active state = terra
+border/tint + a small check badge, no separate switch control). Captions for whichever tiles are
+active stack below the row (`.opt-details`), each stating the consequence:
+- **Fun budget** — reveals a Chip owner picker (Joseph/Marti) below the tile row when on. `commit()`/
+  `onSave()` write `fun:true` + `person`; `EditSheet` pre-populates from `txn.fun`/`txn.person` and
+  deletes both keys when toggled off.
+- **Travel budget** — family-wide (no owner picker). Writes/deletes `travel:true` the same way.
+- **One-off** — writes/deletes `oneoff:true`; causes `isLump()` in `calc.jsx` to exclude the tx from
+  the blended rate while keeping it in `spent`.
+- **Save as template** — `AddSheet` only (`OptionsDisclosure` takes `showOneOff`/`showSaveAsTemplate`
+  booleans, which also control which tiles render; `EditSheet` passes `showSaveAsTemplate={false}`).
+  When on, `commit()` builds `{ id, name: description.trim(), category, defaultAmount? }` (amount only
+  when > 0) and calls `onSaveTemplate` before saving. Wired in `app.jsx` to `addTemplate` (appends to
+  `store.templates`); since transactions are untouched, `useStore` calls `YSync.markSettingsDirty()`
+  to sync the new template server-side.
+
+**`TemplateStrip`** (AddSheet only) — horizontal-scroll strip of template tiles above the amount hero;
+tapping one pre-fills description + category (+ amount, if the template has a `defaultAmount`) and
+clears on any subsequent manual edit to description/category. A "See all" toggle expands the full
+`.tilegrid` inline. Empty state (no templates yet) shows a one-line hint instead of a blank strip.
+Quick is an accelerator on the one form, not a separate screen — there's no mode flag to preserve.
+
+`EditSheet` mirrors `AddSheet`'s body (amount hero, category disclosure, options disclosure) pre-filled
+from `txn`, minus the template strip and Save-as-template toggle; its footer holds Delete + Save
+changes.
 
 ### `settings.jsx`
 
-Footer shows `APP_VERSION` constant (`'v57'` currently, defined at top of IIFE — **update it with
+Footer shows `APP_VERSION` constant (`'v62'` currently, defined at top of IIFE — **update it with
 every release**). `TargetSheet` (now labelled "Household ceiling") and `BufferSheet` accept a `year`
 prop (defaults to `store.currentYear`); `TargetSheet` reads/writes `years[y].ceiling`. `BufferSheet`
 computes its own stats internally (unchanged). `YearsSheet` has tappable year rows that drill into a

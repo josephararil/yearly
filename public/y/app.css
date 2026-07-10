@@ -219,10 +219,11 @@ button, input, select, textarea { font-family: inherit; }
 }
 .sheet.open { transform: translateY(0); }
 .grabber { width: 38px; height: 5px; border-radius: 3px; background: var(--hair-strong); margin: 10px auto 4px; flex: 0 0 auto; }
-.sheet-head { display: flex; align-items: center; gap: 10px; padding: 6px 18px 12px; }
+.sheet-head { display: flex; align-items: center; gap: 10px; padding: 6px 18px 8px; }
 .sheet-head h3 { margin: 0; font-family: var(--sans); font-size: 18px; font-weight: 600; letter-spacing: -0.02em; }
-.sheet-scroll { overflow-y: auto; padding: 0 18px 18px; }
+.sheet-scroll { flex: 1; min-height: 0; overflow-y: auto; padding: 0 18px 18px; }
 .sheet-scroll::-webkit-scrollbar { width: 0; }
+.sheet-footer { flex: 0 0 auto; padding: 14px 18px; border-top: 1px solid var(--hair); background: var(--paper); }
 @media (prefers-reduced-motion: reduce) {
   .sheet, .sheet-scrim { transition: none; }
 }
@@ -236,17 +237,88 @@ button, input, select, textarea { font-family: inherit; }
 }
 .tpl:hover { transform: translateY(-3px); border-color: var(--hair-strong); }
 .tpl:active { transform: translateY(0); }
+.tpl.sel { border-color: var(--terra); background: color-mix(in srgb, var(--terra) 12%, transparent); }
 .tpl-dot { width: 10px; height: 10px; border-radius: 99px; flex: 0 0 auto; }
 .tpl-name { font-size: 11.5px; font-weight: 500; color: var(--ink-2); text-align: center; line-height: 1.1; }
 
+/* template accelerator strip — Quick templates seed the unified form, they aren't a separate mode */
+.tplstrip { display: flex; gap: 8px; overflow-x: auto; padding: 2px 2px 4px; margin: 0 -2px; -webkit-overflow-scrolling: touch; }
+.tplstrip::-webkit-scrollbar { display: none; }
+.tpl-sm {
+  display: flex; align-items: center; gap: 7px; padding: 10px 13px; border-radius: 13px;
+  background: var(--paper); border: 1px solid var(--hair); cursor: pointer; white-space: nowrap; flex: 0 0 auto;
+  transition: border-color var(--dur-fast) var(--ease), background var(--dur-fast) var(--ease);
+}
+.tpl-sm .tpl-dot { width: 8px; height: 8px; }
+.tpl-sm .tpl-name { font-size: 12.5px; color: var(--ink-2); }
+.tpl-sm.sel { border-color: var(--terra); background: color-mix(in srgb, var(--terra) 12%, transparent); }
+.tpl-sm.sel .tpl-name { color: var(--ink); }
+.tpl-seeall {
+  display: flex; align-items: center; gap: 5px; padding: 10px 13px; border-radius: 13px;
+  background: transparent; border: 1px dashed var(--hair-strong); color: var(--muted);
+  cursor: pointer; white-space: nowrap; flex: 0 0 auto; font-size: 12.5px; font-family: var(--sans);
+}
+
 /* amount entry */
-.amount-display { text-align: center; padding: 12px 0 6px; }
+.amount-display { text-align: center; padding: 8px 0 4px; }
 .amount-display .num { font-size: 50px; font-weight: 600; letter-spacing: -0.03em; }
+.amount-display .num.dim { color: var(--muted); }
 .amount-display .cur { color: var(--muted); font-size: 30px; font-weight: 500; }
 
+.numpad-key {
+  height: 56px; border-radius: 14px; border: 1px solid var(--hair);
+  background: var(--paper); color: var(--ink); font: 500 24px var(--mono); cursor: pointer;
+  transition: transform var(--dur-fast) var(--ease);
+}
+.numpad-key:active { transform: scale(0.96); }
+.numpad-key:disabled { opacity: 0.35; cursor: not-allowed; }
+.numpad-key-wide { grid-column: 1 / -1; display: flex; align-items: center; justify-content: center; }
+
+.add-error { margin: 0 0 8px; font: 12px var(--mono); color: var(--terra); text-align: center; }
+.add-helper { margin: 6px 0 0; font: 11px var(--mono); color: var(--muted); text-align: center; }
+
+.tplstrip-empty { margin: 0; padding: 4px 2px; font: 12px var(--mono); color: var(--muted); line-height: 1.5; }
+
+.date-rel { font: 10.5px var(--mono); color: var(--muted); text-transform: uppercase; letter-spacing: 0.06em; white-space: nowrap; }
+
+/* tags & options — icon-tile toggles for Fun / Travel / One-off / Save-as-template */
+.toggle-caption { margin: 0; font-size: 11px; color: var(--ink-2); line-height: 1.4; }
+.opt-tiles { display: grid; gap: 8px; }
+.opt-tile {
+  position: relative; display: flex; flex-direction: column; align-items: center; gap: 6px;
+  padding: 12px 4px 10px; border-radius: 13px; border: 1px solid var(--hair);
+  background: var(--paper); color: var(--muted); cursor: pointer;
+  transition: border-color var(--dur-fast) var(--ease), background var(--dur-fast) var(--ease), color var(--dur-fast) var(--ease);
+}
+.opt-tile.on {
+  border-color: var(--terra); background: color-mix(in srgb, var(--terra) 12%, transparent); color: var(--ink);
+}
+.opt-tile-label {
+  font-family: var(--mono); font-size: 9.5px; letter-spacing: 0.04em; text-transform: uppercase;
+  text-align: center; line-height: 1.2;
+}
+.opt-tile-check {
+  position: absolute; top: -6px; right: -6px; width: 16px; height: 16px; border-radius: 50%;
+  background: var(--terra); color: var(--paper); display: flex; align-items: center; justify-content: center;
+}
+.opt-details { display: flex; flex-direction: column; gap: 8px; margin-top: 10px; }
+
+/* tags & options disclosure */
+.opts-summary {
+  width: 100%; height: 46px; padding: 0 15px; border-radius: 13px;
+  display: flex; align-items: center; justify-content: space-between;
+  background: transparent; border: 1px solid var(--hair); color: var(--ink);
+  font: 14px var(--sans); cursor: pointer; transition: border-color var(--dur-fast) var(--ease);
+}
+.opts-summary:hover { border-color: var(--hair-strong); }
+.opts-chips { font-family: var(--mono); font-size: 10.5px; letter-spacing: 0.06em; color: var(--terra); text-transform: uppercase; }
+.opts-body { display: grid; grid-template-rows: 0fr; overflow: hidden; transition: grid-template-rows var(--dur) var(--ease); }
+.opts-body.open { grid-template-rows: 1fr; }
+.opts-body-inner { overflow: hidden; min-height: 0; padding-top: 10px; }
+
 /* forms */
-.field { display: flex; flex-direction: column; gap: 7px; margin-bottom: 14px; }
-.field > label { font-family: var(--mono); font-size: 11px; font-weight: 400; color: var(--muted); letter-spacing: 0.12em; text-transform: uppercase; padding-left: 2px; }
+.field { display: flex; flex-direction: column; gap: 6px; margin-bottom: 12px; }
+.field > label, .field-label { font-family: var(--mono); font-size: 11px; font-weight: 400; color: var(--muted); letter-spacing: 0.12em; text-transform: uppercase; padding-left: 2px; }
 .inp {
   width: 100%; height: 46px; padding: 0 15px; border-radius: 13px;
   background: transparent; border: 1px solid var(--hair); color: var(--ink);
@@ -256,11 +328,12 @@ button, input, select, textarea { font-family: inherit; }
 textarea.inp { height: auto; padding: 12px 15px; resize: vertical; min-height: 64px; line-height: 1.4; }
 .inp-num { font-family: var(--mono); }
 
-/* category picker grid */
-.catpick { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; }
+/* category picker — wrap-flow of auto-width chips */
+.catpick { display: flex; flex-wrap: wrap; gap: 8px; }
 .catpick-item {
   display: flex; align-items: center; gap: 8px; padding: 9px 10px; border-radius: 13px;
   background: var(--paper); border: 1px solid var(--hair); cursor: pointer; font-size: 12.5px; color: var(--ink-2);
+  white-space: nowrap; flex: 0 0 auto;
   transition: border-color var(--dur-fast) var(--ease), background var(--dur-fast) var(--ease);
 }
 .catpick-item.sel { border-color: var(--terra); background: color-mix(in srgb, var(--terra) 12%, transparent); color: var(--ink); }
