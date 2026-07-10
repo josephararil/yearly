@@ -1,7 +1,7 @@
 // home.jsx — calm overview: status hero + fun strip + monthly spend curve.
 (function () {
   const { YUI, YFun, YTravel, YCalc } = window;
-  const { StatusHero, SectionH, rich } = YUI;
+  const { StatusHero, SectionH, rich, ChartExplain } = YUI;
   const { FunStrip } = YFun;
   const { TravelStrip } = YTravel;
 
@@ -291,20 +291,7 @@
           )}
         </svg>
 
-        {/* Legend */}
-        <div style={{ marginTop: 14, borderTop: "1px solid var(--hair)", paddingTop: 10 }}>
-          {legendItems.map(({ color, label, desc }) => (
-            <div key={label} style={{ display: "flex", gap: 8, alignItems: "flex-start", marginBottom: 6 }}>
-              <span style={{
-                display: "inline-block", marginTop: 4, width: 7, height: 7,
-                borderRadius: "50%", background: color, flexShrink: 0,
-              }} />
-              <span style={{ fontSize: 11, fontFamily: "var(--mono)", color: "var(--muted)", lineHeight: 1.5 }}>
-                <span style={{ color: "var(--ink)", fontWeight: 600 }}>{label}</span>{" — "}{desc}
-              </span>
-            </div>
-          ))}
-        </div>
+        <ChartExplain storageKey="month-curve" items={legendItems} />
       </div>
     );
   }

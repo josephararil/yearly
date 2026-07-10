@@ -145,7 +145,8 @@ triangular band (vertices: today→spentSoFar, month-end→band.high, month-end�
 at 10% opacity, same visual treatment as the yearly `ProjectionChart` band) is drawn beneath the
 dashed Projection line — the month-scale uncertainty cone. See
 [ARCHITECTURE.md](ARCHITECTURE.md#the-brain--ycalcjsx-windowycalc) for the statistical model
-(`monthEndBand`). Legend gains a "Range (±€X)" entry whenever the band is present.
+(`monthEndBand`). Legend gains a "Range (±€X)" entry whenever the band is present. The verbose
+line-by-line legend below the chart is rendered via `YUI.ChartExplain` (see below).
 
 ### `analysis.jsx` — `AnalysisScreen`
 
@@ -176,7 +177,16 @@ Each reference line carries an inline text label showing its value (e.g. "avg �
 (or the needed/mo line for future months), and a floating tooltip with the month name and amount;
 future-month tooltips add an "est. needed/mo" sub-label. Hovered bar gets full opacity + stroke
 highlight; hovered month label bolds. Hidden for future years. `LegendItem` helper renders bar and
-line swatches; defined in the same IIFE above `MonthlyBarsChart`.
+line swatches; defined in the same IIFE above `MonthlyBarsChart`. The verbose line-by-line legend
+below it uses `YUI.ChartExplain` (see below), as does the "This year" chart's legend in
+`ProjectionTab`.
+
+**`YUI.ChartExplain`** — shared collapsible component (`ui.jsx`) rendering the line-by-line "colored
+dot + label + description" legend used below `MonthCurve`, `ProjectionChart` ("This year"), and
+`MonthlyBarsChart` ("Monthly breakdown"). Takes `{ storageKey, items }`; toggled via a "What's
+this?" button (chevron + label) and persists its open/closed state to
+`localStorage['yearly:explain:' + storageKey]` (defaults to open when unset) so each of the three
+charts remembers its own collapsed/expanded state across reloads independent of the other two.
 
 **"What's happening" section** (`ProjectionTab`) — callouts from `buildCallouts` rendered between
 `MonthlyBarsChart` and "In numbers". Shows all callouts (no density filtering). Receives `callouts`
