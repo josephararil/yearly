@@ -45,7 +45,10 @@ formula, status thresholds, and each callout detector.
   currentMonthIndex))` — used by MonthCurve target line and the "needed/mo" stat).
 - `projectedMonthEnd(stats)` → number (current-month daily-rate extrapolation from today to
   month-end; equals `byMonth[m].amount` for complete/future years — shared by MonthCurve and
-  StatusHero pulse line).
+  StatusHero pulse line). Applies the same lump-sum winsorization as `computeStats`: an
+  `oneoff:true` (or > `LUMP_PCT` of ceiling) transaction counts once toward the month's spend but
+  is excluded from the rate extrapolated over the remaining days, so a single large purchase adds
+  itself once instead of being multiplied out to month-end.
 - `monthEndBand(stats, store)` → `{low, high, bandAmt, mid, histN, histMean, histMin, histMax} |
   null` — the monthly uncertainty cone (see below). `null` on complete/future years, on the last
   day of the month, or when there is no statistical basis at all (first month of use, day 1-2,

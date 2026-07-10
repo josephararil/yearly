@@ -653,13 +653,23 @@ function computeStats(store, year, asOfDate, staleDays = 0) {
 
   // Current-month projected end total (same daily-rate extrapolation as MonthCurve).
   // For complete/future years returns the recorded month total (projection = actual).
+  // Lump-sum transactions (oneoff, or > LUMP_PCT of ceiling) count once in spentSoFar but are
+  // excluded from the rate that gets extrapolated over the remaining days — same winsorization
+  // as the yearly projection in computeStats, so a single big purchase doesn't get multiplied
+  // across the rest of the month.
   function projectedMonthEnd(stats) {
     const month = stats.asOf.getMonth();
     if (stats.complete || stats.isFuture) return stats.byMonth[month].amount;
     const dayOfMonth = stats.asOf.getDate();
     const daysInMonth = new Date(stats.asOf.getFullYear(), month + 1, 0).getDate();
     const spentSoFar = stats.byMonth[month].amount;
-    const rate = dayOfMonth > 0 ? spentSoFar / dayOfMonth : 0;
+    const lumpThreshold = stats.ceiling > 0 ? stats.ceiling * T.LUMP_PCT : Infinity;
+    const isLump = (t) => !!t.oneoff || t.amount_eur > lumpThreshold;
+    const monthStr = String(stats.asOf.getFullYear()) + "-" + String(month + 1).padStart(2, "0");
+    const recurringSoFar = stats.upto
+      .filter((t) => t.date.startsWith(monthStr) && !isLump(t))
+      .reduce((a, t) => a + t.amount_eur, 0);
+    const rate = dayOfMonth > 0 ? recurringSoFar / dayOfMonth : 0;
     return spentSoFar + rate * (daysInMonth - dayOfMonth);
   }
 

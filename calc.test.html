@@ -887,6 +887,28 @@
       projDiffRegular > 300 + 1,
       'diff=' + projDiffRegular.toFixed(2));
 
+    // projectedMonthEnd must apply the same winsorization: oneoff tx counts once in the
+    // month-end estimate but must not be extrapolated over the rest of the month.
+    // (asOf17 = June 7, so the oneoff tx must land in June — not March — to affect this month.)
+    const monthOneoffBase = Object.assign({}, oneoffBase, {
+      transactions: oneoffBase.transactions.concat([
+        { id: 'mob1', date: '2026-06-01', description: 'R6', amount_eur: 100, category: 'groceries', source: 'manual' },
+      ]),
+    });
+    const monthOneoffWith = Object.assign({}, monthOneoffBase, {
+      transactions: monthOneoffBase.transactions.concat([
+        { id: 'moo1', date: '2026-06-05', description: 'Gift', amount_eur: 763, category: 'shopping', source: 'manual', oneoff: true },
+      ]),
+    });
+    const monthBaseStats = YCalc.computeStats(monthOneoffBase, 2026, asOf17);
+    const monthWithStats = YCalc.computeStats(monthOneoffWith, 2026, asOf17);
+    const baseMonthEnd = YCalc.projectedMonthEnd(monthBaseStats);
+    const withMonthEnd = YCalc.projectedMonthEnd(monthWithStats);
+    const monthEndDiff = withMonthEnd - baseMonthEnd;
+    assert('oneoff: projectedMonthEnd diff = 763 exactly (not extrapolated)',
+      Math.abs(monthEndDiff - 763) < 0.5,
+      'diff=' + monthEndDiff.toFixed(2));
+
     // ---- Phase 21 — uncertainty band (Big Swing 4, part A) ----
     section('Phase 21 — uncertainty band (computeStats projLow/projHigh/bandAmt + status gating)');
 
