@@ -255,7 +255,16 @@ active stack below the row (`.opt-details`), each stating the consequence:
 - **Fun budget** — reveals a Chip owner picker (Joseph/Marti) below the tile row when on. `commit()`/
   `onSave()` write `fun:true` + `person`; `EditSheet` pre-populates from `txn.fun`/`txn.person` and
   deletes both keys when toggled off.
-- **Travel budget** — family-wide (no owner picker). Writes/deletes `travel:true` the same way.
+- **Travel budget** — family-wide (no owner picker), but now requires a specific trip: when on,
+  `TripField` renders below the caption (collapsed "TRIP — <name or 'Select a trip'>" row, modeled on
+  `CategoryField`). Expanded body shows the 3 most-recent trips (sort key `startDate || createdAt`,
+  desc) as `catpick`-style selectable rows, a "More…" row revealing the rest, and an always-visible
+  inline create row (name input + Add button) calling `onCreateTrip(name)` — wired in `app.jsx` to
+  `addTrip`, which appends `{id, name, location:"", startDate:null, endDate:null, createdAt,
+  updatedAt}` to `store.trips` and returns the new id so the field auto-selects it. `commit()`/
+  `onSave()` write `travel:true` + `trip_id`; both sheets' `valid` requires `tripId` set when
+  `travelOn` (footer helper reads "Select a trip" until one is chosen); `EditSheet` pre-fills
+  `tripId` from `txn.trip_id` and deletes both keys when toggled off.
 - **One-off** — writes/deletes `oneoff:true`; causes `isLump()` in `calc.jsx` to exclude the tx from
   the blended rate while keeping it in `spent`.
 - **Save as template** — `AddSheet` only (`OptionsDisclosure` takes `showOneOff`/`showSaveAsTemplate`

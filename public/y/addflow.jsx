@@ -82,6 +82,7 @@
   function OptionsDisclosure({
     open, setOpen, funOn, setFunOn, funPerson, setFunPerson, travelOn, setTravelOn,
     oneOff, setOneOff, saveAsTemplate, setSaveAsTemplate, store, showOneOff, showSaveAsTemplate,
+    tripId, setTripId, trips, onCreateTrip,
   }) {
     const people = (store && store.people) || [];
     const tiles = [
@@ -137,6 +138,9 @@
                       <Chip key={p.id} pressed={funPerson === p.id} onClick={() => setFunPerson(p.id)}>{p.name}</Chip>
                     ))}
                   </div>
+                )}
+                {travelOn && (
+                  <TripField tripId={tripId} onChange={setTripId} trips={trips} onCreateTrip={onCreateTrip} />
                 )}
               </div>
             )}
@@ -224,6 +228,67 @@
     );
   }
 
+  function tripSortKey(t) {
+    return t.startDate || localISO(new Date(t.createdAt || 0));
+  }
+
+  // Collapsed "TRIP — <name>" summary row; expands to the 3 most-recent trips + "More…" + inline create.
+  function TripField({ tripId, onChange, trips, onCreateTrip }) {
+    const [open, setOpen] = React.useState(false);
+    const [showMore, setShowMore] = React.useState(false);
+    const [newName, setNewName] = React.useState("");
+
+    const sorted = React.useMemo(() => (
+      [...(trips || [])].sort((a, b) => tripSortKey(b).localeCompare(tripSortKey(a)))
+    ), [trips]);
+    const recent = sorted.slice(0, 3);
+    const rest = sorted.slice(3);
+    const selected = (trips || []).find((t) => t.id === tripId);
+
+    const pick = (id) => { onChange(id); setOpen(false); setShowMore(false); };
+    const addNewTrip = () => {
+      const name = newName.trim();
+      if (!name || !onCreateTrip) return;
+      const id = onCreateTrip(name);
+      setNewName("");
+      if (id) pick(id);
+    };
+
+    return (
+      <div className="field">
+        <button type="button" className="opts-summary" onClick={() => setOpen((o) => !o)} aria-expanded={open}>
+          <span className="field-label">Trip</span>
+          <span style={{ display: "flex", alignItems: "center", gap: 8 }}>
+            <span style={{ color: selected ? "var(--ink)" : "var(--muted)" }}>{selected ? selected.name : "Select a trip"}</span>
+            <window.Icon name="chevronDown" size={16} style={{
+              color: "var(--muted)", transform: open ? "rotate(180deg)" : "none",
+              transition: "transform var(--dur-fast) var(--ease)",
+            }} />
+          </span>
+        </button>
+        <div className={"opts-body" + (open ? " open" : "")}>
+          <div className="opts-body-inner">
+            <div className="catpick">
+              {(showMore ? sorted : recent).map((t) => (
+                <button key={t.id} className={"catpick-item" + (tripId === t.id ? " sel" : "")} onClick={() => pick(t.id)}>
+                  <span>{t.name}</span>
+                </button>
+              ))}
+              {!showMore && rest.length > 0 && (
+                <button type="button" className="catpick-item" onClick={() => setShowMore(true)}>More…</button>
+              )}
+            </div>
+            <div style={{ display: "flex", gap: 8, marginTop: 8 }}>
+              <input className="inp" style={{ flex: 1, height: 40 }} value={newName} placeholder="+ New trip name"
+                onChange={(e) => setNewName(e.target.value)} />
+              <Button variant="secondary" disabled={!newName.trim()} onClick={addNewTrip}>Add</Button>
+            </div>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
   // Horizontal-scroll strip of template tiles at the top of the sheet — Quick is an accelerator on the
   // one unified form, not a separate mode. "See all" expands the full grid inline.
   function TemplateStrip({ templates, selectedId, onPick, allOpen, setAllOpen }) {
@@ -274,7 +339,7 @@
     );
   }
 
-  function AddSheet({ open, onClose, store, onSave, onSaveTemplate }) {
+  function AddSheet({ open, onClose, store, onSave, onSaveTemplate, onCreateTrip }) {
     const [tpl, setTpl] = React.useState(null); // last-tapped template, for strip/grid highlight
     const [allTplOpen, setAllTplOpen] = React.useState(false);
     const [amount, setAmount] = React.useState("");
@@ -285,6 +350,7 @@
     const [funOn, setFunOn] = React.useState(false);
     const [funPerson, setFunPerson] = React.useState(defaultPerson());
     const [travelOn, setTravelOn] = React.useState(false);
+    const [tripId, setTripId] = React.useState(null);
     const [oneOff, setOneOff] = React.useState(false);
     const [saveAsTemplate, setSaveAsTemplate] = React.useState(false);
     const [optsOpen, setOptsOpen] = React.useState(false);
@@ -293,7 +359,7 @@
     React.useEffect(() => {
       if (open) {
         setTpl(null); setAllTplOpen(false); setAmount(""); setDraft(blank());
-        setFunOn(false); setFunPerson(defaultPerson()); setTravelOn(false); setOneOff(false);
+        setFunOn(false); setFunPerson(defaultPerson()); setTravelOn(false); setTripId(null); setOneOff(false);
         setSaveAsTemplate(false); setOptsOpen(false); setError(null);
       }
     }, [open]);
@@ -306,7 +372,7 @@
           note: t.note || undefined, source: "manual",
         };
         if (funOn) { tx.fun = true; tx.person = funPerson; }
-        if (travelOn) tx.travel = true;
+        if (travelOn) { tx.travel = true; tx.trip_id = tripId; }
         if (oneOff) tx.oneoff = true;
         if (saveAsTemplate && t.description && t.description.trim() && onSaveTemplate) {
           const tplObj = { id: YData.uid(), name: t.description.trim(), category: t.category };
@@ -327,7 +393,7 @@
       setAmount(t.defaultAmount ? String(t.defaultAmount) : "");
     };
 
-    const valid = parseFloat(amount) > 0;
+    const valid = parseFloat(amount) > 0 && (!travelOn || !!tripId);
     const body = (
       <div>
         <TemplateStrip templates={store.templates} selectedId={tpl && tpl.id} onPick={applyTemplate}
@@ -353,7 +419,8 @@
           funOn={funOn} setFunOn={setFunOn} funPerson={funPerson} setFunPerson={setFunPerson}
           travelOn={travelOn} setTravelOn={setTravelOn}
           oneOff={oneOff} setOneOff={setOneOff} saveAsTemplate={saveAsTemplate} setSaveAsTemplate={setSaveAsTemplate}
-          store={store} showOneOff={true} showSaveAsTemplate={true} />
+          store={store} showOneOff={true} showSaveAsTemplate={true}
+          tripId={tripId} setTripId={setTripId} trips={store.trips} onCreateTrip={onCreateTrip} />
       </div>
     );
     const footer = (
@@ -362,7 +429,9 @@
         <Button variant="primary" block disabled={!valid} onClick={() => commit({ ...draft, amount })}>
           {valid ? "Add €" + amount : "Add expense"}
         </Button>
-        {!valid && !error && <p className="add-helper">Enter an amount</p>}
+        {!valid && !error && (
+          <p className="add-helper">{travelOn && !tripId ? "Select a trip" : "Enter an amount"}</p>
+        )}
       </div>
     );
 
@@ -373,12 +442,13 @@
     );
   }
 
-  function EditSheet({ open, txn, onClose, onSave, onDelete, store }) {
+  function EditSheet({ open, txn, onClose, onSave, onDelete, store, onCreateTrip }) {
     const [draft, setDraft] = React.useState(null);
     const defaultPerson = () => (store && store.people && store.people[0] && store.people[0].id) || "marti";
     const [funOn, setFunOn] = React.useState(false);
     const [funPerson, setFunPerson] = React.useState(defaultPerson());
     const [travelOn, setTravelOn] = React.useState(false);
+    const [tripId, setTripId] = React.useState(null);
     const [oneOff, setOneOff] = React.useState(false);
     const [optsOpen, setOptsOpen] = React.useState(false);
     React.useEffect(() => {
@@ -387,13 +457,14 @@
         setFunOn(!!txn.fun);
         setFunPerson(txn.person || defaultPerson());
         setTravelOn(!!txn.travel);
+        setTripId(txn.trip_id || null);
         setOneOff(!!txn.oneoff);
         setOptsOpen(false);
       }
     }, [txn]);
     const set = (patch) => setDraft((d) => ({ ...d, ...patch }));
     if (!draft) return <Sheet open={open} onClose={onClose} title="Edit" />;
-    const valid = parseFloat(draft.amount) > 0;
+    const valid = parseFloat(draft.amount) > 0 && (!travelOn || !!tripId);
 
     const body = (
       <div>
@@ -418,7 +489,8 @@
           funOn={funOn} setFunOn={setFunOn} funPerson={funPerson} setFunPerson={setFunPerson}
           travelOn={travelOn} setTravelOn={setTravelOn}
           oneOff={oneOff} setOneOff={setOneOff} saveAsTemplate={false} setSaveAsTemplate={() => {}}
-          store={store} showOneOff={true} showSaveAsTemplate={false} />
+          store={store} showOneOff={true} showSaveAsTemplate={false}
+          tripId={tripId} setTripId={setTripId} trips={store && store.trips} onCreateTrip={onCreateTrip} />
       </div>
     );
     const footer = (
@@ -429,7 +501,7 @@
             onClick={() => {
               const updated = { ...txn, description: draft.description, amount_eur: Math.round(parseFloat(draft.amount) * 100) / 100, category: draft.category, date: draft.date, note: draft.note || undefined };
               if (funOn) { updated.fun = true; updated.person = funPerson; } else { delete updated.fun; delete updated.person; }
-              if (travelOn) { updated.travel = true; } else { delete updated.travel; }
+              if (travelOn) { updated.travel = true; updated.trip_id = tripId; } else { delete updated.travel; delete updated.trip_id; }
               if (oneOff) { updated.oneoff = true; } else { delete updated.oneoff; }
               onSave(updated); onClose();
             }}>
