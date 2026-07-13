@@ -1,4 +1,4 @@
-// analysis.jsx — the deep surface: projection chart, category diagnostics, activity, fun.
+// analysis.jsx — the deep surface: projection chart, activity (categories + transactions), fun.
 (function () {
   const { YData, YCalc, YUI, YFun, YTravel } = window;
   const { eur0, eurAuto, signedEur, signedPct, pct, MONTHS, fmtDateShort } = YCalc;
@@ -630,7 +630,7 @@
     );
   }
 
-  function ActivityTab({ stats, onEditTx, people }) {
+  function TransactionsTab({ stats, onEditTx, people }) {
     const [q, setQ] = React.useState("");
     const [fc, setFc] = React.useState(null);
     const [sort, setSort] = React.useState("date-desc");
@@ -726,23 +726,42 @@
     );
   }
 
+  function ActivityMergedTab({ stats, subtab, setSubtab, focusCategory, onEditTx, people }) {
+    return (
+      <div className="stagger" style={{ display: "flex", flexDirection: "column", gap: 16 }}>
+        <SegmentedControl options={["Categories", "Transactions"]} value={subtab} onChange={setSubtab} />
+        {subtab === "Categories" && <CategoriesTab stats={stats} focusCategory={focusCategory} onEditTx={onEditTx} people={people} />}
+        {subtab === "Transactions" && <TransactionsTab stats={stats} onEditTx={onEditTx} people={people} />}
+      </div>
+    );
+  }
+
   function AnalysisScreen({ stats, focus, onEditTx, fun, travel, store, setStore, addTx, callouts, onCallout }) {
     const [tab, setTab] = React.useState("Projection");
+    const [activitySubtab, setActivitySubtab] = React.useState("Categories");
     React.useEffect(() => {
-      if (focus && focus.section === "categories") setTab("Categories");
+      if (focus && focus.section === "categories") { setTab("Activity"); setActivitySubtab("Categories"); }
       else if (focus && focus.section === "projection") setTab("Projection");
-      else if (focus && focus.section === "activity") setTab("Activity");
+      else if (focus && focus.section === "activity") { setTab("Activity"); setActivitySubtab("Transactions"); }
       else if (focus && focus.section === "fun") setTab("Fun");
       else if (focus && focus.section === "travel") setTab("Travel");
     }, [focus]);
     return (
       <div className="screen">
         <div style={{ position: "sticky", top: 0, zIndex: 5, paddingBottom: 4 }}>
-          <SegmentedControl options={["Projection", "Categories", "Activity", "Fun", "Travel"]} value={tab} fill onChange={setTab} />
+          <SegmentedControl options={["Projection", "Activity", "Fun", "Travel"]} value={tab} fill onChange={setTab} />
         </div>
         {tab === "Projection" && <ProjectionTab stats={stats} fun={fun} store={store} callouts={callouts} onCallout={onCallout} />}
-        {tab === "Categories" && <CategoriesTab stats={stats} focusCategory={focus && focus.category} onEditTx={onEditTx} people={store && store.people || []} />}
-        {tab === "Activity" && <ActivityTab stats={stats} onEditTx={onEditTx} people={store && store.people || []} />}
+        {tab === "Activity" && (
+          <ActivityMergedTab
+            stats={stats}
+            subtab={activitySubtab}
+            setSubtab={setActivitySubtab}
+            focusCategory={focus && focus.category}
+            onEditTx={onEditTx}
+            people={store && store.people || []}
+          />
+        )}
         {tab === "Fun" && <YFun.FunTab fun={fun} store={store} setStore={setStore} addTx={addTx} />}
         {tab === "Travel" && <YTravel.TravelTab travel={travel} store={store} setStore={setStore} />}
       </div>
