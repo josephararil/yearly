@@ -147,7 +147,11 @@ immediately above the `app.jsx` script in `index.html`.
 ## Claude Code preview — how to deploy locally for testing
 
 The app lives inside `public/`, but the Python server must be started from the **repo root** (not
-`--directory public`). This is the setup that reliably works.
+`--directory public`). This is the setup that reliably works. This section uses the current Browser
+pane tool names (`mcp__Claude_Browser__*` — `preview_start`, `navigate`, `computer`, `read_page`,
+`javascript_tool`, `preview_logs`, `preview_list`). If you see references elsewhere (or in your own
+memory) to `preview_eval` / `preview_screenshot` / `preview_console_logs`, those are the old names —
+map them to `javascript_tool` / `computer{action:"screenshot"}` / `read_console_messages`.
 
 **`.claude/launch.json` (already configured):**
 ```json
@@ -170,37 +174,88 @@ The app lives inside `public/`, but the Python server must be started from the *
   **from that error page `window.location` assignments are silently ignored** — the preview browser
   is permanently stuck, escapable only via `preview_stop` → `preview_start`. Costs many tokens.
 - Serving from the **repo root**: the browser gets a valid directory-listing page, from which you
-  CAN redirect to `/public/` via eval.
+  can navigate to `/public/`.
 
-**Step-by-step sequence:**
+### If port 8766 is already in use — do NOT chase a random port
+
+`preview_start({name: "yearly"})` has `autoPort: true`: if 8766 is taken (very common — the user, or
+another Claude Code session/tab, is usually already running the dev server there for this project),
+it silently launches a **second** server on a random port (e.g. 58968) and hands you that port
+instead. Do not follow it. That second server is a distinct, empty-cache process that nobody else is
+looking at, it is not "the app" the user means when they say "check the preview," and repeatedly
+retrying `preview_start`/navigating to whatever new random port it returns is exactly the loop that
+wastes many turns for no gain.
+
+**Do this instead:**
+1. Check first whether 8766 is already serving: `Bash`/`PowerShell` → `netstat -ano | findstr :8766`
+   (or just try navigating to it — it either loads or it doesn't).
+2. If it's already up, skip `preview_start` entirely and go straight to
+   `navigate({tabId, url: "http://localhost:8766/public/"})`. This is almost always the right move —
+   the existing server reads the same files on disk, so your edits are already being served by it.
+3. Only call `preview_start({name:"yearly"})` if 8766 is truly free (nothing else running this repo's
+   dev server yet), or the user explicitly asks you to run your own isolated instance.
+4. If `preview_start` still returns a different port because 8766 got taken between your check and
+   the call, treat that as a signal to re-check for an existing server and prefer `8766` over the
+   returned port — don't just accept whatever port comes back without asking whether 8766 is already
+   good enough.
+
+**Step-by-step sequence (fresh server case):**
 ```
-1. preview_start("yearly")                 → returns serverId and actual port (e.g. 54321)
-2. preview_eval: window.location.href      → should be "http://localhost:54321/" (if chrome-error,
-                                              preview_stop + preview_start before proceeding)
-3. preview_eval: window.location.href = 'http://localhost:54321/public/';
-4. preview_console_logs (level: all)       → React DevTools info + Babel warn are normal; any ERROR
-                                              means something broke — fix before screenshots
-5. preview_screenshot                       → verify the app renders
+1. netstat -ano | findstr :8766          → confirm nothing is already listening
+2. preview_start({name:"yearly"})        → returns serverId + tabId + actual port
+3. navigate({tabId, url:"http://localhost:<port>/"})   → expect a directory listing, not chrome-error
+4. navigate({tabId, url:"http://localhost:<port>/public/"})
+5. read_console_messages({tabId})        → React DevTools info + Babel warn are normal; any ERROR
+                                            means something broke — fix before screenshots
+6. computer({tabId, action:"screenshot"}) → verify the app renders
 ```
 
-**Port conflicts:** Ports 8000, 8002, 8003, 8765 are often already in use. Port 8766 tends to be
-free; `autoPort: true` finds the next available one. Use the port returned by `preview_start`, not
-the configured one, in step 3.
+**Port conflicts:** Ports 8000, 8002, 8003, 8765 are often already in use for other projects. Port
+8766 is this project's convention — always try it directly first (see above) before letting
+`autoPort` pick something else.
 
-**After every code change** (PWA service worker — changes are NOT reflected on a simple reload):
-bump `CACHE_NAME` in `public/sw.js` AND hard-refresh. In the preview browser:
+### Verifying a code change actually shows up — hard-refresh first, every time
+
+**A plain reload (`navigate` to the same URL, or `location.reload()`) is NOT reliable evidence that
+your edit is live.** This app is double-cached — the service worker's Cache Storage *and* the
+browser's own HTTP cache for `y/*.jsx` — and a normal reload can silently keep serving old bytes from
+either layer even after you "unregister the SW and clear caches," because the SW's install-time
+fetch can itself be satisfied from the stale HTTP cache. Symptoms: you edited a component, the
+feature is verifiably in the file on disk, but the rendered UI/behavior doesn't change no matter how
+many times you reload or re-run the unregister/clear-caches snippet below.
+
+**The fix that reliably works:** a real hard refresh, not a script-driven reload:
+```js
+computer({ tabId, action: "key", text: "ctrl+shift+r" })
+```
+Do this *first*, before spending turns debugging the code itself, whenever a change doesn't appear
+in the preview — per the general rule in CLAUDE.md ("assume stale cache first"). If you want to
+confirm which layer was stale rather than guess, compare a no-store fetch against a normal one from
+the console:
+```js
+Promise.all([
+  fetch('/public/y/addflow.jsx').then(r => r.text()),
+  fetch('/public/y/addflow.jsx', {cache: 'no-store'}).then(r => r.text()),
+]).then(([cached, fresh]) => ({ same: cached === fresh, cachedLen: cached.length, freshLen: fresh.length }))
+```
+If `same` is `false`, the tab is serving stale bytes through normal `fetch`/`<script>` loads — hard
+refresh (above) before doing anything else. Only after confirming fresh bytes are loading is it worth
+debugging application logic.
+
+The SW-unregister/clear-caches snippet is still useful for a full reset (e.g. clearing `yearly-v*`
+caches, or diagnosing "reloads every second" per the section above) but is not itself sufficient to
+guarantee fresh code — always follow it (or replace it) with the `ctrl+shift+r` key press:
 ```js
 (async () => {
   const regs = await navigator.serviceWorker.getRegistrations();
   for (const r of regs) await r.unregister();
   const keys = await caches.keys();
   for (const k of keys) await caches.delete(k);
-  location.reload();
 })()
 ```
-If `navigator.serviceWorker` is unavailable in the eval context, just bump the cache version and
-reload — the new SW activates on the next page load.
+then `computer({tabId, action:"key", text:"ctrl+shift+r"})`.
 
-**chrome-error recovery:** if `preview_eval: window.location.href` returns
-`"chrome-error://chromewebdata/"`, do NOT attempt further evals/navigation (they silently no-op).
-Run `preview_stop` → `preview_start` for a fresh browser, then repeat from step 1.
+**chrome-error recovery:** if `navigate` or a `javascript_tool` eval shows `window.location.href` as
+`"chrome-error://chromewebdata/"`, do NOT attempt further evals/navigation (they silently no-op). Use
+`preview_stop` → `preview_start` for a fresh browser (or `tabs_create` for a fresh tab against the
+same server), then repeat from the top.
