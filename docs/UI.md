@@ -84,21 +84,28 @@ Internal: `WishlistAddSheet` (name + price + owner Chip picker), `PersonCard` (s
 The family-wide analogue of `fun.jsx` (one household allowance, no per-person split, no owner).
 
 `TravelStrip({ travel, store, onOpen })` — compact Overview indicator: an "Available" headline
-(large mono balance, sage/terra), a meta line (`€X/mo · €Y used this month`), and the nearest trip
-goal name+pct+thin bar. Whole strip tappable → `onOpen()`. When the allowance is unconfigured
-(rate 0, balance 0, no travel spend) it shows a quiet "Set an allowance in Settings →" prompt.
+(large mono balance, sage/terra), a meta line (`€X/mo · €Y used this month`), and — minimal, purely
+informational — the most recent trip's name (from `travel.trips[0]`). Whole strip tappable →
+`onOpen()`. When the allowance is unconfigured (rate 0, balance 0, no travel spend) it shows a quiet
+"Set an allowance in Settings →" prompt.
 
-`TravelTab({ travel, store, setStore, addTx })` — the Analysis workshop:
+`TravelTab({ travel, store, setStore })` — the Analysis workshop:
 - One family-wide stats block: Available balance (sage/terra), this-month used with over/under
   indicator, Spent YTD with the uncapped `~€X/yr` projection.
-- Trips wishlist: trip name, price, progress bar (clamped 0–100%), months-to-afford ETA
-  (`max(0, ceil((price−balance)/rate))`; "ready now" / "—"). "Booked it" logs a travel-tagged
-  `travel` category tx via `addTx` and removes the trip from `store.travelWishlist`. Remove (✕)
-  deletes without booking. "Add" opens `TripAddSheet` (name + price, no owner).
-- Travel category breakdown: catbar-* rows fed from `travel.travelCatList`, each followed by its
-  individual `travel:true` transactions (same treatment as the fun breakdown).
+- Trips list, driven by `travel.trips` (from `computeTravel`, already recency-sorted): each trip is a
+  collapsible `TripRow` (local `openMap` state). Collapsed: trip name + `eur0(total)`, plus date
+  range/location if present. Expanded: `TripBreakdown` — the trip's own catbar-* category rows (fed
+  by `trip.catList`) each followed by its transactions (same treatment the old global breakdown
+  used) — plus Edit and Delete actions. Delete is blocked (with a tx-count message) while the trip
+  has any transactions, so no orphan travel tx are ever created; only empty trips can be removed.
+  "Add trip" opens `TripCreateSheet` (Name required; Location/Start/End optional) for both create and
+  edit (edit bumps `updatedAt`).
 
-Internal: `TripAddSheet` (name + price), `nearestTrip(items, balance)` goal picker.
+Internal: `TripCreateSheet`, `TripBreakdown`, `TripRow`, `tripDateRange(trip)`.
+
+The former "future trip goals" wishlist (`TripAddSheet`, `nearestTrip`, `bookIt`,
+`store.travelWishlist`) has been removed — travel spend is now organized by these discrete trips
+instead. Trip *selection* when logging an expense lives in `y/addflow.jsx` (`TripField`, see below).
 
 ## Screens
 

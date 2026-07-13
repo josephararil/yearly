@@ -235,7 +235,12 @@ templates, and `loadStore`/`saveStore`/`resetStore`/`migrateStore`.
 - `store.wishlist`: `[{id, owner, name, price, note?, createdMonth}]` — per-person wishlist items.
 - `store.travel`: `{rates:[{from:"YYYY-MM", amount}], startMonth:"YYYY-MM", balanceAdjustment?}` —
   the single family-wide travel allowance (same shape as one `person`). Configured in Settings →
-  Travel budget. `store.travelWishlist`: `[{id, name, price, createdMonth}]` — trip goals (no owner).
+  Travel budget. `store.trips`: `[{id, name, location, startDate, endDate, createdAt, updatedAt}]` —
+  discrete, user-named trips; `name` required, the rest optional/nullable; `createdAt`/`updatedAt`
+  are ms epoch. Settings-blob synced like `wishlist`/`people` (no dedicated D1 table). Every
+  `t.travel` transaction carries a `trip_id` referencing one of these (nullable D1 column). Legacy
+  travel tx predating trips are migrated onto a fixed `trip_legacy` ("Past travel") trip by
+  `migrateStore`. (Replaces the removed `store.travelWishlist` future-trip-goals list.)
 - Transaction fields: optional `fun:true` and `person:"joseph"|"marti"` (only on fun tx); optional
   `travel:true` (family-wide travel tag, independent of the `Travel` category and of `fun`).
   Optional `oneoff:true` — excludes the tx from the blended rate used in projection (still
@@ -244,13 +249,15 @@ templates, and `loadStore`/`saveStore`/`resetStore`/`migrateStore`.
   `merchant_city` (string).
 - `years[y].ceiling` — renamed from `years[y].target` (sacred household ceiling, never derived).
 
-`buildSeed()` — returns a blank store: `transactions: []`, `wishlist: []`, `travelWishlist: []`,
+`buildSeed()` — returns a blank store: `transactions: []`, `wishlist: []`, `trips: []`,
 `travel` (€0/mo default), default year ceilings (2024 €21k / 2025 €23k / 2026 €25k), default people
 rates, default templates. No sample data.
 
 `migrateStore(s)` (exported, idempotent): `years[y].target` → `ceiling`; injects `people`,
-`wishlist`, `travel`, and `travelWishlist` defaults if missing; sets `density` default; normalizes
-all `transactions[*].category`
+`wishlist`, `travel`, and `trips` defaults if missing; deterministically assigns any pre-existing
+`t.travel && !t.trip_id` transactions to a fixed `trip_legacy` trip (fixed `createdAt`/`updatedAt`
+of `0` so the object is byte-identical across devices — settings-blob merges never conflict); sets
+`density` default; normalizes all `transactions[*].category`
 to lowercase IDs (fixes Revolut title-case import: `"Groceries"` → `"groceries"`). Called by
 `loadStore` and by JSON restore.
 

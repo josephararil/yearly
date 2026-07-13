@@ -61,7 +61,6 @@
       people: DEFAULT_PEOPLE.map((p) => ({ ...p, rates: p.rates.slice() })),
       wishlist: [],
       travel: { rates: [{ from: "2026-01", amount: 0 }], startMonth: "2026-01", balanceAdjustment: 0 },
-      travelWishlist: [],
       trips: [],
       years: {
         "2024": { ceiling: 21000, buffer: 0.04 },
@@ -102,7 +101,6 @@
       const from = earliest + "-01";
       s.travel = { rates: [{ from, amount: 0 }], startMonth: from, balanceAdjustment: 0 };
     }
-    if (!s.travelWishlist) s.travelWishlist = [];
     if (!s.trips) s.trips = [];
     // legacy travel tx → trip_legacy (deterministic, idempotent; fixed timestamps keep the
     // settings-blob byte-identical across devices so merges never conflict)

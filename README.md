@@ -268,14 +268,18 @@ available, book something; if you're at −€400, hold off.
 - **Not allowance-capped.** Unlike `funProjection`, the travel year-end figure is an honest
   uncapped linear extrapolation of YTD travel spend — the point is to see whether the year is
   tracking over or under the drip.
-- **A trips wishlist** (`store.travelWishlist`, no owner): places you'd like to go, with a target
-  cost and a "ready now / N mos" estimate against the balance. **"Booked it"** logs a travel-tagged
-  transaction for the cost and removes the trip.
+- **Discrete trips** (`store.trips`, no owner): every travel-tagged transaction is assigned to a
+  user-named trip (`{id, name, location?, startDate?, endDate?, createdAt, updatedAt}` — only `name`
+  is required). The Travel tab lists trips as collapsible rows: collapsed shows the trip name +
+  total spend, expanded shows the trip's own category breakdown and transactions. Trips can be
+  created inline from the add/edit expense sheet or from the Travel tab; a trip can only be deleted
+  once it has zero transactions (so travel spend is never left orphaned).
 
 Travel-tagged transactions are **real household spend and count toward the ceiling** like any other.
 Travel is a pure overlay: it does **not** feed `funPlanAnnual`, `mainTarget`, or any callout.
-`computeTravel(store)` produces the ledger; UI is `y/travel.jsx` (`TravelStrip` on Overview,
-`TravelTab` in Analysis).
+`computeTravel(store)` produces the family-wide ledger plus a per-trip `trips` aggregation; UI is
+`y/travel.jsx` (`TravelStrip` on Overview, `TravelTab` in Analysis) and the `TripField` picker in
+`y/addflow.jsx`.
 
 ---
 
@@ -431,8 +435,9 @@ A segmented control: **Projection · Categories · Activity · Fun · Travel**.
 - **Fun** — per-person cards (balance, monthly rate, this-month usage, all-time spent), a fun-only
   category breakdown, and each person's wishlist with progress bars, ETAs, and a "Bought it" action.
 - **Travel** — a family-wide balance card (available, this-month usage, spent YTD + uncapped
-  projection), a trips wishlist with progress bars, ETAs, and a "Booked it" action, and a
-  travel-only category breakdown.
+  projection) and a list of discrete trips, each a collapsible row (name + total collapsed;
+  per-trip category breakdown + transactions expanded), with trip create/rename and delete
+  (delete only allowed once a trip has zero transactions).
 
 ### Add / Edit ([`addflow.jsx`](public/y/addflow.jsx))
 
@@ -514,7 +519,7 @@ Persisted to `localStorage` under `yearly:store:v1` (and mirrored to D1 via sync
   "people":   [ /* Person[] */ ],
   "wishlist": [ /* WishlistItem[] */ ],
   "travel":   { "rates": [ { "from": "2026-01", "amount": 150 } ], "startMonth": "2026-01", "balanceAdjustment": 0 },
-  "travelWishlist": [ /* TripItem[] */ ],
+  "trips":    [ /* Trip[] */ ],
   "templates":[ /* Template[] */ ],
   "transactions": [ /* Transaction[] */ ]
 }
@@ -535,6 +540,7 @@ Persisted to `localStorage` under `yearly:store:v1` (and mirrored to D1 via sync
   fun?: true;                   // present on fun-budget tx only
   person?: "joseph" | "marti";  // required when fun === true
   travel?: true;                // present on travel-budget tx only (family-wide, no owner)
+  trip_id?: string;             // references a Trip.id; present iff travel === true
   oneoff?: true;                // excluded from the trend rate (still counts in spent)
   merchant_logo?: string;       // Revolut-sourced
   merchant_city?: string;       // Revolut-sourced
@@ -545,7 +551,9 @@ Persisted to `localStorage` under `yearly:store:v1` (and mirrored to D1 via sync
 forward-only dated allowance schedule. Defaults: Joseph €100/mo, Marti €200/mo, both from `2026-01`.
 
 **WishlistItem** — `{ id, owner, name, price, note?, createdMonth }`.
-**TripItem** — `{ id, name, price, createdMonth }` (travel wishlist; family-wide, no owner).
+**Trip** — `{ id, name, location?, startDate?, endDate?, createdAt, updatedAt }` (`name` required,
+the rest optional/nullable; `createdAt`/`updatedAt` are ms epoch). Family-wide, no owner. Travel
+transactions reference one via `trip_id`.
 **Template** — `{ id, name, category, defaultAmount?, icon? }` (the Quick-log tiles).
 
 Actuals are **always computed from transactions**, never stored as aggregates. Old backups (with
@@ -573,7 +581,7 @@ on load and on JSON restore.
 │       ├── calc.jsx            THE BRAIN: projection math, fun math, callout engine → YCalc
 │       ├── ui.jsx              Shared primitives (StatusHero, TxRow, CalloutCard, Toast…) → YUI
 │       ├── fun.jsx             Fun-budget UI (FunStrip + FunTab) → YFun
-│       ├── travel.jsx          Travel-budget UI (TravelStrip + TravelTab + trips wishlist) → YTravel
+│       ├── travel.jsx          Travel-budget UI (TravelStrip + TravelTab: collapsible trips list) → YTravel
 │       ├── home.jsx            Overview screen (hero + fun/travel strips + MonthCurve) → YHome
 │       ├── addflow.jsx         Add/Edit sheets, Quick keypad, category picker → YAdd
 │       ├── analysis.jsx        Analysis screen (Projection/Categories/Activity/Fun/Travel) → YAnalysis
