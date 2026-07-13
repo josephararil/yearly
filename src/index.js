@@ -35,6 +35,7 @@ function rowToTx(row) {
     fee_eur:           row.fee_eur,
     oneoff:            row.oneoff,
     travel:            row.travel,
+    trip_id:           row.trip_id,
   };
 }
 
@@ -64,6 +65,7 @@ function txToBinds(tx, now) {
     tx.fee_eur           ?? null,
     tx.oneoff       ? 1 : 0,
     tx.travel       ? 1 : 0,
+    tx.trip_id      ?? null,
     now,
   ];
 }
@@ -156,8 +158,8 @@ export default {
              original_amount,original_currency,deleted,
              revolut_category,merchant_mcc,merchant_city,merchant_country,
              merchant_logo,card_label,tx_type,e_commerce,fee_eur,
-             oneoff,travel,updated_at)
-          VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)
+             oneoff,travel,trip_id,updated_at)
+          VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)
           ON CONFLICT(id) DO UPDATE SET
             date=excluded.date, description=excluded.description,
             amount_eur=excluded.amount_eur, category=excluded.category,
@@ -177,6 +179,7 @@ export default {
             fee_eur=excluded.fee_eur,
             oneoff=excluded.oneoff,
             travel=excluded.travel,
+            trip_id=excluded.trip_id,
             updated_at=excluded.updated_at
         `;
 

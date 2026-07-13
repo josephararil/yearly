@@ -62,6 +62,7 @@
       wishlist: [],
       travel: { rates: [{ from: "2026-01", amount: 0 }], startMonth: "2026-01", balanceAdjustment: 0 },
       travelWishlist: [],
+      trips: [],
       years: {
         "2024": { ceiling: 21000, buffer: 0.04 },
         "2025": { ceiling: 23000, buffer: 0.04 },
@@ -102,6 +103,15 @@
       s.travel = { rates: [{ from, amount: 0 }], startMonth: from, balanceAdjustment: 0 };
     }
     if (!s.travelWishlist) s.travelWishlist = [];
+    if (!s.trips) s.trips = [];
+    // legacy travel tx → trip_legacy (deterministic, idempotent; fixed timestamps keep the
+    // settings-blob byte-identical across devices so merges never conflict)
+    if (Array.isArray(s.transactions) && s.transactions.some((t) => t.travel && !t.trip_id)) {
+      if (!s.trips.some((tr) => tr.id === "trip_legacy")) {
+        s.trips.push({ id: "trip_legacy", name: "Past travel", location: "", startDate: null, endDate: null, createdAt: 0, updatedAt: 0 });
+      }
+      s.transactions = s.transactions.map((t) => (t.travel && !t.trip_id) ? { ...t, trip_id: "trip_legacy" } : t);
+    }
     // density default
     if (!s.density) s.density = "balanced";
     // normalize transaction categories (Revolut stores title-case labels like "Groceries")
