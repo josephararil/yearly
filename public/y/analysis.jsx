@@ -744,7 +744,7 @@
         {tab === "Categories" && <CategoriesTab stats={stats} focusCategory={focus && focus.category} onEditTx={onEditTx} people={store && store.people || []} />}
         {tab === "Activity" && <ActivityTab stats={stats} onEditTx={onEditTx} people={store && store.people || []} />}
         {tab === "Fun" && <YFun.FunTab fun={fun} store={store} setStore={setStore} addTx={addTx} />}
-        {tab === "Travel" && <YTravel.TravelTab travel={travel} store={store} setStore={setStore} addTx={addTx} />}
+        {tab === "Travel" && <YTravel.TravelTab travel={travel} store={store} setStore={setStore} />}
       </div>
     );
   }

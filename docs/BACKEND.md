@@ -7,9 +7,9 @@ that talks to these endpoints is documented in [ARCHITECTURE.md](ARCHITECTURE.md
 
 ## D1 schema (`migrations/`)
 
-Four tables, applied via `npx wrangler d1 migrations apply yearly-db --remote`. Six migration
+Four tables, applied via `npx wrangler d1 migrations apply yearly-db --remote`. Seven migration
 files: `0001_init.sql`, `0002_revolut_fields.sql`, `0003_oneoff_flag.sql`,
-`0004_fix_updated_at_seconds.sql`, `0005_meta.sql`, `0006_travel_flag.sql`.
+`0004_fix_updated_at_seconds.sql`, `0005_meta.sql`, `0006_travel_flag.sql`, `0007_trip_id.sql`.
 
 > **⚠️ Wrangler migration tracking on remote is out of sync.** The remote `d1_migrations` table
 > doesn't record 0002–0004 as applied, so `wrangler d1 migrations apply --remote` will try to replay
@@ -38,6 +38,10 @@ transactions(id TEXT PK, date TEXT NOT NULL, description TEXT,
 -- 0006_travel_flag.sql
 -- travel INTEGER NOT NULL DEFAULT 0  (family-wide travel-budget tag; 0 on Revolut import; toggled in-app)
 
+-- 0007_trip_id.sql
+-- trip_id TEXT  (nullable; references store.trips[].id from the settings blob — no new table;
+--                present iff travel is set, per YCalc/YData trip plumbing)
+
 -- 0005_meta.sql (pipeline-written key/value store)
 meta(key TEXT PRIMARY KEY, value INTEGER NOT NULL)
 -- Populated only by the pipeline. Current rows:
@@ -50,7 +54,8 @@ settings(id INTEGER PK CHECK(id=1), blob TEXT, updated_at INTEGER)
 ```
 
 `amount_eur` is stored as `REAL` (mirrors the JS field directly). `fun`, `deleted`, `e_commerce`,
-`oneoff`, and `travel` are `0`/`1` integers. `updated_at` is a **server-stamped ms epoch** on every write.
+`oneoff`, and `travel` are `0`/`1` integers. `trip_id` is a nullable `TEXT` (no FK — trips live in the
+settings blob, not a table). `updated_at` is a **server-stamped ms epoch** on every write.
 `"migrations_dir": "migrations"` is set in `wrangler.jsonc`'s `d1_databases[0]`.
 
 ## API endpoints (`src/index.js`)

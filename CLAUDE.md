@@ -46,12 +46,17 @@ Full local-dev notes (the no-backend 404 handling, reload-loop fix) are in
 
 ## Everyday gotchas (read before any change)
 
-1. **Service worker caches the whole app.** Code changes are NOT reflected on a simple reload. On
-   every shell change, bump `CACHE_NAME` in `public/sw.js` AND hard-refresh. When something doesn't
-   appear in preview, **assume stale cache first** — rule it out before debugging logic. Full SW +
-   preview workflow: [docs/PWA-AND-DEV.md](docs/PWA-AND-DEV.md).
+1. **Service worker caches the whole app.** Code changes are NOT reflected on a simple reload — even
+   a scripted `location.reload()` or an SW-unregister+clear-caches call can still serve stale bytes
+   via the browser's own HTTP cache. On every shell change, bump `CACHE_NAME` in `public/sw.js` AND
+   hard-refresh (`Ctrl+Shift+R`, or `computer{action:"key", text:"ctrl+shift+r"}` in the Browser pane
+   tool). When something doesn't appear in preview, **hard-refresh first** — rule it out before
+   debugging logic. Also: if port 8766 is already serving (another session's dev server), navigate
+   straight to `http://localhost:8766/public/` instead of letting `preview_start`'s `autoPort` spin up
+   a second server on a random port nobody is looking at. Full SW + preview workflow, including the
+   port-conflict and hard-refresh procedures: [docs/PWA-AND-DEV.md](docs/PWA-AND-DEV.md#claude-code-preview--how-to-deploy-locally-for-testing).
 2. **`APP_VERSION` (`settings.jsx` footer) and `CACHE_NAME` (`sw.js`) move together** — currently
-   `v62` / `yearly-v62`. Bump both on every release.
+   `v65` / `yearly-v65`. Bump both on every release.
 3. **`localISO(d)`, never `toISOString()`** for dates in `calc.jsx` — `toISOString()` is UTC and
    silently drops Dec 31 transactions in UTC+ timezones (EET).
 3b. **`updated_at` is milliseconds everywhere** — `Date.now()` in the worker, `Date.now()` for the
@@ -101,10 +106,18 @@ The essentials every session needs:
 - **Travel budget** — a second, family-wide overlay that mirrors fun but with a single household
   allowance (`store.travel = { rates[], startMonth, balanceAdjustment }`, no per-person split) and
   its own transaction tag `t.travel`. `computeTravel(store)` returns the all-time `balance`
-  (green/deficit), YTD spend, uncapped linear projection, and category breakdown. It is a **pure
-  psychological overlay**: travel-tagged spend still counts in `spent`/`projection` vs the ceiling,
-  but travel does **not** feed `funPlanAnnual`/`mainTarget` or any callout. UI lives in `y/travel.jsx`
-  (`window.YTravel`: home `TravelStrip`, Analysis `TravelTab` + trips wishlist `store.travelWishlist`).
+  (green/deficit), YTD spend, uncapped linear projection, the family-wide category breakdown, and a
+  per-trip `trips[]` aggregation. It is a **pure psychological overlay**: travel-tagged spend still
+  counts in `spent`/`projection` vs the ceiling, but travel does **not** feed
+  `funPlanAnnual`/`mainTarget` or any callout. Travel-tagged spend is organized into discrete,
+  user-named **trips** (`store.trips[]`: `{id, name, location, startDate, endDate, createdAt,
+  updatedAt}`, settings-blob synced, no separate D1 table) — every `t.travel` transaction carries a
+  `trip_id` (nullable D1 column) referencing one. Legacy pre-trips travel tx are migrated onto a
+  fixed `trip_legacy` ("Past travel") trip. UI lives in `y/travel.jsx` (`window.YTravel`: home
+  `TravelStrip`, Analysis `TravelTab` — a collapsible list of trips with per-trip category
+  breakdown/tx and trip create/rename; delete is blocked while a trip has transactions) plus the
+  Add/Edit expense flow's trip picker (`y/addflow.jsx` `TripField`, required whenever Travel is
+  toggled on). The old `store.travelWishlist` future-trip-goals feature has been removed.
 - `staleDays` — whole days since the Revolut pipeline last ran; `0` when unknown. Extends the
   projection horizon: `projDays = daysRemaining + staleDays`. Passed as 4th arg to `computeStats`
   (default 0); only applied when `isCurrent`. Also widens the uncertainty band (`weeksRemaining =
