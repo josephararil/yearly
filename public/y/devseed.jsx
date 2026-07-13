@@ -78,11 +78,12 @@
       const mFun = new Date(Y, m, 17);
       if (mFun <= end) tx.push(mk(iso(mFun), "entertainment", 70 + wob(m * 2, 60), { fun: true, person: "marti" }));
     }
-    // A couple of travel-tagged trips across the year (exercises the travel budget ledger).
+    // A couple of travel-tagged trips across the year, each assigned to a discrete trip
+    // (exercises the travel budget ledger + per-trip aggregation).
     const trip1 = new Date(Y, 2, 21);
-    if (trip1 <= end) tx.push(mk(iso(trip1), "travel", 320 * scale, { travel: true }));
+    if (trip1 <= end) tx.push(mk(iso(trip1), "travel", 320 * scale, { travel: true, trip_id: "dev-trip-" + Y + "-spring" }));
     const trip2 = new Date(Y, 7, 4);
-    if (trip2 <= end) tx.push(mk(iso(trip2), "travel", 540 * scale, { travel: true }));
+    if (trip2 <= end) tx.push(mk(iso(trip2), "travel", 540 * scale, { travel: true, trip_id: "dev-trip-" + Y + "-summer" }));
     // One genuine one-off lump (exercises winsorization — counts in spend, excluded from the rate).
     const lump = new Date(Y, 4, 12);
     if (lump <= end) tx.push(mk(iso(lump), "travel", 1100 * scale, { oneoff: true }));
@@ -102,9 +103,11 @@
     ],
     wishlist: [],
     travel: { rates: [{ from, amount: 150 }], startMonth: from, balanceAdjustment: 0 },
-    travelWishlist: [
-      { id: "dev-trip-1", name: "Weekend in Rome", price: 800, createdMonth: from },
-      { id: "dev-trip-2", name: "Ski trip", price: 2200, createdMonth: from },
+    trips: [
+      { id: "dev-trip-" + (Y - 1) + "-spring", name: "Rome, March " + (Y - 1), location: "Rome, Italy", startDate: (Y - 1) + "-03-20", endDate: (Y - 1) + "-03-24", createdAt: Date.now(), updatedAt: Date.now() },
+      { id: "dev-trip-" + (Y - 1) + "-summer", name: "Beach week, August " + (Y - 1), location: "Halkidiki, Greece", startDate: (Y - 1) + "-08-02", endDate: (Y - 1) + "-08-09", createdAt: Date.now(), updatedAt: Date.now() },
+      { id: "dev-trip-" + Y + "-spring", name: "Rome, March " + Y, location: "Rome, Italy", startDate: Y + "-03-20", endDate: Y + "-03-24", createdAt: Date.now(), updatedAt: Date.now() },
+      { id: "dev-trip-" + Y + "-summer", name: "Beach week, August " + Y, location: "Halkidiki, Greece", startDate: Y + "-08-02", endDate: Y + "-08-09", createdAt: Date.now(), updatedAt: Date.now() },
     ],
     years: {
       [Y - 2]: { ceiling: 21000, buffer: 0.04 },
