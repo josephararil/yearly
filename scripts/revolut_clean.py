@@ -85,7 +85,7 @@ REVOLUT_CATEGORY_MAP = {
 
 NAME_RULES = [
     # Groceries
-    (r"kaufland|aleks treyd|via trakia|t market|lidl|billa|fantastico|metro|carrefour|nak market|farma mol|btsm", "Groceries"),
+    (r"kaufland|aleks treyd|via trakia|t market|lidl|billa|fantastico|metro|carrefour|nak market|farma mol|btsm|lik 2", "Groceries"),
     # Restaurants & Food
     (r"restaurant|mole|bigstroimat|horeca|borukov|tsveti i tedi|cafe|coffee|kfc|mcdonald|burger|pizza|sushi|kapancheto|bonbon|west cafe"
      r"|gozba|amrest|rozhen|vm beykar|zlatna krusha|fusion|lagardere", "Restaurants"),
@@ -94,7 +94,7 @@ NAME_RULES = [
     # Transport
     (r"omv|oil|vinetki|shell|lukoil|petrol|parking|uber|bolt|taxi|fuel", "Transport"),
     # Entertainment / Subscriptions
-    (r"spotify|realdebrid|google|netflix|apple|google play|youtube|steam|disney|hbo|lik 2|prirodonauc", "Entertainment"),
+    (r"spotify|realdebrid|google|netflix|apple|google play|youtube|steam|disney|hbo|prirodonauc", "Entertainment"),
     # Gym (Playbox Tennis Court shows as garbled Cyrillic — match on partial decode)
     (r"gym|toni k eood|royal santelo|sila|dekatlon|fitness|sport|pulse|playbox", "Gym"),
     # Shopping
@@ -112,6 +112,21 @@ NAME_RULES = [
     # Kindergarten
     (r"kindergarten|детска|gradina|sophie", "Sophie Kindergarten"),
 ]
+
+# Friendly description override for specific merchants. Each entry is
+# (name pattern, required amount_eur or None for any amount, override description).
+DESCRIPTION_OVERRIDES = [
+    (r"lik 2 1926 eood", None, "Mesarnitza"),
+    (r"epay", 14.27, "Internet"),
+]
+
+def override_description(name_to_check: str, amount_eur: float) -> str | None:
+    for pattern, required_amount, override in DESCRIPTION_OVERRIDES:
+        if required_amount is not None and round(amount_eur, 2) != required_amount:
+            continue
+        if re.search(pattern, name_to_check, re.IGNORECASE):
+            return override
+    return None
 
 SKIP_DESCRIPTION_PATTERNS = [
     r"^transfer from joseph",
@@ -324,6 +339,9 @@ def build_rows(transactions: list[dict]) -> tuple[list[dict], dict]:
         merchant = tx.get("merchant") or {}
         merchant_name = merchant.get("name", "").strip()
         description = merchant_name or tx.get("description", "").strip()
+        override = override_description((merchant_name or description).lower(), amount_eur)
+        if override:
+            description = override
 
         rows.append({
             # Core / existing schema

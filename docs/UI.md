@@ -112,8 +112,8 @@ instead. Trip *selection* when logging an expense lives in `y/addflow.jsx` (`Tri
 ## Screens
 
 - `y/home.jsx` (Overview — hero + `VoiceLine` + FunStrip + TravelStrip + `MonthCurve` monthly chart)
-- `y/analysis.jsx` (Projection/Categories/Activity/Fun/Travel tabs; charts are hand-built SVG that
-  double as the Recharts spec)
+- `y/analysis.jsx` (Projection/Activity/Fun/Travel tabs — Activity has Categories/Transactions
+  sub-tabs; charts are hand-built SVG that double as the Recharts spec)
 - `y/settings.jsx` (ceiling/buffer/years/fun-budget/density/templates/CSV import-export/JSON
   backup-restore/clear)
 - `y/addflow.jsx` (unified "Log an expense" sheet: amount hero, template accelerator strip, category
@@ -161,9 +161,14 @@ line-by-line legend below the chart is rendered via `YUI.ChartExplain` (see belo
 ### `analysis.jsx` — `AnalysisScreen`
 
 Receives `fun`, `travel`, `store`, `setStore`, `addTx` in addition to `stats`/`focus`/`onEditTx`;
-renders `<YFun.FunTab>` on the "Fun" segment and `<YTravel.TravelTab>` on the "Travel" segment.
-Focus routing: `"categories"` → Categories, `"projection"` → Projection, `"activity"` → Activity,
-`"fun"` → Fun, `"travel"` → Travel. The Activity tab's "show only" filters include Fun and Travel.
+renders `<YFun.FunTab>` on the "Fun" segment and `<YTravel.TravelTab>` on the "Travel" segment. Four
+top-level segments: Projection, Activity, Fun, Travel. **Activity** is `ActivityMergedTab`, which owns
+its own sub-tab state (`activitySubtab`, lifted into `AnalysisScreen` so focus-routing can drive it)
+and renders a second `SegmentedControl` — Categories / Transactions — above whichever of `CategoriesTab`
+/ `TransactionsTab` is selected; both sub-tabs are otherwise unchanged from their former standalone-tab
+selves. Focus routing: `"categories"` → Activity tab, Categories sub-tab (with `focusCategory`),
+`"projection"` → Projection, `"activity"` → Activity tab, Transactions sub-tab, `"fun"` → Fun,
+`"travel"` → Travel. The Transactions sub-tab's "show only" filters include Fun and Travel.
 
 **ProjectionChart** — H=252, interactive: pointer/touch events (pointer move + down, leave, up,
 cancel) show a vertical crosshair with a floating tooltip (€ value + month/day label); on the
@@ -221,7 +226,7 @@ Removed: "Projected finish" and "VS Target" cards (both surfaced on the Overview
 
 **CategoriesTab** catbar rows use `CatIcon` (24px, radius 6); expanding a category shows two
 sub-lists: "Recent in [category]" (last 5 by date, reversed) and "Largest in [category]" (top 5 by
-`amount_eur` descending), both using `TxRow` with `onClick → onEditTx`. **ActivityTab** — lists **all** transactions (`stats.txns`, including fun-tagged ones); fun tx
+`amount_eur` descending), both using `TxRow` with `onClick → onEditTx`. **TransactionsTab** — lists **all** transactions (`stats.txns`, including fun-tagged ones); fun tx
 show the person's name as a tag. Filters are hidden behind a compact `sliders` icon button to the
 right of the search bar; when active filters exist, a terracotta badge shows the count. Tapping the
 button toggles an inline filter panel with three sections: **Category** (All + one chip per category
