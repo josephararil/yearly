@@ -211,6 +211,17 @@ Balance only counts travel txns with `t.date >= travel.startMonth + "-01"`. Trav
 still counts in `computeStats`'s `spent`/`projection` vs the ceiling; travel does **not** feed
 `funPlanAnnual`/`mainTarget` or any callout — it is a pure psychological overlay.
 
+Also returns `trips`: an array built from `store.trips`, one entry per trip —
+`{id, name, location, startDate, endDate, total, count, catList, txns}` — aggregating **all-time**
+travel-tagged transactions matching `t.trip_id === trip.id` (no year filter; a trip can span a year
+boundary). `total`/`count`/`catList` are the trip's own sum/tx-count/category breakdown (via
+`aggregateByCategory`); `txns` is the matching transactions, newest-first. Trips with zero matching
+transactions still appear (`total:0`, empty `catList`/`txns`) so a freshly created trip shows
+immediately. Sorted by recency, newest first: sort key = `trip.startDate || localISO(new
+Date(trip.createdAt || 0))`, string-compared descending. This is purely additive per-trip metadata
+on top of the family-wide ledger above — it does not affect `balance`/`accrued`/`travelProjection`
+or any other existing field.
+
 ## Store shape — `y/data.jsx` (`window.YData`)
 
 The persisted store shape, the fixed 18-category list (`CATEGORIES`, id→icon→color), default

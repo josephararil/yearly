@@ -417,7 +417,33 @@ function computeStats(store, year, asOfDate, staleDays = 0) {
 
     const { catList: travelCatList } = aggregateByCategory(travelYearTxns, travelSpentYTD);
 
-    return { balance, accrued, spentAllTime, monthlyRate, usedThisMonth, travelSpentYTD, travelProjection, travelCatList, startMonth: travel.startMonth };
+    // Per-trip aggregation — all-time (a trip can cross a year boundary), independent of the
+    // year/asOf filters above. Purely additive metadata on top of the ledger math.
+    const trips = (store.trips || [])
+      .map((trip) => {
+        const txns = (store.transactions || [])
+          .filter((t) => t.travel && t.trip_id === trip.id)
+          .sort((a, b) => b.date.localeCompare(a.date));
+        const total = txns.reduce((a, t) => a + t.amount_eur, 0);
+        const { catList } = aggregateByCategory(txns, total);
+        const sortKey = trip.startDate || localISO(new Date(trip.createdAt || 0));
+        return {
+          id: trip.id,
+          name: trip.name,
+          location: trip.location,
+          startDate: trip.startDate,
+          endDate: trip.endDate,
+          total,
+          count: txns.length,
+          catList,
+          txns,
+          sortKey,
+        };
+      })
+      .sort((a, b) => b.sortKey.localeCompare(a.sortKey))
+      .map(({ sortKey, ...rest }) => rest);
+
+    return { balance, accrued, spentAllTime, monthlyRate, usedThisMonth, travelSpentYTD, travelProjection, travelCatList, startMonth: travel.startMonth, trips };
   }
 
   // ---- Callout engine ----
