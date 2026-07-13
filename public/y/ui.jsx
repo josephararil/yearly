@@ -228,7 +228,7 @@ function TxTag({ label, color }) {
         </span>
         <span className="tx-main">
           <div className="tx-desc" style={{ display: 'flex', alignItems: 'center', gap: 5, minWidth: 0 }}>
-            <span style={{ flex: 1, minWidth: 0, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{t.description}</span>
+            <span style={{ minWidth: 0, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{t.description}</span>
             {t.fun && <TxTag label="Fun" color="var(--amber)" />}
             {t.travel && <TxTag label="Travel" color={YData.cat('travel').color} />}
           </div>
