@@ -197,7 +197,19 @@
     );
   }
 
-function TxRow({ t, onClick, people }) {
+function TxTag({ label, color }) {
+    return (
+      <span style={{
+        fontFamily: 'var(--mono)', fontSize: 9, fontWeight: 700, letterSpacing: '0.06em',
+        textTransform: 'uppercase', color,
+        background: `color-mix(in srgb, ${color} 14%, transparent)`,
+        border: `1px solid color-mix(in srgb, ${color} 35%, transparent)`,
+        borderRadius: 5, padding: '1px 5px', lineHeight: 1.4, flexShrink: 0,
+      }}>{label}</span>
+    );
+  }
+
+  function TxRow({ t, onClick, people }) {
     const c = YData.cat(t.category);
     const personName = t.person && people ? (people.find((p) => p.id === t.person) || {}).name : null;
     const isManual = t.source !== 'revolut';
@@ -215,8 +227,12 @@ function TxRow({ t, onClick, people }) {
           )}
         </span>
         <span className="tx-main">
-          <div className="tx-desc">{t.description}</div>
-          <div className="tx-meta">{fmtDateShort(t.date)} · {c.label}{personName ? ` · ${personName}` : ""}{t.fun ? <span style={{ color: 'var(--amber)', fontWeight: 600 }}> · fun</span> : null}</div>
+          <div className="tx-desc" style={{ display: 'flex', alignItems: 'center', gap: 5, minWidth: 0 }}>
+            <span style={{ flex: 1, minWidth: 0, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{t.description}</span>
+            {t.fun && <TxTag label="Fun" color="var(--amber)" />}
+            {t.travel && <TxTag label="Travel" color={YData.cat('travel').color} />}
+          </div>
+          <div className="tx-meta">{fmtDateShort(t.date)} · {c.label}{personName ? ` · ${personName}` : ""}</div>
         </span>
         <span className="tx-amt num">{eurAuto(t.amount_eur)}</span>
       </button>

@@ -50,7 +50,9 @@ verdict on the right; row 2 (`.pulse-r2`, mono 11.5px) carries `€X so far` (in
 Shows a 24px rounded merchant logo (`t.merchant_logo`) when present; falls back to a 24px `cat-ic`
 category icon (colored square + SVG icon, `CatIcon`-style inline) if absent or on load error.
 `tx-meta` appends `· city` when `t.merchant_city` is set. Both fields are populated by `rowToTx` in
-`sync.jsx` from the Revolut D1 columns.
+`sync.jsx` from the Revolut D1 columns. When `t.fun` / `t.travel` is set, a small colored `TxTag`
+("Fun" amber / "Travel" — the Travel category's blue) renders inline next to the title so tagged
+rows are scannable at a glance; per-person/per-trip detail is left to the edit sheet.
 
 ### `Toast`
 
