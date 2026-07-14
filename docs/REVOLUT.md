@@ -184,6 +184,18 @@ in-memory per currency+date for the run. **TRY (Turkish lira) is unsupported** �
 it in 2018. If a lookup fails (TRY or otherwise), the row is **dropped** and listed at the end of the
 clean step — add it manually in the app rather than letting `amount_eur` go in wrong.
 
+**Browser-side gotcha (`y/revolut_import.jsx`, `window.YRevolutImport.getEurRate`):** the in-app
+importer hits `https://api.frankfurter.dev/v1/{date}?from={CURRENCY}&to=EUR` directly, **not**
+`api.frankfurter.app`. `api.frankfurter.app` now permanently 301-redirects to `api.frankfurter.dev`,
+and that redirect response carries no `Access-Control-Allow-Origin` header — browsers abort the
+whole fetch ("Failed to fetch") on that hop even though the final response allows CORS. Python's
+`requests` library doesn't enforce CORS, so `revolut_clean.py` never saw this. The practical effect
+of using the wrong host client-side: every non-EUR transaction silently drops out of the import
+(shows as "changed"/"skipped" instead of matching an already-imported row) with no error surfaced.
+`revolut_import.test.html`'s second fixture (`revolut_import_fixture_fx.json`, EUR+TRY) exercises
+this live FX path so a regression here fails the parity test instead of only showing up against
+real production data.
+
 ## `.sync_state.json`
 
 ```json
