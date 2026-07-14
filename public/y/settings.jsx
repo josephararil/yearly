@@ -138,23 +138,32 @@
   }
 
   // ---------- Revolut mobile import ----------
-  function diffRevolutRows(rows, store) {
-    const existing = new Map(store.transactions.map((t) => [t.id, t]));
-    const COMPARE = ["date", "description", "amount_eur"];
-    const fresh = [], changed = [];
+  const COMPARE_FIELDS = ["date", "description", "amount_eur"];
+
+  // existingById: id -> raw D1 row (includes deleted=1 rows — the local React store never does,
+  // since the client sync layer drops deleted rows from its in-memory map entirely). Diffing
+  // against that local store would misclassify every soft-deleted id as "new".
+  function diffRevolutRows(rows, existingById) {
+    const fresh = [], changed = [], alreadyDeleted = [];
     for (const r of rows) {
-      const old = existing.get(r.id);
+      const old = existingById.get(r.id);
       if (!old) { fresh.push(r); continue; }
-      const diffs = COMPARE.filter((f) => {
+      if (old.deleted) { alreadyDeleted.push(r); continue; }
+      const diffs = COMPARE_FIELDS.filter((f) => {
         if (f === "amount_eur") return Math.round((old.amount_eur || 0) * 100) !== Math.round((r.amount_eur || 0) * 100);
         return (old[f] || "") !== (r[f] || "");
-      });
-      if (diffs.length) changed.push({ row: r, old, diffs });
+      }).map((f) => ({ field: f, old: old[f], next: r[f] }));
+      if (diffs.length) changed.push({ row: r, diffs });
     }
     const addedTotal = fresh.reduce((s, r) => s + r.amount_eur, 0);
-    const changedDelta = changed.reduce((s, c) => s + (c.diffs.includes("amount_eur") ? c.row.amount_eur - c.old.amount_eur : 0), 0);
-    return { fresh, changed, net: addedTotal + changedDelta };
+    const changedDelta = changed.reduce((s, c) => {
+      const d = c.diffs.find((x) => x.field === "amount_eur");
+      return s + (d ? d.next - d.old : 0);
+    }, 0);
+    return { fresh, changed, alreadyDeleted, net: addedTotal + changedDelta };
   }
+
+  const FIELD_LABEL = { date: "date", description: "desc", amount_eur: "amount" };
 
   function RevolutImportSheet({ open, onClose, store }) {
     const [raw, setRaw] = React.useState("");
@@ -177,8 +186,22 @@
           setBusy(false);
           return;
         }
-        const diff = diffRevolutRows(built.rows, store);
-        setPreview({ rows: built.rows, skipped: built.skipped, diff });
+        // Prefer a live full D1 snapshot (includes deleted=1 rows) over the local store, which
+        // never carries deleted rows at all. Falls back to the local store (no deleted-row
+        // visibility) if the endpoint is unreachable, e.g. the no-backend local static preview.
+        let existingById = new Map(store.transactions.map((t) => [t.id, t]));
+        let liveSnapshot = false;
+        try {
+          const res = await fetch('/api/sync?since=0');
+          const ct = res.headers.get('content-type') || '';
+          if (res.ok && ct.includes('application/json')) {
+            const data = await res.json();
+            existingById = new Map((data.transactions || []).map((t) => [t.id, t]));
+            liveSnapshot = true;
+          }
+        } catch (e) { /* offline/unreachable — fall back to local store below */ }
+        const diff = diffRevolutRows(built.rows, existingById);
+        setPreview({ rows: built.rows, skipped: built.skipped, diff, liveSnapshot });
       } catch (e) {
         setError("Couldn't process the paste: " + (e && e.message ? e.message : e));
       }
@@ -241,9 +264,15 @@
         ) : (
           <div>
             <div className="muted" style={{ fontSize: 13, marginBottom: 6 }}>
-              {preview.diff.fresh.length} new · {preview.diff.changed.length} changed · {preview.skipped.length} skipped ·{" "}
+              {preview.diff.fresh.length} new · {preview.diff.changed.length} changed · {preview.diff.alreadyDeleted.length} already deleted · {preview.skipped.length} skipped ·{" "}
               net <span className="num" style={{ color: "var(--ink)" }}>{eur2(preview.diff.net)}</span>
             </div>
+            {!preview.liveSnapshot && (
+              <p style={{ color: "var(--alert)", fontSize: 12, marginTop: -2, marginBottom: 8, lineHeight: 1.4 }}>
+                Couldn't reach the server to check for deleted rows — this diff is only against the
+                data already loaded on this device, so a deleted row you haven't synced may show as new.
+              </p>
+            )}
             <div style={{ maxHeight: "44vh", overflowY: "auto", marginBottom: 12 }}>
               {preview.diff.fresh.length > 0 && (
                 <div style={{ marginBottom: 10 }}>
@@ -263,15 +292,26 @@
                 <div style={{ marginBottom: 10 }}>
                   <div className="field-label" style={{ marginBottom: 4 }}>Changed ({preview.diff.changed.length})</div>
                   {preview.diff.changed.map((c) => (
-                    <div key={c.row.id} className="imp-row">
+                    <div key={c.row.id} className="imp-row" style={{ alignItems: "flex-start" }}>
                       <span className="imp-main">
-                        <div className="tx-desc" style={{ fontSize: 13.5 }}>{c.row.description || "—"}</div>
-                        <div className="tx-meta">
-                          {YCalc.fmtDateShort(c.row.date)}
-                          {c.diffs.includes("amount_eur") && <> · <span className="num">{eur2(c.old.amount_eur)} → {eur2(c.row.amount_eur)}</span></>}
-                        </div>
+                        <div className="tx-desc" style={{ fontSize: 13.5 }}>{c.row.description || "—"} <span className="muted" style={{ fontSize: 11 }}>{YCalc.fmtDateShort(c.row.date)}</span></div>
+                        {c.diffs.map((d) => (
+                          <div key={d.field} className="tx-meta">
+                            {FIELD_LABEL[d.field]}: {d.field === "amount_eur" ? eur2(d.old) : (d.old || "—")}
+                            {" → "}
+                            <span style={{ color: "var(--ink)" }}>{d.field === "amount_eur" ? eur2(d.next) : (d.next || "—")}</span>
+                          </div>
+                        ))}
                       </span>
                     </div>
+                  ))}
+                </div>
+              )}
+              {preview.diff.alreadyDeleted.length > 0 && (
+                <div style={{ marginBottom: 10 }}>
+                  <div className="field-label" style={{ marginBottom: 4 }}>Already deleted in D1 ({preview.diff.alreadyDeleted.length}) — stays deleted</div>
+                  {preview.diff.alreadyDeleted.map((r) => (
+                    <div key={r.id} className="muted" style={{ fontSize: 12.5, padding: "3px 0" }}>{YCalc.fmtDateShort(r.date)} · {r.description || "—"}</div>
                   ))}
                 </div>
               )}
