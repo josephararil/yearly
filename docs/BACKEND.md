@@ -68,6 +68,7 @@ All under `/api/*`. Server clock is authoritative; every write stamps `updated_a
 | `GET` | `/api/sync?since=<ms>` | Pull: `{now, transactions:[rows with updated_at>=since], settings:row|null}` |
 | `GET` | `/api/sync/check` | Aggregate check: `{tx_count, sum_eur_cents, settings_updated_at, last_revolut_sync_ts}` — used by client reconciliation |
 | `POST` | `/api/transactions` | Batch upsert array of tx records; returns `{now, count}` |
+| `POST` | `/api/revolut/ingest` | Field-preserving batch upsert for the mobile Revolut import pipeline; returns `{now, count}` |
 | `GET` | `/api/settings` | `{blob:{…}, updated_at}` or `{blob:null}` |
 | `PUT` | `/api/settings` | Upsert settings blob; returns `{now, updated_at}` |
 | `GET` | `/api/export` | Full dump: `{exported_at, transactions:[all incl. deleted], settings}` |
@@ -81,3 +82,13 @@ Key implementation notes:
   `fun:true`/`oneoff:true`/`travel:true`/omit on read.
 - Body validation: array required, each item must have a string `id`; returns 400 otherwise.
 - Uses `env.DB.batch([...])` for the upsert array.
+- `POST /api/revolut/ingest` is a **separate, preserving** upsert for the mobile Revolut import path
+  (see [REVOLUT.md](REVOLUT.md)). Unlike `POST /api/transactions` (which overwrites every column on
+  conflict), its `ON CONFLICT DO UPDATE SET` only touches pipeline-authoritative columns (`date`,
+  `description`, `amount_eur`, `source`, `original_amount`, `original_currency`, `revolut_category`,
+  `merchant_mcc`, `merchant_city`, `merchant_country`, `merchant_logo`, `card_label`, `tx_type`,
+  `e_commerce`, `fee_eur`, `updated_at`) and never touches user-owned columns (`category`, `fun`,
+  `person`, `note`, `deleted`, `oneoff`, `travel`, `trip_id`) — mirroring `revolut_clean.py`'s
+  `PRESERVE_ON_CONFLICT`. New ids still get every column set from the incoming row. Same body
+  validation and `txToBinds` reuse as `POST /api/transactions`; the batch also stamps
+  `meta.last_revolut_sync_ts = Date.now()` (ms) in the same `env.DB.batch([...])` call.
