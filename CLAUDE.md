@@ -28,7 +28,7 @@ on track and why.
 | [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) | Engine (`calc.jsx`), store shape (`data.jsx`), sync layer (`sync.jsx`), state root (`app.jsx`) |
 | [docs/UI.md](docs/UI.md) | Components & screens: `ui.jsx`, `fun.jsx`, `home.jsx`, `analysis.jsx`, `settings.jsx`, `addflow.jsx` |
 | [docs/BACKEND.md](docs/BACKEND.md) | Cloudflare Workers + D1 schema, migrations, `/api/*` endpoints |
-| [docs/REVOLUT.md](docs/REVOLUT.md) | Revolut import pipeline (`scripts/`), category rules, FX, known issues |
+| [docs/REVOLUT.md](docs/REVOLUT.md) | Revolut import pipeline (`scripts/`), category rules, FX, known issues, mobile bookmarklet path |
 | [docs/PWA-AND-DEV.md](docs/PWA-AND-DEV.md) | Running locally, service worker, regression test, Claude Code preview sequence |
 
 ## How to run it
