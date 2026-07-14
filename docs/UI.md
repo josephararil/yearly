@@ -114,8 +114,8 @@ instead. Trip *selection* when logging an expense lives in `y/addflow.jsx` (`Tri
 - `y/home.jsx` (Overview — hero + `VoiceLine` + FunStrip + TravelStrip + `MonthCurve` monthly chart)
 - `y/analysis.jsx` (Projection/Activity/Fun/Travel tabs — Activity has Categories/Transactions
   sub-tabs; charts are hand-built SVG that double as the Recharts spec)
-- `y/settings.jsx` (ceiling/buffer/years/fun-budget/density/templates/CSV import-export/JSON
-  backup-restore/clear)
+- `y/settings.jsx` (ceiling/buffer/years/fun-budget/density/templates/CSV import-export/Revolut
+  mobile import/JSON backup-restore/clear)
 - `y/addflow.jsx` (unified "Log an expense" sheet: amount hero, template accelerator strip, category
   picker, Tags & options disclosure, Edit sheet)
 
@@ -326,6 +326,22 @@ YYYY-MM, plus the same "Correct balance…" → `travel.balanceAdjustment` back-
 old backups (with `target`, no `people`/`wishlist`) migrate cleanly. Hidden `#jsonfile` input mirrors
 the CSV `#csvfile` pattern. **"Sync now"** row in the Data section calls `YSync.pull()` on demand
 (shows "Syncing…" while in flight). "Restore sample data" has been removed.
+
+**"Import Revolut"** row (Data section, below "Import CSV") opens `RevolutImportSheet` — the mobile
+in-app counterpart to the desktop `sync.py push` pipeline (see [docs/REVOLUT.md](REVOLUT.md) and the
+`POST /api/revolut/ingest` endpoint in [docs/BACKEND.md](BACKEND.md#api-endpoints-srcindexjs)). Flow:
+paste the raw Revolut
+JSON array (from the bookmarklet or console script) into a textarea → "Preview" `JSON.parse`s it and
+runs it through `window.YRevolutImport.buildRows` (the JS port of `revolut_clean.py`), then
+`diffRevolutRows` (local helper in `settings.jsx`) diffs the cleaned rows against `store.transactions`
+by `id`, mirroring `sync.py`'s preview: **new** (id not in store), **changed** (existing id where
+`date`/`description`/`amount_eur` differ — the same `COMPARE` tuple as the Python preview), plus a
+grouped **skipped** list (by reason) and a net-€ total (Σ new + Σ changed deltas). "Import" POSTs the
+cleaned rows to `POST /api/revolut/ingest` (the field-preserving endpoint — in-app category/fun/note
+edits and deletions survive), then calls `YSync.pull({ force: true })` to refresh the local store from
+the merged D1 truth, and shows an imported/changed/net-€ summary. Errors (invalid JSON, empty array,
+nothing left after filters, network/endpoint failure) render inline and keep the pasted text so the
+user can retry — nothing is cleared on failure.
 
 ## Supporting files
 

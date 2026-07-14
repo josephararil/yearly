@@ -92,3 +92,13 @@ Key implementation notes:
   `PRESERVE_ON_CONFLICT`. New ids still get every column set from the incoming row. Same body
   validation and `txToBinds` reuse as `POST /api/transactions`; the batch also stamps
   `meta.last_revolut_sync_ts = Date.now()` (ms) in the same `env.DB.batch([...])` call.
+
+> **⚠️ Never `DELETE FROM transactions` directly in the D1 console for cleanup.** The client's pull
+> only ever adds/updates rows present in the `/api/sync` response — it never removes a row it already
+> has locally unless the incoming row carries `deleted=1` (a tombstone). A raw SQL `DELETE` leaves no
+> tombstone, so any client that already synced that row keeps it forever (confirmed: a hard-deleted
+> test row from a Revolut-import test stayed visible in the tab that had loaded it, survived a hard
+> refresh and "Force resync from server," and only disappeared in a fresh tab that had never seen it).
+> To remove a test/bad row so it propagates everywhere, run `UPDATE transactions SET deleted=1,
+> updated_at=<now_ms> WHERE id='...'` instead — or use the app's own delete action, which does this
+> for you.

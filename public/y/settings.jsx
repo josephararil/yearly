@@ -1,8 +1,8 @@
 // settings.jsx — target, buffer, years, templates, CSV import/export, clear.
 (function () {
-  const APP_VERSION = 'v66';
+  const APP_VERSION = 'v67';
   const { YData, YCalc, YUI } = window;
-  const { eur0, signedPct, computeStats, localISO } = YCalc;
+  const { eur0, eur2, signedPct, computeStats, localISO } = YCalc;
   const { Sheet, DeltaChip } = YUI;
   const DS = window.ApertureDesignSystem_72a4cd || {};
   const Button = DS.Button, SegmentedControl = DS.SegmentedControl;
@@ -130,6 +130,164 @@
             <div style={{ display: "flex", gap: 10 }}>
               <Button variant="secondary" onClick={() => setRows(null)}>Back</Button>
               <div style={{ flex: 1 }}><Button variant="primary" block disabled={!kept} onClick={doImport}>Import {kept} {kept === 1 ? "row" : "rows"}</Button></div>
+            </div>
+          </div>
+        )}
+      </Sheet>
+    );
+  }
+
+  // ---------- Revolut mobile import ----------
+  function diffRevolutRows(rows, store) {
+    const existing = new Map(store.transactions.map((t) => [t.id, t]));
+    const COMPARE = ["date", "description", "amount_eur"];
+    const fresh = [], changed = [];
+    for (const r of rows) {
+      const old = existing.get(r.id);
+      if (!old) { fresh.push(r); continue; }
+      const diffs = COMPARE.filter((f) => {
+        if (f === "amount_eur") return Math.round((old.amount_eur || 0) * 100) !== Math.round((r.amount_eur || 0) * 100);
+        return (old[f] || "") !== (r[f] || "");
+      });
+      if (diffs.length) changed.push({ row: r, old, diffs });
+    }
+    const addedTotal = fresh.reduce((s, r) => s + r.amount_eur, 0);
+    const changedDelta = changed.reduce((s, c) => s + (c.diffs.includes("amount_eur") ? c.row.amount_eur - c.old.amount_eur : 0), 0);
+    return { fresh, changed, net: addedTotal + changedDelta };
+  }
+
+  function RevolutImportSheet({ open, onClose, store }) {
+    const [raw, setRaw] = React.useState("");
+    const [busy, setBusy] = React.useState(false);
+    const [error, setError] = React.useState(null);
+    const [preview, setPreview] = React.useState(null); // { rows, skipped, diff }
+    const [result, setResult] = React.useState(null); // { imported, changed, net }
+    React.useEffect(() => { if (open) { setRaw(""); setBusy(false); setError(null); setPreview(null); setResult(null); } }, [open]);
+
+    const doPreview = async () => {
+      setError(null);
+      let arr;
+      try { arr = JSON.parse(raw); } catch (e) { setError("Invalid JSON — check the paste and try again."); return; }
+      if (!Array.isArray(arr)) { setError("Expected a JSON array of transactions."); return; }
+      setBusy(true);
+      try {
+        const built = await window.YRevolutImport.buildRows(arr);
+        if (!built.rows.length) {
+          setError(`Nothing to import — ${built.parsed} parsed, all ${built.skipped.length} excluded by filters.`);
+          setBusy(false);
+          return;
+        }
+        const diff = diffRevolutRows(built.rows, store);
+        setPreview({ rows: built.rows, skipped: built.skipped, diff });
+      } catch (e) {
+        setError("Couldn't process the paste: " + (e && e.message ? e.message : e));
+      }
+      setBusy(false);
+    };
+
+    const skipGroups = React.useMemo(() => {
+      if (!preview) return [];
+      const m = new Map();
+      preview.skipped.forEach((s) => { m.set(s.reason, (m.get(s.reason) || 0) + 1); });
+      return Array.from(m.entries()).sort((a, b) => b[1] - a[1]);
+    }, [preview]);
+
+    const doImport = async () => {
+      setBusy(true);
+      setError(null);
+      try {
+        const res = await fetch('/api/revolut/ingest', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(preview.rows),
+        });
+        const ct = res.headers.get('content-type') || '';
+        if (!res.ok || !ct.includes('application/json')) throw new Error('Server error (HTTP ' + res.status + ')');
+        await res.json();
+        await window.YSync.pull({ force: true });
+        setResult({ imported: preview.diff.fresh.length, changed: preview.diff.changed.length, net: preview.diff.net });
+      } catch (e) {
+        setError("Import failed — the paste is kept so you can retry. (" + (e && e.message ? e.message : e) + ")");
+      }
+      setBusy(false);
+    };
+
+    return (
+      <Sheet open={open} onClose={onClose} title="Import Revolut">
+        {result ? (
+          <div>
+            <p className="muted" style={{ fontSize: 13.5, marginTop: 0, lineHeight: 1.5 }}>Import complete.</p>
+            <div className="panel panel-pad" style={{ marginBottom: 16 }}>
+              <div style={{ display: "flex", justifyContent: "space-between", padding: "4px 0" }}><span className="muted">Imported (new)</span><span className="num">{result.imported}</span></div>
+              <div style={{ display: "flex", justifyContent: "space-between", padding: "4px 0" }}><span className="muted">Changed (existing)</span><span className="num">{result.changed}</span></div>
+              <div style={{ display: "flex", justifyContent: "space-between", padding: "4px 0" }}><span className="muted">Net impact</span><span className="num">{eur2(result.net)}</span></div>
+            </div>
+            <Button variant="primary" block onClick={onClose}>Done</Button>
+          </div>
+        ) : !preview ? (
+          <div>
+            <p className="muted" style={{ fontSize: 13, marginTop: 0, lineHeight: 1.5 }}>
+              Paste the raw Revolut JSON array (from the bookmarklet or console script). It's cleaned
+              and previewed here before anything is pushed — your in-app category/fun/note edits are
+              never overwritten.
+            </p>
+            <div className="field"><label>Raw JSON</label>
+              <textarea className="inp" style={{ minHeight: 160, fontFamily: "var(--mono)", fontSize: 11.5 }} value={raw}
+                onChange={(e) => setRaw(e.target.value)} placeholder="[{...}, {...}]" />
+            </div>
+            {error && <p style={{ color: "var(--alert)", fontSize: 13, marginTop: -4 }}>{error}</p>}
+            <Button variant="primary" block disabled={!raw.trim() || busy} onClick={doPreview}>{busy ? "Cleaning…" : "Preview"}</Button>
+          </div>
+        ) : (
+          <div>
+            <div className="muted" style={{ fontSize: 13, marginBottom: 6 }}>
+              {preview.diff.fresh.length} new · {preview.diff.changed.length} changed · {preview.skipped.length} skipped ·{" "}
+              net <span className="num" style={{ color: "var(--ink)" }}>{eur2(preview.diff.net)}</span>
+            </div>
+            <div style={{ maxHeight: "44vh", overflowY: "auto", marginBottom: 12 }}>
+              {preview.diff.fresh.length > 0 && (
+                <div style={{ marginBottom: 10 }}>
+                  <div className="field-label" style={{ marginBottom: 4 }}>New ({preview.diff.fresh.length})</div>
+                  {preview.diff.fresh.map((r) => (
+                    <div key={r.id} className="imp-row">
+                      <span className="imp-main">
+                        <div className="tx-desc" style={{ fontSize: 13.5 }}>{r.description || "—"}</div>
+                        <div className="tx-meta">{YCalc.fmtDateShort(r.date)} · {r.category}</div>
+                      </span>
+                      <span className="num">{eur2(r.amount_eur)}</span>
+                    </div>
+                  ))}
+                </div>
+              )}
+              {preview.diff.changed.length > 0 && (
+                <div style={{ marginBottom: 10 }}>
+                  <div className="field-label" style={{ marginBottom: 4 }}>Changed ({preview.diff.changed.length})</div>
+                  {preview.diff.changed.map((c) => (
+                    <div key={c.row.id} className="imp-row">
+                      <span className="imp-main">
+                        <div className="tx-desc" style={{ fontSize: 13.5 }}>{c.row.description || "—"}</div>
+                        <div className="tx-meta">
+                          {YCalc.fmtDateShort(c.row.date)}
+                          {c.diffs.includes("amount_eur") && <> · <span className="num">{eur2(c.old.amount_eur)} → {eur2(c.row.amount_eur)}</span></>}
+                        </div>
+                      </span>
+                    </div>
+                  ))}
+                </div>
+              )}
+              {skipGroups.length > 0 && (
+                <div>
+                  <div className="field-label" style={{ marginBottom: 4 }}>Skipped ({preview.skipped.length})</div>
+                  {skipGroups.map(([reason, count]) => (
+                    <div key={reason} className="muted" style={{ fontSize: 12.5, padding: "3px 0" }}>{reason} — {count}</div>
+                  ))}
+                </div>
+              )}
+            </div>
+            {error && <p style={{ color: "var(--alert)", fontSize: 13 }}>{error}</p>}
+            <div style={{ display: "flex", gap: 10 }}>
+              <Button variant="secondary" onClick={() => setPreview(null)}>Back</Button>
+              <div style={{ flex: 1 }}><Button variant="primary" block disabled={busy} onClick={doImport}>{busy ? "Importing…" : "Import"}</Button></div>
             </div>
           </div>
         )}
@@ -639,6 +797,7 @@
         <div className="panel" style={{ overflow: "hidden" }}>
           <Row icon="layers" title="Quick templates" sub={`${store.templates.length} templates`} onClick={() => setSub("templates")} />
           <Row icon="upload" title="Import CSV" sub="with duplicate detection" onClick={() => setSub("import")} />
+          <Row icon="upload" title="Import Revolut" sub="paste raw JSON, preserves your edits" onClick={() => setSub("revolut")} />
           <Row icon="download" title="Export all data" sub="CSV of every transaction" onClick={() => exportCSV(store)} />
           <Row icon="download" title="Back up (JSON)" sub="full backup incl. years & templates" onClick={() => backupJSON(store)} />
           <input type="file" accept=".json,application/json" style={{ display: "none" }} id="jsonfile"
@@ -697,6 +856,7 @@
         <DensitySheet open={sub === "density"} onClose={() => setSub(null)} store={store} setStore={setStore} />
         <TemplatesSheet open={sub === "templates"} onClose={() => setSub(null)} store={store} setStore={setStore} />
         <ImportSheet open={sub === "import"} onClose={() => setSub(null)} store={store} setStore={setStore} />
+        <RevolutImportSheet open={sub === "revolut"} onClose={() => setSub(null)} store={store} />
         <ClearSheet open={sub === "clear"} onClose={() => setSub(null)} />
         <FunConfigSheet open={!!funPersonOpen} onClose={() => setFunPersonSub(null)} person={funPersonOpen} store={store} setStore={setStore} stats={stats} />
         <TravelConfigSheet open={travelOpen} onClose={() => setTravelOpen(false)} store={store} setStore={setStore} />
