@@ -8,10 +8,12 @@
  * navigator.clipboard.writeText to work on mobile browsers, since the fetch/pagination itself is
  * async and doesn't count as a user gesture.
  *
- * STOP_BEFORE is stateless (always Jan 1 of the current year — full YTD), unlike sync.py's
- * BUFFER_DAYS-based incremental window, because there is no local state file on a phone.
- * Over-fetching is harmless: the app's import flow filters to the current year and the ingest
- * endpoint's upsert is idempotent + field-preserving.
+ * STOP_BEFORE is a stateless rolling window — always "BUFFER_DAYS days ago" — rather than
+ * sync.py's incremental window keyed off a local last-sync date, because there is no state file
+ * on a phone. This mirrors sync.py's BUFFER_DAYS=30 (same rationale: catch late-settling/PENDING
+ * transactions), just anchored to "now" instead of "last sync". Over-fetching beyond that window
+ * is harmless (the ingest endpoint's upsert is idempotent + field-preserving), but there's no
+ * reason to re-pull the whole year on every run, so the window is intentionally narrow.
  *
  * To install: see docs/REVOLUT.md "Mobile path" for the ready-to-paste javascript: URL, or run
  * `node scripts/build_bookmarklet.js` equivalent manually — minify this file's IIFE body to a
@@ -30,7 +32,8 @@
   };
   const BASE = "https://app.revolut.com/api/retail/user/current/transactions/last";
   const WALLET = "b3badc0f-f575-43ec-8ca5-eac55929d857";
-  const STOP_BEFORE = new Date(`${new Date().getFullYear()}-01-01`).getTime();
+  const BUFFER_DAYS = 30;
+  const STOP_BEFORE = Date.now() - BUFFER_DAYS * 24 * 60 * 60 * 1000;
 
   // --- overlay UI ---------------------------------------------------------
   const overlay = document.createElement("div");
