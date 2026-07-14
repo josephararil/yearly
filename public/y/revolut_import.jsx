@@ -110,7 +110,12 @@
     if (_fxCache.has(key)) return _fxCache.get(key);
     if (_fxFailures.has(key)) return null;
     try {
-      const url = "https://api.frankfurter.app/" + dateStr + "?from=" + currency + "&to=EUR";
+      // api.frankfurter.app now permanently 301-redirects to api.frankfurter.dev, and that
+      // redirect response carries no Access-Control-Allow-Origin header — browsers abort the
+      // whole fetch with "Failed to fetch" even though the final destination allows CORS
+      // (server-side callers like Python's `requests`, which don't enforce CORS, don't see
+      // this). Call the non-redirecting endpoint directly. Same response shape.
+      const url = "https://api.frankfurter.dev/v1/" + dateStr + "?from=" + currency + "&to=EUR";
       const res = await fetch(url);
       if (!res.ok) throw new Error("HTTP " + res.status);
       const data = await res.json();

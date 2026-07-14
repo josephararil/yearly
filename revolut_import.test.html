@@ -7,6 +7,7 @@
     body { font-family: ui-monospace, "SF Mono", Consolas, monospace; background: #111; color: #eee; padding: 24px; max-width: 720px; margin: 0 auto; }
     h1 { font-size: 18px; margin-bottom: 16px; }
     h2 { font-size: 11px; margin: 20px 0 4px; color: #666; text-transform: uppercase; letter-spacing: 0.08em; }
+    h3 { font-size: 13px; margin: 24px 0 2px; color: #ddd; }
     .row { display: flex; align-items: center; gap: 10px; padding: 7px 0; border-bottom: 1px solid #1e1e1e; font-size: 12.5px; }
     .badge { font-size: 10px; font-weight: 700; padding: 2px 7px; border-radius: 4px; flex-shrink: 0; }
     .pass { background: #1a3a1a; color: #4caf50; }
@@ -19,23 +20,31 @@
 <body>
   <h1>Yearly — revolut_import parity check</h1>
   <p style="font-size:12px;color:#666;margin-top:-8px">
-    Serve over HTTP and open this file. Fixture: <code>revolut_import_fixture.json</code>
-    (archived Revolut batch <code>scripts/batches/revolut_2026-06-11.json</code>, 50 raw transactions,
-    EUR-only — no live foreign-currency FX call is exercised). Expected output:
-    <code>revolut_import_expected.json</code>, generated with
-    <code>python scripts/revolut_clean.py revolut_import_fixture.json --report revolut_import_expected.json --quiet</code>.
+    Serve over HTTP and open this file. Runs two fixtures: a small EUR-only batch, and a larger
+    batch that includes foreign-currency (TRY) rows requiring a live Frankfurter FX lookup — the
+    latter is what caught the api.frankfurter.app redirect/CORS bug (browsers fail the whole fetch
+    because the 301 hop to api.frankfurter.dev carries no Access-Control-Allow-Origin header, even
+    though the final response allows CORS; Python's `requests` doesn't enforce CORS so it never saw
+    the problem). Expected outputs generated with
+    <code>python scripts/revolut_clean.py &lt;fixture&gt; --report &lt;expected&gt; --quiet</code>.
   </p>
   <div id="results"></div>
   <div id="summary"></div>
 
   <!-- Plain script tag — no Babel needed; revolut_import.jsx contains no JSX -->
-  <script src="public/y/revolut_import.jsx"></script>
+  <script src="public/y/revolut_import.jsx?v=2"></script>
   <script>
     const container = document.getElementById('results');
     let passed = 0, failed = 0;
 
     function section(label) {
       const h = document.createElement('h2');
+      h.textContent = label;
+      container.appendChild(h);
+    }
+
+    function subsection(label) {
+      const h = document.createElement('h3');
       h.textContent = label;
       container.appendChild(h);
     }
@@ -53,53 +62,72 @@
       container.appendChild(row);
     }
 
-    async function main() {
-      const [fixture, expected] = await Promise.all([
-        fetch('revolut_import_fixture.json').then(r => r.json()),
-        fetch('revolut_import_expected.json').then(r => r.json()),
+    const FIXTURES = [
+      {
+        label: 'Fixture A — EUR-only (revolut_import_fixture.json, 50 raw tx)',
+        fixture: 'revolut_import_fixture.json',
+        expected: 'revolut_import_expected.json',
+      },
+      {
+        label: 'Fixture B — EUR + TRY, exercises live FX conversion (revolut_import_fixture_fx.json, 650 raw tx)',
+        fixture: 'revolut_import_fixture_fx.json',
+        expected: 'revolut_import_expected_fx.json',
+      },
+    ];
+
+    async function runFixture({ label, fixture, expected }) {
+      subsection(label);
+      const [fixtureData, expectedData] = await Promise.all([
+        fetch(fixture).then(r => r.json()),
+        fetch(expected).then(r => r.json()),
       ]);
 
-      const result = await YRevolutImport.buildRows(fixture);
+      const result = await YRevolutImport.buildRows(fixtureData);
 
-      // ---- top-level counts ----
-      section('Top-level counts');
-      assert('parsed === ' + expected.parsed, result.parsed === expected.parsed,
+      assert('parsed === ' + expectedData.parsed, result.parsed === expectedData.parsed,
         'got ' + result.parsed);
-      assert('kept rows === ' + expected.kept, result.rows.length === expected.kept,
+      assert('kept rows === ' + expectedData.kept, result.rows.length === expectedData.kept,
         'got ' + result.rows.length);
-      assert('skipped count === ' + expected.skipped.length, result.skipped.length === expected.skipped.length,
-        'got ' + result.skipped.length + ' expected ' + expected.skipped.length);
+      assert('skipped count === ' + expectedData.skipped.length, result.skipped.length === expectedData.skipped.length,
+        'got ' + result.skipped.length + ' expected ' + expectedData.skipped.length);
 
-      // ---- row-for-row parity ----
-      section('Row-for-row parity (id, date, description, amount_eur, category, person)');
-      const n = Math.max(result.rows.length, expected.rows.length);
+      const n = Math.max(result.rows.length, expectedData.rows.length);
+      let rowMismatches = 0;
       for (let i = 0; i < n; i++) {
         const got = result.rows[i];
-        const exp = expected.rows[i];
+        const exp = expectedData.rows[i];
         if (!got || !exp) {
+          rowMismatches++;
           assert('row ' + i + ' present in both', false, 'got=' + JSON.stringify(got) + ' expected=' + JSON.stringify(exp));
           continue;
         }
-        assert('row ' + i + ' id matches', got.id === exp.id, got.id + ' vs ' + exp.id);
-        assert('row ' + i + ' (' + exp.id + ') date matches', got.date === exp.date, got.date + ' vs ' + exp.date);
-        assert('row ' + i + ' (' + exp.id + ') description matches', got.description === exp.description, JSON.stringify(got.description) + ' vs ' + JSON.stringify(exp.description));
-        assert('row ' + i + ' (' + exp.id + ') amount_eur matches', Math.abs(got.amount_eur - exp.amount_eur) < 0.005, got.amount_eur + ' vs ' + exp.amount_eur);
-        assert('row ' + i + ' (' + exp.id + ') category matches', got.category === exp.category, got.category + ' vs ' + exp.category);
-        assert('row ' + i + ' (' + exp.id + ') person matches', got.person === exp.person, got.person + ' vs ' + exp.person);
+        const fields = ['id', 'date', 'description', 'category', 'person'];
+        for (const f of fields) {
+          if (got[f] !== exp[f]) rowMismatches++;
+          assert('row ' + i + ' (' + exp.id + ') ' + f + ' matches', got[f] === exp[f], JSON.stringify(got[f]) + ' vs ' + JSON.stringify(exp[f]));
+        }
+        const amountOk = Math.abs(got.amount_eur - exp.amount_eur) < 0.005;
+        if (!amountOk) rowMismatches++;
+        assert('row ' + i + ' (' + exp.id + ') amount_eur matches', amountOk, got.amount_eur + ' vs ' + exp.amount_eur);
       }
 
-      // ---- skip set parity ----
-      section('Skip set parity (reason)');
-      const m = Math.max(result.skipped.length, expected.skipped.length);
+      const m = Math.max(result.skipped.length, expectedData.skipped.length);
       for (let i = 0; i < m; i++) {
         const got = result.skipped[i];
-        const exp = expected.skipped[i];
+        const exp = expectedData.skipped[i];
         if (!got || !exp) {
           assert('skip ' + i + ' present in both', false, 'got=' + JSON.stringify(got) + ' expected=' + JSON.stringify(exp));
           continue;
         }
         assert('skip ' + i + ' reason matches', got.reason === exp.reason, JSON.stringify(got.reason) + ' vs ' + JSON.stringify(exp.reason));
         assert('skip ' + i + ' description matches', got.description === exp.description, JSON.stringify(got.description) + ' vs ' + JSON.stringify(exp.description));
+      }
+    }
+
+    async function main() {
+      section('Row-for-row + skip-set parity, per fixture');
+      for (const f of FIXTURES) {
+        await runFixture(f);
       }
 
       const summary = document.getElementById('summary');
