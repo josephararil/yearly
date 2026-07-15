@@ -9,9 +9,6 @@
   const DEL_HOLD_MS = 500;
 
   function NumPad({ value, onChange }) {
-    const holdTimer = React.useRef(null);
-    const heldClear = React.useRef(false);
-
     const digit = (k) => {
       if (!value || value === "0") { onChange(k === "00" ? "0" : k); return; }
       if (value.includes(".")) {
@@ -23,34 +20,19 @@
       onChange(value + k);
     };
     const press = (k) => {
-      if (k === "del") return onChange(value.slice(0, -1));
       if (k === ".") { if (value.includes(".")) return; return onChange((value || "0") + "."); }
       digit(k);
     };
 
-    const delDown = () => {
-      heldClear.current = false;
-      holdTimer.current = setTimeout(() => { heldClear.current = true; onChange("0"); }, DEL_HOLD_MS);
-    };
-    const delUp = () => {
-      clearTimeout(holdTimer.current);
-      if (!heldClear.current) press("del");
-    };
-
     const keys = ["1", "2", "3", "4", "5", "6", "7", "8", "9", ".", "0", "00"];
     return (
-      <div style={{ display: "grid", gridTemplateColumns: "repeat(3,1fr)", gap: 7, marginTop: 4 }}>
+      <div style={{ display: "grid", gridTemplateColumns: "repeat(3,1fr)", gap: 7, marginTop: 10 }}>
         {keys.map((k) => (
           <button key={k} className="numpad-key" disabled={k === "." && value.includes(".")}
             onClick={() => press(k)}>
             {k}
           </button>
         ))}
-        <button className="numpad-key numpad-key-wide"
-          onMouseDown={delDown} onMouseUp={delUp} onMouseLeave={() => clearTimeout(holdTimer.current)}
-          onTouchStart={(e) => { e.preventDefault(); delDown(); }} onTouchEnd={(e) => { e.preventDefault(); delUp(); }}>
-          <window.Icon name="chevronLeft" size={20} />
-        </button>
       </div>
     );
   }
@@ -62,14 +44,39 @@
     return decPart !== undefined ? grouped + "." + decPart : grouped;
   }
 
-  // Shared amount hero — used by both Quick and Manual. The NumPad below drives the value.
+  // Shared amount hero — the big running total. A small backspace sits inline to its right: tap =
+  // delete the last digit, press-and-hold = clear to zero (same behavior the old full-width key had).
+  // It only appears once something's been entered, so the resting state stays clean. Equal side
+  // spacers keep the number optically centered. The NumPad below drives the value.
   function AmountHero({ amount, onChange }) {
     const empty = !amount || parseFloat(amount) === 0;
+    const holdTimer = React.useRef(null);
+    const heldClear = React.useRef(false);
+    const delDown = () => {
+      heldClear.current = false;
+      holdTimer.current = setTimeout(() => { heldClear.current = true; onChange("0"); }, DEL_HOLD_MS);
+    };
+    const delUp = () => {
+      clearTimeout(holdTimer.current);
+      if (!heldClear.current) onChange((amount || "").slice(0, -1));
+    };
     return (
       <div>
         <div className="amount-display">
-          <span className="cur">€</span>
-          <span className={"num" + (empty ? " dim" : "")}>{empty ? "0.00" : formatAmountDisplay(amount)}</span>
+          <span className="amount-side" />
+          <span className="amount-main">
+            <span className="cur">€</span>
+            <span className={"num" + (empty ? " dim" : "")}>{empty ? "0.00" : formatAmountDisplay(amount)}</span>
+          </span>
+          <span className="amount-side">
+            {amount && (
+              <button type="button" className="amount-del" aria-label="Delete last digit"
+                onMouseDown={delDown} onMouseUp={delUp} onMouseLeave={() => clearTimeout(holdTimer.current)}
+                onTouchStart={(e) => { e.preventDefault(); delDown(); }} onTouchEnd={(e) => { e.preventDefault(); delUp(); }}>
+                <window.Icon name="chevronLeft" size={18} />
+              </button>
+            )}
+          </span>
         </div>
         <NumPad value={amount} onChange={onChange} />
       </div>
@@ -163,7 +170,7 @@
     const rel = relativeDateLabel(value);
     return (
       <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
-        <input className="inp" type="date" value={value} max={YData.todayISO()}
+        <input className="inp inp-date" type="date" value={value} max={YData.todayISO()}
           onChange={(e) => onChange(e.target.value)} style={{ colorScheme: "light" }} />
         {rel && <span className="date-rel">{rel}</span>}
       </div>
