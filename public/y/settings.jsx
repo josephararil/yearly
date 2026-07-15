@@ -1,6 +1,6 @@
 // settings.jsx — target, buffer, years, templates, CSV import/export, clear.
 (function () {
-  const APP_VERSION = 'v67';
+  const APP_VERSION = 'v68';
   const { YData, YCalc, YUI } = window;
   const { eur0, eur2, signedPct, computeStats, localISO } = YCalc;
   const { Sheet, DeltaChip } = YUI;
@@ -535,95 +535,110 @@
     );
   }
 
-  // ---------- Fun budget config ----------
-  function FunConfigSheet({ open, onClose, person, store, setStore, stats }) {
+  // ---------- Fun budget config (all people in one banner) ----------
+  // Small per-person balance display + collapsible correction, shared with the allowance editor.
+  function BalanceCorrection({ name, balance, value, onChange, open, onToggle, noun }) {
+    return (
+      <div style={{ marginTop: 12 }}>
+        <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 6 }}>
+          <span style={{ fontFamily: "var(--mono)", fontSize: 11, color: "var(--muted)", textTransform: "uppercase", letterSpacing: "0.07em" }}>Current balance</span>
+          <span style={{ fontFamily: "var(--mono)", fontSize: 13, color: balance < 0 ? "var(--terra)" : "var(--sage)" }}>
+            {balance < 0 ? "−€" + Math.round(Math.abs(balance)) : "€" + Math.round(balance)}
+          </span>
+        </div>
+        <button className="linklike" style={{ fontSize: 12, color: "var(--ink-2)" }} onClick={onToggle}>
+          {open ? "Hide balance correction" : "Correct balance…"}
+        </button>
+        {open && (
+          <div style={{ marginTop: 10 }}>
+            <p className="muted" style={{ fontSize: 12, marginTop: 0, marginBottom: 10, lineHeight: 1.5 }}>
+              Override the calculated balance. Enter the actual {noun} available right now. Future accruals and spending apply on top.
+            </p>
+            <div className="field">
+              <label>Set balance to (€)</label>
+              <input className="inp inp-num" inputMode="numeric" value={value}
+                onChange={(e) => onChange(e.target.value.replace(/[^-\d]/g, ""))}
+                style={{ textAlign: "center", fontSize: 18 }} />
+            </div>
+          </div>
+        )}
+      </div>
+    );
+  }
+
+  function FunBudgetSheet({ open, onClose, store, setStore, stats }) {
     const currentYM = new Date().toISOString().slice(0, 7);
-    const latestRate = (() => {
-      const rates = (person && person.rates) || [];
-      let best = 0;
-      rates.forEach((r) => { if (r.from <= currentYM) best = r.amount; });
-      return best;
-    })();
-    const [v, setV] = React.useState(String(latestRate));
-    const [balMode, setBalMode] = React.useState(false);
-    // Current balance shown to the user (with any existing adjustment included)
-    const currentBalance = React.useMemo(() => {
-      if (!person || !open) return 0;
-      const fun = YCalc.computeFun(store);
-      const pd = fun.people.find((p) => p.id === person.id);
-      return pd ? pd.balance : 0;
-    }, [open, person, store]);
-    const [balVal, setBalVal] = React.useState("");
+    const people = store.people || [];
+    const latestRate = (p) => { let best = 0; (p.rates || []).forEach((r) => { if (r.from <= currentYM) best = r.amount; }); return best; };
+    // Balances (with existing adjustments) as of open; store is frozen while the sheet is open.
+    const balances = React.useMemo(() => {
+      if (!open) return {};
+      const m = {};
+      YCalc.computeFun(store).people.forEach((pd) => { m[pd.id] = pd.balance; });
+      return m;
+    }, [open, store]);
+
+    const [rates, setRates] = React.useState({});
+    const [bals, setBals] = React.useState({});
+    const [balOpen, setBalOpen] = React.useState({});
     React.useEffect(() => {
       if (open) {
-        setV(String(latestRate));
-        setBalMode(false);
-        setBalVal(String(Math.round(currentBalance)));
+        const r = {}, b = {};
+        people.forEach((p) => { r[p.id] = String(latestRate(p)); b[p.id] = String(Math.round(balances[p.id] || 0)); });
+        setRates(r); setBals(b); setBalOpen({});
       }
     }, [open]);
 
     const save = () => {
-      const amount = parseInt(v) || 0;
       setStore((s) => {
         const updated = (s.people || []).map((p) => {
-          if (p.id !== person.id) return p;
-          const rates = (p.rates || []).slice();
-          const idx = rates.findIndex((r) => r.from === currentYM);
-          if (idx >= 0) {
-            rates[idx] = { from: currentYM, amount };
-          } else {
-            rates.push({ from: currentYM, amount });
-          }
-          rates.sort((a, b) => (a.from < b.from ? -1 : 1));
-          // Compute raw balance (without existing adjustment) to back-calculate new adjustment
+          const amount = parseInt(rates[p.id]) || 0;
+          const rs = (p.rates || []).slice();
+          const idx = rs.findIndex((r) => r.from === currentYM);
+          if (idx >= 0) rs[idx] = { from: currentYM, amount };
+          else rs.push({ from: currentYM, amount });
+          rs.sort((a, b) => (a.from < b.from ? -1 : 1));
+          // Back-calculate the adjustment that lands the balance on the entered target.
           const existingAdj = p.balanceAdjustment || 0;
-          const rawBalance = currentBalance - existingAdj;
-          const targetBalance = parseInt(balVal);
+          const rawBalance = (balances[p.id] || 0) - existingAdj;
+          const targetBalance = parseInt(bals[p.id]);
           const newAdj = isNaN(targetBalance) ? existingAdj : targetBalance - rawBalance;
-          return { ...p, rates, balanceAdjustment: Math.round(newAdj) };
+          return { ...p, rates: rs, balanceAdjustment: Math.round(newAdj) };
         });
         return { ...s, people: updated };
       });
       onClose();
     };
 
-    if (!person) return null;
     return (
-      <Sheet open={open} onClose={onClose} title={person.name + "'s fun budget"}>
+      <Sheet open={open} onClose={onClose} title="Fun budget">
         <p className="muted" style={{ fontSize: 13, marginTop: 0, lineHeight: 1.5 }}>
-          Monthly allowance from {currentYM} onwards — past months keep their old rate.
+          Each person's monthly allowance, effective from {currentYM} onwards — past months keep their old rate.
         </p>
-        <div className="amount-display"><span className="cur">€</span><span className="num">{v || "0"}</span></div>
-        <input className="inp inp-num" inputMode="numeric" value={v}
-          onChange={(e) => setV(e.target.value.replace(/[^\d]/g, ""))}
-          style={{ textAlign: "center", fontSize: 18, marginBottom: 20 }} />
-
-        <div style={{ borderTop: "1px solid var(--hair)", paddingTop: 16, marginBottom: 16 }}>
-          <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 6 }}>
-            <span style={{ fontFamily: "var(--mono)", fontSize: 11, color: "var(--muted)", textTransform: "uppercase", letterSpacing: "0.07em" }}>Current balance</span>
-            <span style={{ fontFamily: "var(--mono)", fontSize: 13, color: currentBalance < 0 ? "var(--terra)" : "var(--sage)" }}>
-              {currentBalance < 0 ? "−€" + Math.round(Math.abs(currentBalance)) : "€" + Math.round(currentBalance)}
-            </span>
-          </div>
-          <button className="linklike" style={{ fontSize: 12, color: "var(--ink-2)" }}
-            onClick={() => setBalMode((b) => !b)}>
-            {balMode ? "Hide balance correction" : "Correct balance…"}
-          </button>
-          {balMode && (
-            <div style={{ marginTop: 10 }}>
-              <p className="muted" style={{ fontSize: 12, marginTop: 0, marginBottom: 10, lineHeight: 1.5 }}>
-                Override the calculated balance. Enter the actual balance {person.name} should have right now. Future accruals and spending apply on top.
-              </p>
-              <div className="field">
-                <label>Set balance to (€)</label>
-                <input className="inp inp-num" inputMode="numeric" value={balVal}
-                  onChange={(e) => setBalVal(e.target.value.replace(/[^-\d]/g, ""))}
-                  style={{ textAlign: "center", fontSize: 18 }} />
-              </div>
+        {people.map((p) => (
+          <div key={p.id} className="panel panel-pad" style={{ marginBottom: 12 }}>
+            <div style={{ fontSize: 15, fontWeight: 600, marginBottom: 10 }}>{p.name}</div>
+            <div className="field" style={{ marginBottom: 0 }}>
+              <label>Monthly allowance (€)</label>
+              <input className="inp inp-num" inputMode="numeric" value={rates[p.id] || ""}
+                onChange={(e) => setRates((r) => ({ ...r, [p.id]: e.target.value.replace(/[^\d]/g, "") }))}
+                style={{ textAlign: "center", fontSize: 18 }} />
             </div>
-          )}
-        </div>
-
+            <BalanceCorrection
+              name={p.name} noun={"balance " + p.name + " should have"}
+              balance={balances[p.id] || 0}
+              value={bals[p.id] || ""}
+              onChange={(val) => setBals((b) => ({ ...b, [p.id]: val }))}
+              open={!!balOpen[p.id]}
+              onToggle={() => setBalOpen((o) => ({ ...o, [p.id]: !o[p.id] }))}
+            />
+          </div>
+        ))}
+        {stats && (
+          <div style={{ padding: "2px 2px 14px", fontFamily: "var(--mono)", fontSize: 12, color: "var(--muted)", textAlign: "center" }}>
+            {eur0(stats.ceiling)} ceiling = {eur0(stats.mainTarget)} main + {eur0(stats.funPlanAnnual)}/yr fun
+          </div>
+        )}
         <Button variant="primary" block onClick={save}>Save</Button>
       </Sheet>
     );
@@ -714,30 +729,6 @@
     );
   }
 
-  function DensitySheet({ open, onClose, store, setStore }) {
-    const OPTIONS = [
-      { value: "minimal", label: "Minimal", sub: "Up to 2 alert/watch callouts" },
-      { value: "balanced", label: "Balanced", sub: "Up to 4 callouts" },
-      { value: "all", label: "All", sub: "Show every callout" },
-    ];
-    const current = store.density || "balanced";
-    return (
-      <Sheet open={open} onClose={onClose} title="Overview density">
-        <div className="panel" style={{ overflow: "hidden" }}>
-          {OPTIONS.map((o) => (
-            <button key={o.value} className="setrow" onClick={() => { setStore((s) => ({ ...s, density: o.value })); onClose(); }}>
-              <span className="setrow-main">
-                <div className="setrow-title">{o.label}</div>
-                <div className="setrow-sub">{o.sub}</div>
-              </span>
-              {current === o.value && <window.Icon name="check" size={18} style={{ color: "var(--terra)" }} />}
-            </button>
-          ))}
-        </div>
-      </Sheet>
-    );
-  }
-
   function ClearSheet({ open, onClose }) {
     const [v, setV] = React.useState("");
     React.useEffect(() => { if (open) setV(""); }, [open]);
@@ -776,87 +767,129 @@
     const a = document.createElement("a"); a.href = URL.createObjectURL(blob); a.download = "yearly-export.csv"; a.click();
   }
 
+  // ---------- Combined ceiling + missed-entry buffer (current year) ----------
+  function CeilingBufferSheet({ open, onClose, store, setStore }) {
+    const yr = Number(store.currentYear);
+    const getCeiling = (s) => { const y = s.years[String(yr)] || {}; return y.ceiling != null ? y.ceiling : (y.target || 25000); };
+    const [v, setV] = React.useState(String(getCeiling(store)));
+    const [buf, setBuf] = React.useState(Math.round(((store.years[String(yr)] || {}).buffer || 0) * 100));
+    React.useEffect(() => {
+      if (open) {
+        setV(String(getCeiling(store)));
+        setBuf(Math.round(((store.years[String(yr)] || {}).buffer || 0) * 100));
+      }
+    }, [open]);
+    // Projection is independent of the ceiling, so this preview is safe even while the ceiling is edited.
+    const buffStats = YCalc.computeStats(store, yr);
+    const preview = buffStats.projNoBuffer * (1 + buf / 100);
+    return (
+      <Sheet open={open} onClose={onClose} title={`${yr} household ceiling`}>
+        <p className="muted" style={{ fontSize: 13, marginTop: 0, lineHeight: 1.5 }}>Your total annual outflow ceiling — the sacred number everything is measured against.</p>
+        <div className="amount-display"><span className="cur">€</span><span className="num">{v || "0"}</span></div>
+        <input className="inp inp-num" inputMode="numeric" value={v} onChange={(e) => setV(e.target.value.replace(/[^\d]/g, ""))} style={{ textAlign: "center", fontSize: 18, marginBottom: 4 }} />
+
+        <div style={{ borderTop: "1px solid var(--hair)", paddingTop: 16, marginTop: 16, marginBottom: 8 }}>
+          <div className="field-label" style={{ marginBottom: 4 }}>Missed-entry buffer</div>
+          <p className="muted" style={{ fontSize: 12.5, marginTop: 0, lineHeight: 1.5 }}>People forget to log things. This lifts the projection by a flat percentage so it isn't artificially optimistic.</p>
+          <div style={{ textAlign: "center", margin: "8px 0 14px" }}>
+            <div className="num" style={{ fontSize: 40, fontWeight: 600 }}>{buf}%</div>
+            <div className="muted" style={{ fontSize: 13 }}>projection {eur0(buffStats.projNoBuffer)} → <span style={{ color: "var(--ink)" }} className="num">{eur0(preview)}</span></div>
+          </div>
+          <div className="rangewrap" style={{ marginBottom: 8 }}>
+            <span className="muted num">0%</span>
+            <input className="rng" type="range" min="0" max="15" step="1" value={buf} onChange={(e) => setBuf(parseInt(e.target.value))}
+              style={{ "--rng-fill": `${Math.round(buf / 15 * 100)}%` }} />
+            <span className="muted num">15%</span>
+          </div>
+        </div>
+
+        <Button variant="primary" block disabled={!(parseInt(v) > 0)} onClick={() => {
+          setStore((s) => {
+            const yr_ = s.years[String(yr)] || {};
+            const updated = { ...yr_, ceiling: parseInt(v), buffer: buf / 100 };
+            delete updated.target;
+            return { ...s, years: { ...s.years, [String(yr)]: updated } };
+          });
+          onClose();
+        }}>Save</Button>
+      </Sheet>
+    );
+  }
+
+  // ---------- Import / Export submenus ----------
+  const SAMPLE_JSON = `{
+  "currentYear": 2026,
+  "years": { "2026": { "ceiling": 25000, "buffer": 0.04 } },
+  "people": [ { "id": "…", "name": "Joseph", "rates": […] } ],
+  "travel": { "rates": […], "startMonth": "2026-01" },
+  "trips": [ … ],
+  "templates": [ … ],
+  "transactions": [
+    { "id": "…", "date": "2026-06-02", "description": "Billa",
+      "amount_eur": 42.18, "category": "groceries" }
+  ]
+}`;
+
+  function ImportMenuSheet({ open, onClose, onPick }) {
+    return (
+      <Sheet open={open} onClose={onClose} title="Import">
+        <div className="panel" style={{ overflow: "hidden", marginBottom: 16 }}>
+          <Row icon="revolut" title="Import Revolut" sub="paste raw JSON, preserves your edits" onClick={() => onPick("revolut")} />
+          <Row icon="upload" title="Import CSV" sub="with duplicate detection" onClick={() => onPick("csv")} />
+          <Row icon="download" title="Import JSON" sub="replace all data from a full backup" onClick={() => document.getElementById("jsonfile").click()} />
+        </div>
+        <div className="field-label" style={{ marginBottom: 6 }}>What a JSON backup looks like</div>
+        <p className="muted" style={{ fontSize: 12.5, marginTop: 0, marginBottom: 8, lineHeight: 1.5 }}>
+          The whole store object — every year, person, template and transaction. Importing replaces
+          <b> all</b> current data. Make one with Export → JSON.
+        </p>
+        <pre style={{ background: "var(--paper-2, var(--hair))", border: "1px solid var(--hair)", borderRadius: 8, padding: "10px 12px", overflowX: "auto", fontFamily: "var(--mono)", fontSize: 11, lineHeight: 1.45, color: "var(--ink-2)", margin: 0 }}>{SAMPLE_JSON}</pre>
+      </Sheet>
+    );
+  }
+
+  function ExportMenuSheet({ open, onClose, store }) {
+    return (
+      <Sheet open={open} onClose={onClose} title="Export">
+        <div className="panel" style={{ overflow: "hidden" }}>
+          <Row icon="download" title="Export CSV" sub="every transaction, one row each" onClick={() => { exportCSV(store); onClose(); }} />
+          <Row icon="download" title="Export JSON" sub="full backup incl. years, people & templates" onClick={() => { backupJSON(store); onClose(); }} />
+        </div>
+      </Sheet>
+    );
+  }
+
   function SettingsScreen({ store, setStore, stats, lastSyncTs }) {
     const [sub, setSub] = React.useState(null);
-    const [funPersonSub, setFunPersonSub] = React.useState(null); // person id | null
+    const [funOpen, setFunOpen] = React.useState(false);
     const [travelOpen, setTravelOpen] = React.useState(false);
     const [syncing, setSyncing] = React.useState(false);
     const cur = store.years[String(store.currentYear)];
-    const density = store.density || "balanced";
-    const densityLabel = density.charAt(0).toUpperCase() + density.slice(1);
-    const people = store.people || [];
-    const funPersonOpen = people.find((p) => p.id === funPersonSub) || null;
+    const curCeiling = cur.ceiling != null ? cur.ceiling : (cur.target || 25000);
+    const currentYM = new Date().toISOString().slice(0, 7);
+
+    // Travel: annual aggregate = latest monthly rate × 12; balance shown as the sub.
+    let travelRate = 0;
+    ((store.travel && store.travel.rates) || []).forEach((r) => { if (r.from <= currentYM) travelRate = r.amount; });
+    const travelBal = YCalc.computeTravel(store).balance;
+    const travelBalStr = travelBal < 0 ? "−" + eur0(Math.abs(travelBal)) + " owed" : eur0(travelBal) + " available";
+
     return (
       <div className="screen">
-        <div className="section-h" style={{ marginTop: 0 }}><h2>This year</h2></div>
+        <div className="section-h" style={{ marginTop: 0 }}><h2>Budget settings</h2></div>
         <div className="panel" style={{ overflow: "hidden" }}>
-          <Row icon="target" title="Household ceiling" sub={`${store.currentYear} ceiling`} value={eur0(cur.ceiling != null ? cur.ceiling : (cur.target || 25000))} onClick={() => setSub("target")} />
-          <Row icon="layers" title="Missed-entry buffer" sub="lifts the projection" value={Math.round((cur.buffer || 0) * 100) + "%"} onClick={() => setSub("buffer")} />
+          <Row icon="target" title="Household ceiling" sub={`${store.currentYear} ceiling · ${Math.round((cur.buffer || 0) * 100)}% buffer`} value={eur0(curCeiling)} onClick={() => setSub("ceiling")} />
           <Row icon="clock" title="Past years" sub="target vs actual history" onClick={() => setSub("years")} />
+          <Row icon="activity" title="Fun budget" sub="per-person allowances & balances" value={stats ? eur0(stats.funPlanAnnual) + "/yr" : undefined} onClick={() => setFunOpen(true)} />
+          <Row icon="travel" title="Travel budget" sub={travelBalStr} value={eur0(travelRate * 12) + "/yr"} onClick={() => setTravelOpen(true)} />
         </div>
 
-        <div className="section-h"><h2>Fun budget</h2></div>
-        <div className="panel" style={{ overflow: "hidden" }}>
-          {people.map((p) => {
-            const currentYM = new Date().toISOString().slice(0, 7);
-            const rates = p.rates || [];
-            let rate = 0;
-            rates.forEach((r) => { if (r.from <= currentYM) rate = r.amount; });
-            return (
-              <Row key={p.id} icon="activity" title={p.name} sub="monthly fun allowance" value={eur0(rate) + "/mo"} onClick={() => setFunPersonSub(p.id)} />
-            );
-          })}
-          {stats && (
-            <div style={{ padding: "10px 14px", fontFamily: "var(--mono)", fontSize: 12, color: "var(--muted)", borderTop: people.length ? "1px solid var(--hair)" : "none" }}>
-              {eur0(stats.ceiling)} ceiling = {eur0(stats.mainTarget)} main + {eur0(stats.funPlanAnnual)}/yr fun
-            </div>
-          )}
-        </div>
-
-        <div className="section-h"><h2>Travel budget</h2></div>
-        <div className="panel" style={{ overflow: "hidden" }}>
-          {(() => {
-            const currentYM = new Date().toISOString().slice(0, 7);
-            const rates = (store.travel && store.travel.rates) || [];
-            let rate = 0;
-            rates.forEach((r) => { if (r.from <= currentYM) rate = r.amount; });
-            const bal = YCalc.computeTravel(store).balance;
-            const balStr = bal < 0 ? "−" + eur0(Math.abs(bal)) + " owed" : eur0(bal) + " available";
-            return (
-              <Row icon="travel" title="Monthly travel allowance" sub={balStr} value={eur0(rate) + "/mo"} onClick={() => setTravelOpen(true)} />
-            );
-          })()}
-        </div>
-
-        <div className="section-h"><h2>Display</h2></div>
-        <div className="panel" style={{ overflow: "hidden" }}>
-          <Row icon="activity" title="Overview density" sub="callouts shown on Overview" value={densityLabel} onClick={() => setSub("density")} />
-        </div>
-
-        <div className="section-h"><h2>Data</h2></div>
+        <div className="section-h"><h2>Data settings</h2></div>
         <div className="panel" style={{ overflow: "hidden" }}>
           <Row icon="layers" title="Quick templates" sub={`${store.templates.length} templates`} onClick={() => setSub("templates")} />
-          <Row icon="upload" title="Import CSV" sub="with duplicate detection" onClick={() => setSub("import")} />
-          <Row icon="upload" title="Import Revolut" sub="paste raw JSON, preserves your edits" onClick={() => setSub("revolut")} />
-          <Row icon="download" title="Export all data" sub="CSV of every transaction" onClick={() => exportCSV(store)} />
-          <Row icon="download" title="Back up (JSON)" sub="full backup incl. years & templates" onClick={() => backupJSON(store)} />
-          <input type="file" accept=".json,application/json" style={{ display: "none" }} id="jsonfile"
-            onChange={(e) => {
-              const f = e.target.files[0]; if (!f) return;
-              e.target.value = "";
-              f.text().then((text) => {
-                let parsed;
-                try { parsed = JSON.parse(text); } catch (_) { alert("Invalid JSON file — restore cancelled."); return; }
-                if (!parsed || typeof parsed.years !== "object" || !Array.isArray(parsed.transactions)) {
-                  alert("File doesn't look like a Yearly backup — restore cancelled."); return;
-                }
-                YData.migrateStore(parsed);
-                if (!confirm("Replace ALL current data with this backup?")) return;
-                setStore(parsed);
-              });
-            }} />
-          <Row icon="upload" title="Restore (JSON)" sub="replace all data from a backup" onClick={() => document.getElementById("jsonfile").click()} />
-          <Row icon="activity" title={syncing ? "Resyncing…" : "Force resync from server"}
+          <Row icon="upload" title="Import" sub="Revolut, CSV or JSON" onClick={() => setSub("import")} />
+          <Row icon="download" title="Export" sub="CSV or JSON backup" onClick={() => setSub("export")} />
+          <Row icon="refresh" title={syncing ? "Resyncing…" : "Force resync from server"}
             sub="refetches every row (escape hatch if the app looks out of date)"
             onClick={async () => {
               const before = store.transactions.length;
@@ -873,12 +906,26 @@
                 else             alert(`Resync complete — ${delta > 0 ? '+' : ''}${delta} transactions (${after} total).`);
               } catch { /* swallow display errors */ }
             }} />
+          <Row icon="trash" title="Clear all data" sub="delete every local transaction" danger onClick={() => setSub("clear")} />
         </div>
 
-        <div className="section-h"><h2>Danger zone</h2></div>
-        <div className="panel" style={{ overflow: "hidden" }}>
-          <Row icon="trash" title="Clear all data" sub="delete every transaction" danger onClick={() => setSub("clear")} />
-        </div>
+        {/* Hidden JSON restore input — kept mounted here so the Import submenu can trigger it. */}
+        <input type="file" accept=".json,application/json" style={{ display: "none" }} id="jsonfile"
+          onChange={(e) => {
+            const f = e.target.files[0]; if (!f) return;
+            e.target.value = "";
+            f.text().then((text) => {
+              let parsed;
+              try { parsed = JSON.parse(text); } catch (_) { alert("Invalid JSON file — restore cancelled."); return; }
+              if (!parsed || typeof parsed.years !== "object" || !Array.isArray(parsed.transactions)) {
+                alert("File doesn't look like a Yearly backup — restore cancelled."); return;
+              }
+              YData.migrateStore(parsed);
+              if (!confirm("Replace ALL current data with this backup?")) return;
+              setStore(parsed);
+              setSub(null);
+            });
+          }} />
 
         <div className="muted" style={{ textAlign: "center", fontSize: 11.5, marginTop: 6, fontFamily: "var(--mono)" }}>Yearly · {APP_VERSION}</div>
         {lastSyncTs != null && (() => {
@@ -890,15 +937,15 @@
           );
         })()}
 
-        <TargetSheet open={sub === "target"} onClose={() => setSub(null)} store={store} setStore={setStore} />
-        <BufferSheet open={sub === "buffer"} onClose={() => setSub(null)} store={store} setStore={setStore} />
+        <CeilingBufferSheet open={sub === "ceiling"} onClose={() => setSub(null)} store={store} setStore={setStore} />
         <YearsSheet open={sub === "years"} onClose={() => setSub(null)} store={store} setStore={setStore} />
-        <DensitySheet open={sub === "density"} onClose={() => setSub(null)} store={store} setStore={setStore} />
         <TemplatesSheet open={sub === "templates"} onClose={() => setSub(null)} store={store} setStore={setStore} />
-        <ImportSheet open={sub === "import"} onClose={() => setSub(null)} store={store} setStore={setStore} />
-        <RevolutImportSheet open={sub === "revolut"} onClose={() => setSub(null)} store={store} />
+        <ImportMenuSheet open={sub === "import"} onClose={() => setSub(null)} onPick={(k) => setSub(k === "csv" ? "import-csv" : "import-revolut")} />
+        <ImportSheet open={sub === "import-csv"} onClose={() => setSub("import")} store={store} setStore={setStore} />
+        <RevolutImportSheet open={sub === "import-revolut"} onClose={() => setSub("import")} store={store} />
+        <ExportMenuSheet open={sub === "export"} onClose={() => setSub(null)} store={store} />
         <ClearSheet open={sub === "clear"} onClose={() => setSub(null)} />
-        <FunConfigSheet open={!!funPersonOpen} onClose={() => setFunPersonSub(null)} person={funPersonOpen} store={store} setStore={setStore} stats={stats} />
+        <FunBudgetSheet open={funOpen} onClose={() => setFunOpen(false)} store={store} setStore={setStore} stats={stats} />
         <TravelConfigSheet open={travelOpen} onClose={() => setTravelOpen(false)} store={store} setStore={setStore} />
       </div>
     );

@@ -36,6 +36,12 @@
     target: { c: [[12, 12, 10], [12, 12, 6], [12, 12, 2]] },
     clock: { d: ["M12 6v6l4 2"], c: [[12, 12, 10]] },
     dot: { c: [[12, 12, 1]] },
+    refresh: { d: ["M3 12a9 9 0 0 1 9-9 9.75 9.75 0 0 1 6.74 2.74L21 8", "M21 3v5h-5", "M21 12a9 9 0 0 1-9 9 9.75 9.75 0 0 1-6.74-2.74L3 16", "M8 16H3v5"] },
+    // Revolut brand monogram (filled). Approximation of the wordmark "R" — bowl + leg with a cut counter.
+    revolut: {
+      fill: true, fillRule: "evenodd",
+      d: ["M6 3 L13 3 C16.3 3 18.6 5.2 18.6 8.2 C18.6 10.6 17 12.6 14.7 13.2 L19 21 L15 21 L11.1 13.6 L9.5 13.6 L9.5 21 L6 21 Z M9.5 6 L9.5 10.6 L12.7 10.6 C14.2 10.6 15 9.6 15 8.3 C15 7 14.2 6 12.7 6 Z"],
+    },
 
     // ---- Category identity ----
     groceries: { d: ["M2.05 2.05h2l2.66 12.42a2 2 0 0 0 2 1.58h9.78a2 2 0 0 0 1.95-1.57l1.65-7.43H5.12"], c: [[8, 21, 1], [19, 21, 1]] },
@@ -60,13 +66,14 @@
 
   function Icon({ name, size = 20, strokeWidth = 2, fill = false, style, className }) {
     const spec = P[name] || P.general;
+    const filled = fill || spec.fill;
     const kids = [];
-    (spec.d || []).forEach((d, i) => kids.push(React.createElement("path", { key: "p" + i, d })));
+    (spec.d || []).forEach((d, i) => kids.push(React.createElement("path", { key: "p" + i, d, fillRule: spec.fillRule })));
     (spec.c || []).forEach((c, i) => kids.push(React.createElement("circle", { key: "c" + i, cx: c[0], cy: c[1], r: c[2] })));
     (spec.r || []).forEach((r, i) => kids.push(React.createElement("rect", { key: "r" + i, x: r[0], y: r[1], width: r[2], height: r[3], rx: r[4] })));
     return React.createElement("svg", {
       width: size, height: size, viewBox: "0 0 24 24",
-      fill: "none", stroke: "currentColor", strokeWidth,
+      fill: filled ? "currentColor" : "none", stroke: filled ? "none" : "currentColor", strokeWidth,
       strokeLinecap: "round", strokeLinejoin: "round",
       style, className, "aria-hidden": true,
     }, kids);

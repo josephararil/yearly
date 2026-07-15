@@ -114,8 +114,9 @@ instead. Trip *selection* when logging an expense lives in `y/addflow.jsx` (`Tri
 - `y/home.jsx` (Overview — hero + `VoiceLine` + FunStrip + TravelStrip + `MonthCurve` monthly chart)
 - `y/analysis.jsx` (Projection/Activity/Fun/Travel tabs — Activity has Categories/Transactions
   sub-tabs; charts are hand-built SVG that double as the Recharts spec)
-- `y/settings.jsx` (ceiling/buffer/years/fun-budget/density/templates/CSV import-export/Revolut
-  mobile import/JSON backup-restore/clear)
+- `y/settings.jsx` (Budget settings: combined ceiling+buffer / years / fun-budget / travel · Data
+  settings: templates / Import & Export submenus (CSV · Revolut mobile import · JSON
+  backup-restore) / force-resync / clear)
 - `y/addflow.jsx` (unified "Log an expense" sheet: amount hero, template accelerator strip, category
   picker, Tags & options disclosure, Edit sheet)
 
@@ -300,34 +301,52 @@ changes.
 
 ### `settings.jsx`
 
-Footer shows `APP_VERSION` constant (`'v62'` currently, defined at top of IIFE — **update it with
-every release**). `TargetSheet` (now labelled "Household ceiling") and `BufferSheet` accept a `year`
-prop (defaults to `store.currentYear`); `TargetSheet` reads/writes `years[y].ceiling`. `BufferSheet`
-computes its own stats internally (unchanged). `YearsSheet` has tappable year rows that drill into a
-year detail view (ceiling + buffer rows), plus an "Add year" button that clones the most recent
-year's ceiling/buffer into `year+1`. Future years with no transactions can be deleted from the
-detail view. Year list rows show `st.ceiling` + `st.projection` + `DeltaChip(st.delta, st.status)`.
+The screen is two sections — **Budget settings** and **Data settings** — each a panel of `Row`s.
+Footer shows `APP_VERSION` constant (defined at top of IIFE — **update it with every release**,
+moves with `CACHE_NAME` in `sw.js`).
 
-**"Fun budget" section** — one `Row` per person opens `FunConfigSheet`, which sets the person's
-monthly rate for the current YYYY-MM (forward-only: appends/updates a `rates[]` entry, never
-modifies past entries, keeps `rates` sorted) and optionally corrects the balance: "Correct
-balance…" toggle reveals a "Set balance to €X" input that back-calculates and stores
-`p.balanceAdjustment` so the displayed balance equals the entered value, with future accruals and
-spending applied on top. The derived split is shown inline: `ceiling = main + fun/yr`.
+**Budget settings** — four rows:
+- **Household ceiling** → `CeilingBufferSheet`, a *combined* sheet for the current year that edits
+  both `years[y].ceiling` (numeric input) and the missed-entry buffer (0–15% slider with a live
+  `projNoBuffer → projection` preview). Saving writes `ceiling` + `buffer` together and drops any
+  legacy `target`. (The projection preview is ceiling-independent, so editing the ceiling can't make
+  it stale.) The row sub shows `YYYY ceiling · N% buffer`.
+- **Past years** → `YearsSheet` (unchanged): tappable year rows drill into a year detail view whose
+  ceiling/buffer rows still use the standalone `TargetSheet`/`BufferSheet` (both take a `year` prop).
+  "Add year" clones the most recent year's ceiling/buffer into `year+1`; future years with no
+  transactions can be deleted. Year list rows show `st.ceiling` + `st.projection` + `DeltaChip`.
+- **Fun budget** → `FunBudgetSheet`, a *single* banner covering **all** people (not one row each).
+  Value shows the aggregate `stats.funPlanAnnual` as `€X/yr`. Each person gets a monthly-allowance
+  input and an independent "Correct balance…" expander (shared `BalanceCorrection` sub-component).
+  Save iterates every person: forward-only `rates[]` append/update for the current YYYY-MM (never
+  touches past entries, keeps `rates` sorted) and back-calculates `p.balanceAdjustment` from the
+  entered target so the displayed balance matches. The `ceiling = main + fun/yr` split is shown at
+  the bottom.
+- **Travel budget** → `TravelConfigSheet` (unchanged internally): family-wide single allowance on
+  `store.travel`; forward-only rate append/update + "Correct balance…" → `travel.balanceAdjustment`.
+  Row value shows the aggregate `€X/yr` (latest monthly rate × 12); sub shows the available balance.
 
-**"Travel budget" section** — one `Row` (icon `travel`) showing the current `€X/mo` allowance and
-the available balance, opening `TravelConfigSheet`. It works exactly like `FunConfigSheet` but on
-`store.travel` (family-wide, single allowance): forward-only rate append/update for the current
-YYYY-MM, plus the same "Correct balance…" → `travel.balanceAdjustment` back-calculation.
+**Data settings** — five rows:
+- **Quick templates** → `TemplatesSheet` (unchanged).
+- **Import** → `ImportMenuSheet`, a submenu of three rows: **Import Revolut** (filled Revolut
+  monogram icon), **Import CSV**, and **Import JSON** (triggers the hidden `#jsonfile` restore
+  input). The CSV/Revolut rows route via `sub` state (`import-csv` / `import-revolut`) and close back
+  to the Import menu, not out. The menu also shows a sample of the JSON backup shape.
+- **Export** → `ExportMenuSheet`, a submenu with **Export CSV** and **Export JSON** (call
+  `exportCSV`/`backupJSON` then close).
+- **Force resync from server** (icon `refresh`) → `YSync.pull({ force: true })` with a before/after
+  transaction-count alert.
+- **Clear all data** (danger `Row`) → `ClearSheet`.
 
-`DensitySheet` — a picker for Overview density (minimal/balanced/all); writes to `store.density`.
+The Overview-density picker (`DensitySheet`, `store.density`) has been **removed** from the UI
+(the density field may still exist in older stores; it's simply no longer editable here).
 
-**JSON backup/restore**: "Restore (JSON)" calls `YData.migrateStore(parsed)` before `setStore` so
-old backups (with `target`, no `people`/`wishlist`) migrate cleanly. Hidden `#jsonfile` input mirrors
-the CSV `#csvfile` pattern. **"Sync now"** row in the Data section calls `YSync.pull()` on demand
-(shows "Syncing…" while in flight). "Restore sample data" has been removed.
+**JSON backup/restore**: Import JSON calls `YData.migrateStore(parsed)` before `setStore` so old
+backups (with `target`, no `people`/`wishlist`) migrate cleanly. Hidden `#jsonfile` input (mounted at
+the `SettingsScreen` top level so the Import submenu can trigger it) mirrors the CSV `#csvfile`
+pattern.
 
-**"Import Revolut"** row (Data section, below "Import CSV") opens `RevolutImportSheet` — the mobile
+**"Import Revolut"** row (inside the Import submenu) opens `RevolutImportSheet` — the mobile
 in-app counterpart to the desktop `sync.py push` pipeline (see [docs/REVOLUT.md](REVOLUT.md) and the
 `POST /api/revolut/ingest` endpoint in [docs/BACKEND.md](BACKEND.md#api-endpoints-srcindexjs)). Flow:
 paste the raw Revolut
