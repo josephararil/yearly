@@ -28,7 +28,7 @@ on track and why.
 | [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) | Engine (`calc.jsx`), store shape (`data.jsx`), sync layer (`sync.jsx`), state root (`app.jsx`) |
 | [docs/UI.md](docs/UI.md) | Components & screens: `ui.jsx`, `fun.jsx`, `home.jsx`, `analysis.jsx`, `settings.jsx`, `addflow.jsx` |
 | [docs/BACKEND.md](docs/BACKEND.md) | Cloudflare Workers + D1 schema, migrations, `/api/*` endpoints |
-| [docs/REVOLUT.md](docs/REVOLUT.md) | Revolut import pipeline (`scripts/`), category rules, FX, known issues |
+| [docs/REVOLUT.md](docs/REVOLUT.md) | Revolut import pipeline (`scripts/`), category rules, FX, known issues, mobile bookmarklet path |
 | [docs/PWA-AND-DEV.md](docs/PWA-AND-DEV.md) | Running locally, service worker, regression test, Claude Code preview sequence |
 
 ## How to run it
@@ -56,7 +56,7 @@ Full local-dev notes (the no-backend 404 handling, reload-loop fix) are in
    a second server on a random port nobody is looking at. Full SW + preview workflow, including the
    port-conflict and hard-refresh procedures: [docs/PWA-AND-DEV.md](docs/PWA-AND-DEV.md#claude-code-preview--how-to-deploy-locally-for-testing).
 2. **`APP_VERSION` (`settings.jsx` footer) and `CACHE_NAME` (`sw.js`) move together** — currently
-   `v65` / `yearly-v65`. Bump both on every release.
+   `v67` / `yearly-v67`. Bump both on every release.
 3. **`localISO(d)`, never `toISOString()`** for dates in `calc.jsx` — `toISOString()` is UTC and
    silently drops Dec 31 transactions in UTC+ timezones (EET).
 3b. **`updated_at` is milliseconds everywhere** — `Date.now()` in the worker, `Date.now()` for the

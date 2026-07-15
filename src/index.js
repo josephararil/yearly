@@ -191,6 +191,63 @@ export default {
         return json({ now, count: stmts.length });
       }
 
+      // POST /api/revolut/ingest — field-preserving upsert for the mobile Revolut
+      // import pipeline. Unlike POST /api/transactions, this UPDATE SET excludes
+      // user-owned columns (category, fun, person, note, deleted, oneoff, travel,
+      // trip_id) so it never clobbers in-app edits, mirroring revolut_clean.py's
+      // PRESERVE_ON_CONFLICT.
+      if (request.method === "POST" && url.pathname === "/api/revolut/ingest") {
+        let body;
+        try { body = await request.json(); } catch { return json({ error: "invalid JSON" }, 400); }
+
+        if (!Array.isArray(body)) return json({ error: "body must be an array" }, 400);
+        for (const item of body) {
+          if (!item || typeof item.id !== "string") {
+            return json({ error: "each item must have a string id" }, 400);
+          }
+        }
+
+        const now = Date.now();
+        const INGEST_UPSERT = `
+          INSERT INTO transactions
+            (id,date,description,amount_eur,category,note,source,fun,person,
+             original_amount,original_currency,deleted,
+             revolut_category,merchant_mcc,merchant_city,merchant_country,
+             merchant_logo,card_label,tx_type,e_commerce,fee_eur,
+             oneoff,travel,trip_id,updated_at)
+          VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)
+          ON CONFLICT(id) DO UPDATE SET
+            date=excluded.date, description=excluded.description,
+            amount_eur=excluded.amount_eur,
+            source=excluded.source,
+            original_amount=excluded.original_amount,
+            original_currency=excluded.original_currency,
+            revolut_category=excluded.revolut_category,
+            merchant_mcc=excluded.merchant_mcc,
+            merchant_city=excluded.merchant_city,
+            merchant_country=excluded.merchant_country,
+            merchant_logo=excluded.merchant_logo,
+            card_label=excluded.card_label,
+            tx_type=excluded.tx_type,
+            e_commerce=excluded.e_commerce,
+            fee_eur=excluded.fee_eur,
+            updated_at=excluded.updated_at
+        `;
+
+        const stmts = body.map(tx =>
+          env.DB.prepare(INGEST_UPSERT).bind(...txToBinds(tx, now))
+        );
+        stmts.push(
+          env.DB.prepare(`
+            INSERT INTO meta (key, value) VALUES ('last_revolut_sync_ts', ?)
+            ON CONFLICT(key) DO UPDATE SET value=excluded.value
+          `).bind(now)
+        );
+        await env.DB.batch(stmts);
+
+        return json({ now, count: body.length });
+      }
+
       // GET /api/settings
       if (request.method === "GET" && url.pathname === "/api/settings") {
         const row = await env.DB

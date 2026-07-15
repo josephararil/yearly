@@ -1,0 +1,396 @@
+{
+  "parsed": 50,
+  "kept": 44,
+  "rows": [
+    {
+      "id": "7df25a92-57c2-897f-6bc5-57fd4d620fd3",
+      "date": "2026-05-28",
+      "description": "Kapancheto",
+      "amount_eur": 4.0,
+      "category": "Restaurants",
+      "person": "Joseph H"
+    },
+    {
+      "id": "6dc6c07d-9610-f5ab-ddb7-9009cf139401",
+      "date": "2026-05-28",
+      "description": "Amazon",
+      "amount_eur": 25.76,
+      "category": "Shopping",
+      "person": "Joseph H"
+    },
+    {
+      "id": "b33c1b62-139d-4d7b-2acc-cd47dacef01b",
+      "date": "2026-05-29",
+      "description": "To ДЖОУЗЕФ ХАРАРИ ЛАНИАДО",
+      "amount_eur": 40.0,
+      "category": "Restaurants",
+      "person": "Joseph H"
+    },
+    {
+      "id": "ce5a74b7-984c-0375-cdd1-24453e808db7",
+      "date": "2026-05-29",
+      "description": "Bimaks 2009 Eood",
+      "amount_eur": 0.25,
+      "category": "Groceries",
+      "person": "Joseph H"
+    },
+    {
+      "id": "ae25d7a2-c43d-fd2c-89b2-2e030c9ca24e",
+      "date": "2026-05-30",
+      "description": "Spotify",
+      "amount_eur": 5.62,
+      "category": "Entertainment",
+      "person": "Joseph H"
+    },
+    {
+      "id": "e0230082-8099-ae2e-afc3-734503a1092c",
+      "date": "2026-05-30",
+      "description": "To ДЖОУЗЕФ ХАРАРИ ЛАНИАДО",
+      "amount_eur": 160.0,
+      "category": "Shopping",
+      "person": "Joseph H"
+    },
+    {
+      "id": "f4546f27-11ff-418a-8572-b26ae4230414",
+      "date": "2026-05-30",
+      "description": "To ДЖОУЗЕФ ХАРАРИ ЛАНИАДО",
+      "amount_eur": 32.0,
+      "category": "Shopping",
+      "person": "Joseph H"
+    },
+    {
+      "id": "a5ed0b6d-e8a1-47ea-9987-2a7f858cc8f7",
+      "date": "2026-06-01",
+      "description": "CloudFlare",
+      "amount_eur": 9.03,
+      "category": "Shopping",
+      "person": "Joseph H"
+    },
+    {
+      "id": "758df2dc-2579-6411-cd8c-81921b010053",
+      "date": "2026-06-01",
+      "description": "To Lyudmila D",
+      "amount_eur": 64.0,
+      "category": "Cash",
+      "person": "Joseph H"
+    },
+    {
+      "id": "47df3031-9b38-5121-a6b7-c25765e89f38",
+      "date": "2026-06-01",
+      "description": "TPASS",
+      "amount_eur": 1.0,
+      "category": "Transport",
+      "person": "Joseph H"
+    },
+    {
+      "id": "227b25fe-1238-50c9-d69c-56e8809bb7fb",
+      "date": "2026-06-02",
+      "description": "Kapancheto",
+      "amount_eur": 0.81,
+      "category": "Restaurants",
+      "person": "Joseph H"
+    },
+    {
+      "id": "78daa23b-6607-96a3-ea2a-fb6ff0da97a0",
+      "date": "2026-06-02",
+      "description": "Apteka Mareshki",
+      "amount_eur": 24.32,
+      "category": "Health",
+      "person": "Joseph H"
+    },
+    {
+      "id": "51d69342-2864-e8fc-adb8-72956c69e06f",
+      "date": "2026-06-02",
+      "description": "Alfarmasi Eood",
+      "amount_eur": 17.48,
+      "category": "Health",
+      "person": "Joseph H"
+    },
+    {
+      "id": "98ff9275-7848-ac72-55a6-3f600bba1b66",
+      "date": "2026-06-02",
+      "description": "Metro",
+      "amount_eur": 59.54,
+      "category": "Groceries",
+      "person": "Joseph H"
+    },
+    {
+      "id": "1f899257-f897-6859-3753-a8ff8aab289a",
+      "date": "2026-06-02",
+      "description": "To Lyudmila D",
+      "amount_eur": 65.5,
+      "category": "Cash",
+      "person": "Joseph H"
+    },
+    {
+      "id": "2b80b146-679c-71fa-6c42-e58cfa4033bf",
+      "date": "2026-06-02",
+      "description": "To Miglena D",
+      "amount_eur": 22.5,
+      "category": "Cash",
+      "person": "Joseph H"
+    },
+    {
+      "id": "1b1c3982-41fa-3c94-e41a-a54acfcf5adc",
+      "date": "2026-06-03",
+      "description": "Kapancheto",
+      "amount_eur": 0.91,
+      "category": "Restaurants",
+      "person": "Joseph H"
+    },
+    {
+      "id": "2c8586c0-bd83-3a52-9e2c-33948de44460",
+      "date": "2026-06-03",
+      "description": "Lidl",
+      "amount_eur": 17.94,
+      "category": "Groceries",
+      "person": "Joseph H"
+    },
+    {
+      "id": "e412d2ca-f7be-de72-5f9e-8e883540349a",
+      "date": "2026-06-04",
+      "description": "Kapancheto",
+      "amount_eur": 3.6,
+      "category": "Restaurants",
+      "person": "Joseph H"
+    },
+    {
+      "id": "d3009041-2db9-09a6-4e54-fbdcbe2fd0cd",
+      "date": "2026-06-04",
+      "description": "Kapancheto",
+      "amount_eur": 0.9,
+      "category": "Restaurants",
+      "person": "Martina G"
+    },
+    {
+      "id": "49eae878-20ce-65a0-dd19-6c6cb5dbde54",
+      "date": "2026-06-04",
+      "description": "Hran. K S Center",
+      "amount_eur": 0.6,
+      "category": "Restaurants",
+      "person": "Joseph H"
+    },
+    {
+      "id": "76546edc-b8f1-d32b-3fd0-fb428fbe70b1",
+      "date": "2026-06-04",
+      "description": "Hran. K S Center",
+      "amount_eur": 7.15,
+      "category": "Restaurants",
+      "person": "Joseph H"
+    },
+    {
+      "id": "fa728dfa-0040-f34c-9365-509501db9839",
+      "date": "2026-06-04",
+      "description": "KiK",
+      "amount_eur": 2.98,
+      "category": "Shopping",
+      "person": "Joseph H"
+    },
+    {
+      "id": "97e2a38c-c938-7b2e-a19f-eda539ab2339",
+      "date": "2026-06-04",
+      "description": "Goldfingers",
+      "amount_eur": 5.5,
+      "category": "Restaurants",
+      "person": "Joseph H"
+    },
+    {
+      "id": "cda26122-06bb-a886-875e-4a5e810ad3a4",
+      "date": "2026-06-05",
+      "description": "TEDi",
+      "amount_eur": 2.0,
+      "category": "Utilities",
+      "person": "Joseph H"
+    },
+    {
+      "id": "e9d686d1-7487-da3d-e5a1-664032f3df56",
+      "date": "2026-06-05",
+      "description": "Kapancheto",
+      "amount_eur": 1.51,
+      "category": "Restaurants",
+      "person": "Joseph H"
+    },
+    {
+      "id": "804c31ee-6137-14c5-6d1b-6b3f9add52fd",
+      "date": "2026-06-05",
+      "description": "Mesarnitza",
+      "amount_eur": 3.64,
+      "category": "Groceries",
+      "person": "Joseph H"
+    },
+    {
+      "id": "e0f6f65e-fd3b-02e1-a101-146e371c8383",
+      "date": "2026-06-06",
+      "description": "Plovdiv Sveta Petka",
+      "amount_eur": 6.74,
+      "category": "Groceries",
+      "person": "Joseph H"
+    },
+    {
+      "id": "7ee044a3-fd62-2e97-cd0a-0bcdadc6ccb3",
+      "date": "2026-06-06",
+      "description": "Mylight",
+      "amount_eur": 1.55,
+      "category": "Groceries",
+      "person": "Joseph H"
+    },
+    {
+      "id": "278bcc4d-863d-25b4-66fa-fda16cdd5edf",
+      "date": "2026-06-06",
+      "description": "Eko",
+      "amount_eur": 50.0,
+      "category": "Transport",
+      "person": "Joseph H"
+    },
+    {
+      "id": "4539db61-7713-929e-470c-c93f62662052",
+      "date": "2026-06-06",
+      "description": "Kapancheto",
+      "amount_eur": 0.6,
+      "category": "Restaurants",
+      "person": "Martina G"
+    },
+    {
+      "id": "8aefc17d-5d0f-3397-5362-3865bc7c41d3",
+      "date": "2026-06-07",
+      "description": "Google Play",
+      "amount_eur": 1.07,
+      "category": "Entertainment",
+      "person": "Joseph H"
+    },
+    {
+      "id": "df7d84a0-1c19-a50b-b902-79a41638837e",
+      "date": "2026-06-07",
+      "description": "Kapancheto",
+      "amount_eur": 0.61,
+      "category": "Restaurants",
+      "person": "Joseph H"
+    },
+    {
+      "id": "884a400f-1a52-acfe-2b03-e9df29511d45",
+      "date": "2026-06-08",
+      "description": "M Farmasi",
+      "amount_eur": 14.35,
+      "category": "Health",
+      "person": "Joseph H"
+    },
+    {
+      "id": "377faf84-d0b3-19ae-3303-bcedee6e7ace",
+      "date": "2026-06-08",
+      "description": "TEDi",
+      "amount_eur": 3.5,
+      "category": "Utilities",
+      "person": "Joseph H"
+    },
+    {
+      "id": "7ce2cdc2-6b6a-bc13-674c-90d3b8bc68d3",
+      "date": "2026-06-08",
+      "description": "Kapancheto",
+      "amount_eur": 2.11,
+      "category": "Restaurants",
+      "person": "Joseph H"
+    },
+    {
+      "id": "9bfeaecc-300b-951d-054d-dd2115b2e283",
+      "date": "2026-06-08",
+      "description": "Daglov Bakeshop",
+      "amount_eur": 3.06,
+      "category": "Groceries",
+      "person": "Joseph H"
+    },
+    {
+      "id": "12711beb-1905-da65-ad74-2b6a42b75c2d",
+      "date": "2026-06-08",
+      "description": "Galen 15",
+      "amount_eur": 3.74,
+      "category": "Health",
+      "person": "Joseph H"
+    },
+    {
+      "id": "235366d3-ca1b-b459-c46d-af82c8878c32",
+      "date": "2026-06-09",
+      "description": "Kapancheto",
+      "amount_eur": 4.1,
+      "category": "Restaurants",
+      "person": "Joseph H"
+    },
+    {
+      "id": "a8db4460-2d47-66ec-ffe8-06be5336abfb",
+      "date": "2026-06-09",
+      "description": "Fantastico",
+      "amount_eur": 7.87,
+      "category": "Groceries",
+      "person": "Joseph H"
+    },
+    {
+      "id": "b7e5fd92-f492-b491-04dd-cf5fc4b7cd8c",
+      "date": "2026-06-09",
+      "description": "Lidl",
+      "amount_eur": 32.01,
+      "category": "Groceries",
+      "person": "Joseph H"
+    },
+    {
+      "id": "e64a3047-abbb-af2f-839c-b9a5c1c7e3fc",
+      "date": "2026-06-10",
+      "description": "Mesarnitza",
+      "amount_eur": 3.82,
+      "category": "Groceries",
+      "person": "Joseph H"
+    },
+    {
+      "id": "f7b66f26-b487-6d9e-5898-780490f41d8e",
+      "date": "2026-06-10",
+      "description": "Amd 31 Grup Eood",
+      "amount_eur": 1.6,
+      "category": "Shopping",
+      "person": "Joseph H"
+    },
+    {
+      "id": "a46ead40-5fb5-3e15-bea9-3b2c64e407ec",
+      "date": "2026-06-10",
+      "description": "dm Bulgaria",
+      "amount_eur": 1.51,
+      "category": "Health",
+      "person": "Joseph H"
+    }
+  ],
+  "skipped": [
+    {
+      "date": "2026-06-07",
+      "description": "From EUR MB:11a7198d-b4b8-be5b-cac8-d801e8af1d64",
+      "amount_str": "+25.00 EUR",
+      "reason": "income/refund (amount >= 0)"
+    },
+    {
+      "date": "2026-06-03",
+      "description": "Kapancheto",
+      "amount_str": "-1.25 EUR",
+      "reason": "state=REVERTED"
+    },
+    {
+      "date": "2026-06-02",
+      "description": "From EUR MB:3ed87113-562b-f5df-706e-13a9925c7f4d",
+      "amount_str": "+10.00 EUR",
+      "reason": "income/refund (amount >= 0)"
+    },
+    {
+      "date": "2026-06-01",
+      "description": "CloudFlare",
+      "amount_str": "+0.00 EUR",
+      "reason": "income/refund (amount >= 0)"
+    },
+    {
+      "date": "2026-06-01",
+      "description": "CloudFlare",
+      "amount_str": "+0.00 EUR",
+      "reason": "income/refund (amount >= 0)"
+    },
+    {
+      "date": "2026-05-28",
+      "description": "Amazon",
+      "amount_str": "+0.00 EUR",
+      "reason": "income/refund (amount >= 0)"
+    }
+  ]
+}
