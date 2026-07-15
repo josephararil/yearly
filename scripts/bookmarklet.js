@@ -16,10 +16,13 @@
  *
  * STOP_BEFORE is a stateless rolling window — always "BUFFER_DAYS days ago" — rather than
  * sync.py's incremental window keyed off a local last-sync date, because there is no state file
- * on a phone. This mirrors sync.py's BUFFER_DAYS=30 (same rationale: catch late-settling/PENDING
- * transactions), just anchored to "now" instead of "last sync". Over-fetching beyond that window
- * is harmless (the ingest endpoint's upsert is idempotent + field-preserving), but there's no
- * reason to re-pull the whole year on every run, so the window is intentionally narrow.
+ * on a phone. BUFFER_DAYS=7 (narrower than sync.py's 30) is a deliberate mobile-specific
+ * trade-off: this bookmarklet is meant to run every few days, and the raw JSON has to be
+ * copy-pasted by hand into the app (no download), so keeping the payload small matters more here
+ * than catching every late-settling/PENDING transaction — copying a large JSON blob on mobile can
+ * silently truncate (observed: 100 transactions failed to fully copy; a smaller batch copied
+ * fine). Over-fetching beyond the window is still harmless (the ingest endpoint's upsert is
+ * idempotent + field-preserving) if you skip a few days between runs.
  *
  * To install: see docs/REVOLUT.md "Mobile path" for the ready-to-paste javascript: URL, or run
  * `node scripts/build_bookmarklet.js` equivalent manually — minify this file's IIFE body to a
@@ -38,7 +41,7 @@
   };
   const BASE = "https://app.revolut.com/api/retail/user/current/transactions/last";
   const WALLET = "b3badc0f-f575-43ec-8ca5-eac55929d857";
-  const BUFFER_DAYS = 30;
+  const BUFFER_DAYS = 7;
   const STOP_BEFORE = Date.now() - BUFFER_DAYS * 24 * 60 * 60 * 1000;
 
   // --- overlay UI ---------------------------------------------------------
