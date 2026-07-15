@@ -89,7 +89,7 @@
   function OptionsDisclosure({
     open, setOpen, funOn, setFunOn, funPerson, setFunPerson, travelOn, setTravelOn,
     oneOff, setOneOff, saveAsTemplate, setSaveAsTemplate, store, showOneOff, showSaveAsTemplate,
-    tripId, setTripId, trips, onCreateTrip,
+    tripId, setTripId, trips, onCreateTrip, dateField,
   }) {
     const people = (store && store.people) || [];
     const tiles = [
@@ -114,16 +114,19 @@
 
     return (
       <div className="field">
-        <button type="button" className="opts-summary" onClick={() => setOpen((o) => !o)} aria-expanded={open}>
-          <span>Tags & options</span>
-          <span style={{ display: "flex", alignItems: "center", gap: 8 }}>
-            {activeTiles.length > 0 && <span className="opts-chips">{activeTiles.map((t) => t.chip).join(" · ")}</span>}
-            <window.Icon name="chevronDown" size={16} style={{
-              color: "var(--muted)", transform: open ? "rotate(180deg)" : "none",
-              transition: "transform var(--dur-fast) var(--ease)",
-            }} />
-          </span>
-        </button>
+        <div className="datetags-row">
+          {dateField}
+          <button type="button" className="opts-summary datetags-trigger" onClick={() => setOpen((o) => !o)} aria-expanded={open}>
+            <span>Tags & options</span>
+            <span style={{ display: "flex", alignItems: "center", gap: 8, minWidth: 0 }}>
+              {activeTiles.length > 0 && <span className="opts-chips">{activeTiles.map((t) => t.chip).join(" · ")}</span>}
+              <window.Icon name="chevronDown" size={16} style={{
+                color: "var(--muted)", transform: open ? "rotate(180deg)" : "none",
+                transition: "transform var(--dur-fast) var(--ease)",
+              }} />
+            </span>
+          </button>
+        </div>
         <div className={"opts-body" + (open ? " open" : "")}>
           <div className="opts-body-inner">
             <div className="opt-tiles" style={{ gridTemplateColumns: "repeat(" + tiles.length + ", 1fr)" }}>
@@ -157,23 +160,10 @@
     );
   }
 
-  // "Today" / "Yesterday" label alongside the date value, when the picked date matches.
-  function relativeDateLabel(iso) {
-    const today = YData.todayISO();
-    if (iso === today) return "Today";
-    const d = new Date(today + "T00:00:00");
-    d.setDate(d.getDate() - 1);
-    return iso === localISO(d) ? "Yesterday" : null;
-  }
-
   function DateField({ value, onChange }) {
-    const rel = relativeDateLabel(value);
     return (
-      <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
-        <input className="inp inp-date" type="date" value={value} max={YData.todayISO()}
-          onChange={(e) => onChange(e.target.value)} style={{ colorScheme: "light" }} />
-        {rel && <span className="date-rel">{rel}</span>}
-      </div>
+      <input className="inp inp-date" type="date" value={value} max={YData.todayISO()}
+        onChange={(e) => onChange(e.target.value)} style={{ colorScheme: "light" }} />
     );
   }
 
@@ -413,17 +403,19 @@
           <textarea className="inp" value={draft.note || ""} placeholder="Anything worth remembering"
             onChange={(e) => set({ note: e.target.value })} />
         </div>
-        <div className="field">
-          <label>Date</label>
-          <DateField value={draft.date} onChange={(date) => set({ date })} />
-        </div>
         <OptionsDisclosure
           open={optsOpen} setOpen={setOptsOpen}
           funOn={funOn} setFunOn={setFunOn} funPerson={funPerson} setFunPerson={setFunPerson}
           travelOn={travelOn} setTravelOn={setTravelOn}
           oneOff={oneOff} setOneOff={setOneOff} saveAsTemplate={saveAsTemplate} setSaveAsTemplate={setSaveAsTemplate}
           store={store} showOneOff={true} showSaveAsTemplate={true}
-          tripId={tripId} setTripId={setTripId} trips={store.trips} onCreateTrip={onCreateTrip} />
+          tripId={tripId} setTripId={setTripId} trips={store.trips} onCreateTrip={onCreateTrip}
+          dateField={(
+            <div className="datetags-date">
+              <span className="field-label">Date</span>
+              <DateField value={draft.date} onChange={(date) => set({ date })} />
+            </div>
+          )} />
       </div>
     );
     const footer = (
@@ -483,17 +475,19 @@
           <textarea className="inp" value={draft.note || ""} placeholder="Anything worth remembering"
             onChange={(e) => set({ note: e.target.value })} />
         </div>
-        <div className="field">
-          <label>Date</label>
-          <DateField value={draft.date} onChange={(date) => set({ date })} />
-        </div>
         <OptionsDisclosure
           open={optsOpen} setOpen={setOptsOpen}
           funOn={funOn} setFunOn={setFunOn} funPerson={funPerson} setFunPerson={setFunPerson}
           travelOn={travelOn} setTravelOn={setTravelOn}
           oneOff={oneOff} setOneOff={setOneOff} saveAsTemplate={false} setSaveAsTemplate={() => {}}
           store={store} showOneOff={true} showSaveAsTemplate={false}
-          tripId={tripId} setTripId={setTripId} trips={store && store.trips} onCreateTrip={onCreateTrip} />
+          tripId={tripId} setTripId={setTripId} trips={store && store.trips} onCreateTrip={onCreateTrip}
+          dateField={(
+            <div className="datetags-date">
+              <span className="field-label">Date</span>
+              <DateField value={draft.date} onChange={(date) => set({ date })} />
+            </div>
+          )} />
       </div>
     );
     const footer = (

@@ -240,7 +240,8 @@ is active.
 
 Redesigned (2026-07) around one unified form shared by `AddSheet` and `EditSheet` — there is no
 Quick/Manual mode split anymore. Body order top → bottom: `TemplateStrip` (AddSheet only) →
-`AmountHero` → `CategoryField` → Description → Note → Date → `OptionsDisclosure`. `Sheet` (`ui.jsx`)
+`AmountHero` → `CategoryField` → Description → Note → `OptionsDisclosure` (Date sits inline in its
+header row). `Sheet` (`ui.jsx`)
 takes an optional `footer` prop rendered as a flex sibling below `.sheet-scroll` (not an overlay —
 `.sheet` is `display:flex; flex-direction:column`, so the footer takes its own row and the scroll area
 shrinks to fit via `flex:1; min-height:0`); both `AddSheet` and `EditSheet` pass their primary CTA row
@@ -257,10 +258,13 @@ avoiding a double-delete. The display formats the integer part with thousands se
 (`formatAmountDisplay`); the raw value stays a plain numeric string for `tx.amount`. Decimal input is
 capped to 2 places and the "." key disables once a decimal point exists.
 
-The **Date** field (`DateField`) uses `.inp-date` (`width:auto`) so the native date control shrinks to
-its content instead of stretching full-width, with the relative "Today"/"Yesterday" label inline
-beside it. The **Note** textarea (`textarea.inp`) rests at a single-line `min-height` (46px) and grows
-on demand rather than reserving a large empty box.
+The **Date** field (`DateField`, `.inp-date` `width:auto`) shrinks to its content and shares one row
+(`.datetags-row`, bottom-aligned) with the **Tags & options** trigger: `OptionsDisclosure` takes the
+date block as its `dateField` prop and renders it to the left of the summary button, with the options
+body expanding full-width below the row. This saves a line and fills the dead space beside the compact
+date box; the old relative "Today"/"Yesterday" label was dropped. The **Note** textarea
+(`textarea.inp`) rests at a single-line `min-height` (46px) and grows on demand rather than reserving a
+large empty box.
 
 **`CategoryField`** — compact Revolut-style trigger row (`.catsel-row`): the "CATEGORY" mono label on
 the left, the current value as a tappable terracotta link on the right (category line icon tinted its

@@ -287,7 +287,12 @@ button, input, select, textarea { font-family: inherit; }
 
 .tplstrip-empty { margin: 0; padding: 4px 2px; font: 12px var(--mono); color: var(--muted); line-height: 1.5; }
 
-.date-rel { font: 10.5px var(--mono); color: var(--muted); text-transform: uppercase; letter-spacing: 0.06em; white-space: nowrap; }
+/* date + tags-&-options share one row — date box left, disclosure trigger right, options expand below */
+.datetags-row { display: flex; align-items: flex-end; gap: 10px; }
+.datetags-date { display: flex; flex-direction: column; gap: 6px; flex: 0 0 auto; }
+.datetags-trigger { width: auto; flex: 1 1 auto; min-width: 0; }
+.datetags-trigger > span:first-child { flex: 0 0 auto; }
+.opts-chips { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 
 /* tags & options — icon-tile toggles for Fun / Travel / One-off / Save-as-template */
 .toggle-caption { margin: 0; font-size: 11px; color: var(--ink-2); line-height: 1.4; }
