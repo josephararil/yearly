@@ -1,8 +1,14 @@
 /**
  * Revolut mobile capture bookmarklet — source.
  *
- * Adapted from CONSOLE_TEMPLATE in scripts/sync.py (same BASE, WALLET, x-device-id, headers,
- * and pagination). Run this from a bookmark while logged into app.revolut.com (works on mobile).
+ * Adapted from CONSOLE_TEMPLATE in scripts/sync.py (same BASE, WALLET, headers, and pagination).
+ * Run this from a bookmark while logged into app.revolut.com (works on mobile).
+ *
+ * x-device-id is NOT the same value as sync.py's REVOLUT_DEVICE_ID — Revolut's backend ties
+ * x-device-id to the authenticated session, so a device id captured on one device/browser gets
+ * rejected (401 "Phone and/or passcode are incorrect") when sent from another. This hardcoded
+ * value was captured from Joseph's actual phone via scripts/bookmarklet_debug.js (see
+ * docs/REVOLUT.md "Debugging"), not copied from the desktop console script.
  * Instead of downloading a file, it renders the fetched JSON into a full-screen overlay with a
  * "Copy" button so the clipboard write happens on a real button-tap user gesture — required for
  * navigator.clipboard.writeText to work on mobile browsers, since the fetch/pagination itself is
@@ -22,12 +28,12 @@
 (async () => {
   const headers = {
     "accept": "application/json, text/plain, */*",
-    "accept-language": "en-US",
+    "accept-language": "en-GB",
     "cache-control": "no-cache",
     "pragma": "no-cache",
     "x-browser-application": "WEB_CLIENT",
     "x-client-version": "100.0",
-    "x-device-id": "AAAAAIXDDztSOzqJLJZaae2QShIgSMJa6PgaOQP86SD/0AfbuALYF356fkx+vwwOJF8D+L3rjdMW2EOWIAu5hdWzIK7hUCNDYPD6HEBBnBA9URP3rtLIhHoKhYymmrd9BY9dgA==",
+    "x-device-id": "AAAAAWLo/HTfVw84dk2pfD0BBpL59qsj7JQaSmRZYpNzk/DtxStQVI9wHfVhWA7votI7gqM2VIwEVLCjM0BTpigFqKItvxLHKI6GZj5uaeVfNuEB3TgOOYtBkKPiV6Eb5c8y7g==",
     "x-timezone": "Europe/Sofia"
   };
   const BASE = "https://app.revolut.com/api/retail/user/current/transactions/last";
