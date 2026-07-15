@@ -9,9 +9,6 @@
   const DEL_HOLD_MS = 500;
 
   function NumPad({ value, onChange }) {
-    const holdTimer = React.useRef(null);
-    const heldClear = React.useRef(false);
-
     const digit = (k) => {
       if (!value || value === "0") { onChange(k === "00" ? "0" : k); return; }
       if (value.includes(".")) {
@@ -23,34 +20,19 @@
       onChange(value + k);
     };
     const press = (k) => {
-      if (k === "del") return onChange(value.slice(0, -1));
       if (k === ".") { if (value.includes(".")) return; return onChange((value || "0") + "."); }
       digit(k);
     };
 
-    const delDown = () => {
-      heldClear.current = false;
-      holdTimer.current = setTimeout(() => { heldClear.current = true; onChange("0"); }, DEL_HOLD_MS);
-    };
-    const delUp = () => {
-      clearTimeout(holdTimer.current);
-      if (!heldClear.current) press("del");
-    };
-
     const keys = ["1", "2", "3", "4", "5", "6", "7", "8", "9", ".", "0", "00"];
     return (
-      <div style={{ display: "grid", gridTemplateColumns: "repeat(3,1fr)", gap: 7, marginTop: 4 }}>
+      <div style={{ display: "grid", gridTemplateColumns: "repeat(3,1fr)", gap: 7, marginTop: 10 }}>
         {keys.map((k) => (
           <button key={k} className="numpad-key" disabled={k === "." && value.includes(".")}
             onClick={() => press(k)}>
             {k}
           </button>
         ))}
-        <button className="numpad-key numpad-key-wide"
-          onMouseDown={delDown} onMouseUp={delUp} onMouseLeave={() => clearTimeout(holdTimer.current)}
-          onTouchStart={(e) => { e.preventDefault(); delDown(); }} onTouchEnd={(e) => { e.preventDefault(); delUp(); }}>
-          <window.Icon name="chevronLeft" size={20} />
-        </button>
       </div>
     );
   }
@@ -62,14 +44,39 @@
     return decPart !== undefined ? grouped + "." + decPart : grouped;
   }
 
-  // Shared amount hero — used by both Quick and Manual. The NumPad below drives the value.
+  // Shared amount hero — the big running total. A small backspace sits inline to its right: tap =
+  // delete the last digit, press-and-hold = clear to zero (same behavior the old full-width key had).
+  // It only appears once something's been entered, so the resting state stays clean. Equal side
+  // spacers keep the number optically centered. The NumPad below drives the value.
   function AmountHero({ amount, onChange }) {
     const empty = !amount || parseFloat(amount) === 0;
+    const holdTimer = React.useRef(null);
+    const heldClear = React.useRef(false);
+    const delDown = () => {
+      heldClear.current = false;
+      holdTimer.current = setTimeout(() => { heldClear.current = true; onChange("0"); }, DEL_HOLD_MS);
+    };
+    const delUp = () => {
+      clearTimeout(holdTimer.current);
+      if (!heldClear.current) onChange((amount || "").slice(0, -1));
+    };
     return (
       <div>
         <div className="amount-display">
-          <span className="cur">€</span>
-          <span className={"num" + (empty ? " dim" : "")}>{empty ? "0.00" : formatAmountDisplay(amount)}</span>
+          <span className="amount-side" />
+          <span className="amount-main">
+            <span className="cur">€</span>
+            <span className={"num" + (empty ? " dim" : "")}>{empty ? "0.00" : formatAmountDisplay(amount)}</span>
+          </span>
+          <span className="amount-side">
+            {amount && (
+              <button type="button" className="amount-del" aria-label="Delete last digit"
+                onMouseDown={delDown} onMouseUp={delUp} onMouseLeave={() => clearTimeout(holdTimer.current)}
+                onTouchStart={(e) => { e.preventDefault(); delDown(); }} onTouchEnd={(e) => { e.preventDefault(); delUp(); }}>
+                <window.Icon name="chevronLeft" size={18} />
+              </button>
+            )}
+          </span>
         </div>
         <NumPad value={amount} onChange={onChange} />
       </div>
@@ -82,7 +89,7 @@
   function OptionsDisclosure({
     open, setOpen, funOn, setFunOn, funPerson, setFunPerson, travelOn, setTravelOn,
     oneOff, setOneOff, saveAsTemplate, setSaveAsTemplate, store, showOneOff, showSaveAsTemplate,
-    tripId, setTripId, trips, onCreateTrip,
+    tripId, setTripId, trips, onCreateTrip, dateField,
   }) {
     const people = (store && store.people) || [];
     const tiles = [
@@ -107,16 +114,19 @@
 
     return (
       <div className="field">
-        <button type="button" className="opts-summary" onClick={() => setOpen((o) => !o)} aria-expanded={open}>
-          <span>Tags & options</span>
-          <span style={{ display: "flex", alignItems: "center", gap: 8 }}>
-            {activeTiles.length > 0 && <span className="opts-chips">{activeTiles.map((t) => t.chip).join(" · ")}</span>}
-            <window.Icon name="chevronDown" size={16} style={{
-              color: "var(--muted)", transform: open ? "rotate(180deg)" : "none",
-              transition: "transform var(--dur-fast) var(--ease)",
-            }} />
-          </span>
-        </button>
+        <div className="datetags-row">
+          {dateField}
+          <button type="button" className="opts-summary datetags-trigger" onClick={() => setOpen((o) => !o)} aria-expanded={open}>
+            <span>Tags & options</span>
+            <span style={{ display: "flex", alignItems: "center", gap: 8, minWidth: 0 }}>
+              {activeTiles.length > 0 && <span className="opts-chips">{activeTiles.map((t) => t.chip).join(" · ")}</span>}
+              <window.Icon name="chevronDown" size={16} style={{
+                color: "var(--muted)", transform: open ? "rotate(180deg)" : "none",
+                transition: "transform var(--dur-fast) var(--ease)",
+              }} />
+            </span>
+          </button>
+        </div>
         <div className={"opts-body" + (open ? " open" : "")}>
           <div className="opts-body-inner">
             <div className="opt-tiles" style={{ gridTemplateColumns: "repeat(" + tiles.length + ", 1fr)" }}>
@@ -150,73 +160,56 @@
     );
   }
 
-  // "Today" / "Yesterday" label alongside the date value, when the picked date matches.
-  function relativeDateLabel(iso) {
-    const today = YData.todayISO();
-    if (iso === today) return "Today";
-    const d = new Date(today + "T00:00:00");
-    d.setDate(d.getDate() - 1);
-    return iso === localISO(d) ? "Yesterday" : null;
-  }
-
   function DateField({ value, onChange }) {
-    const rel = relativeDateLabel(value);
     return (
-      <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
-        <input className="inp" type="date" value={value} max={YData.todayISO()}
-          onChange={(e) => onChange(e.target.value)} style={{ colorScheme: "light" }} />
-        {rel && <span className="date-rel">{rel}</span>}
-      </div>
+      <input className="inp inp-date" type="date" value={value} max={YData.todayISO()}
+        onChange={(e) => onChange(e.target.value)} style={{ colorScheme: "light" }} />
     );
   }
 
-  // Selected + most-recently-used categories float to the front; the rest keep canonical order.
+  // Categories ordered frequent-first (all-time usage count), ties broken by canonical order — a
+  // stable, predictable grid. Each tile is a thin line icon tinted its category color; tap to select.
   function CategoryPicker({ value, onChange, store }) {
     const ordered = React.useMemo(() => {
-      const recentIds = [];
+      const counts = {};
       if (store && Array.isArray(store.transactions)) {
-        const sorted = [...store.transactions].sort((a, b) => (b.date || "").localeCompare(a.date || ""));
-        for (const t of sorted) {
+        for (const t of store.transactions) {
           const id = YData.normalizeCategory(t.category);
-          if (id !== value && !recentIds.includes(id)) recentIds.push(id);
-          if (recentIds.length >= 3) break;
+          counts[id] = (counts[id] || 0) + 1;
         }
       }
-      const frontIds = [value, ...recentIds];
-      const frontSet = new Set(frontIds);
-      const front = frontIds.map((id) => YData.cat(id)).filter(Boolean);
-      const rest = YData.CATEGORIES.filter((c) => !frontSet.has(c.id));
-      return [...front, ...rest];
-    }, [value, store]);
+      const rank = new Map(YData.CATEGORIES.map((c, i) => [c.id, i]));
+      return [...YData.CATEGORIES].sort((a, b) => {
+        const byUse = (counts[b.id] || 0) - (counts[a.id] || 0);
+        return byUse !== 0 ? byUse : rank.get(a.id) - rank.get(b.id);
+      });
+    }, [store]);
     return (
-      <div className="catpick">
+      <div className="catgrid">
         {ordered.map((c) => (
-          <button key={c.id} className={"catpick-item" + (value === c.id ? " sel" : "")} onClick={() => onChange(c.id)}>
-            <span className="cat-dot" style={{ background: c.color }} />
-            <span>{c.label}</span>
+          <button key={c.id} type="button" className={"catgrid-item" + (value === c.id ? " sel" : "")} onClick={() => onChange(c.id)}>
+            <span className="catgrid-icon" style={{ color: c.color }}><window.Icon name={c.icon} size={22} /></span>
+            <span className="catgrid-label">{c.label}</span>
           </button>
         ))}
       </div>
     );
   }
 
-  // Collapsed "CATEGORY — ● General" summary row; tapping expands the wrap-flow chips inline.
+  // Compact "Category   ⟨icon⟩ General ⌄" row — the value reads as a tappable link; tapping expands
+  // the picker grid inline (no modal).
   function CategoryField({ value, onChange, store }) {
     const [open, setOpen] = React.useState(false);
     const c = YData.cat(value);
     return (
-      <div className="field">
-        <button type="button" className="opts-summary" onClick={() => setOpen((o) => !o)} aria-expanded={open}>
+      <div className="field catsel-field">
+        <button type="button" className="catsel-row" onClick={() => setOpen((o) => !o)} aria-expanded={open}>
           <span className="field-label">Category</span>
-          <span style={{ display: "flex", alignItems: "center", gap: 8 }}>
-            <span style={{ display: "flex", alignItems: "center", gap: 8, color: "var(--ink)" }}>
-              <span className="cat-dot" style={{ background: c.color }} />
-              {c.label}
-            </span>
-            <window.Icon name="chevronDown" size={16} style={{
-              color: "var(--muted)", transform: open ? "rotate(180deg)" : "none",
-              transition: "transform var(--dur-fast) var(--ease)",
-            }} />
+          <span className="catsel-value">
+            <span className="catsel-icon" style={{ color: c.color }}><window.Icon name={c.icon} size={16} /></span>
+            <span className="catsel-name">{c.label}</span>
+            <window.Icon name="chevronDown" size={15} className="catsel-chev"
+              style={{ transform: open ? "rotate(180deg)" : "none" }} />
           </span>
         </button>
         <div className={"opts-body" + (open ? " open" : "")}>
@@ -410,17 +403,19 @@
           <textarea className="inp" value={draft.note || ""} placeholder="Anything worth remembering"
             onChange={(e) => set({ note: e.target.value })} />
         </div>
-        <div className="field">
-          <label>Date</label>
-          <DateField value={draft.date} onChange={(date) => set({ date })} />
-        </div>
         <OptionsDisclosure
           open={optsOpen} setOpen={setOptsOpen}
           funOn={funOn} setFunOn={setFunOn} funPerson={funPerson} setFunPerson={setFunPerson}
           travelOn={travelOn} setTravelOn={setTravelOn}
           oneOff={oneOff} setOneOff={setOneOff} saveAsTemplate={saveAsTemplate} setSaveAsTemplate={setSaveAsTemplate}
           store={store} showOneOff={true} showSaveAsTemplate={true}
-          tripId={tripId} setTripId={setTripId} trips={store.trips} onCreateTrip={onCreateTrip} />
+          tripId={tripId} setTripId={setTripId} trips={store.trips} onCreateTrip={onCreateTrip}
+          dateField={(
+            <div className="datetags-date">
+              <span className="field-label">Date</span>
+              <DateField value={draft.date} onChange={(date) => set({ date })} />
+            </div>
+          )} />
       </div>
     );
     const footer = (
@@ -480,17 +475,19 @@
           <textarea className="inp" value={draft.note || ""} placeholder="Anything worth remembering"
             onChange={(e) => set({ note: e.target.value })} />
         </div>
-        <div className="field">
-          <label>Date</label>
-          <DateField value={draft.date} onChange={(date) => set({ date })} />
-        </div>
         <OptionsDisclosure
           open={optsOpen} setOpen={setOptsOpen}
           funOn={funOn} setFunOn={setFunOn} funPerson={funPerson} setFunPerson={setFunPerson}
           travelOn={travelOn} setTravelOn={setTravelOn}
           oneOff={oneOff} setOneOff={setOneOff} saveAsTemplate={false} setSaveAsTemplate={() => {}}
           store={store} showOneOff={true} showSaveAsTemplate={false}
-          tripId={tripId} setTripId={setTripId} trips={store && store.trips} onCreateTrip={onCreateTrip} />
+          tripId={tripId} setTripId={setTripId} trips={store && store.trips} onCreateTrip={onCreateTrip}
+          dateField={(
+            <div className="datetags-date">
+              <span className="field-label">Date</span>
+              <DateField value={draft.date} onChange={(date) => set({ date })} />
+            </div>
+          )} />
       </div>
     );
     const footer = (

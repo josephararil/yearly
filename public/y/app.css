@@ -260,10 +260,19 @@ button, input, select, textarea { font-family: inherit; }
 }
 
 /* amount entry */
-.amount-display { text-align: center; padding: 8px 0 4px; }
+.amount-display { display: flex; align-items: center; justify-content: center; padding: 8px 0 4px; }
+.amount-main { display: inline-flex; align-items: baseline; gap: 2px; min-width: 0; }
+.amount-side { flex: 0 0 46px; display: flex; align-items: center; justify-content: center; }
 .amount-display .num { font-size: 50px; font-weight: 600; letter-spacing: -0.03em; }
 .amount-display .num.dim { color: var(--muted); }
 .amount-display .cur { color: var(--muted); font-size: 30px; font-weight: 500; }
+.amount-del {
+  width: 40px; height: 40px; border-radius: 12px; border: 1px solid var(--hair); background: var(--paper);
+  color: var(--muted); display: flex; align-items: center; justify-content: center; cursor: pointer;
+  transition: border-color var(--dur-fast) var(--ease), color var(--dur-fast) var(--ease), transform var(--dur-fast) var(--ease);
+}
+.amount-del:hover { border-color: var(--hair-strong); color: var(--ink-2); }
+.amount-del:active { transform: scale(0.92); }
 
 .numpad-key {
   height: 56px; border-radius: 14px; border: 1px solid var(--hair);
@@ -272,14 +281,18 @@ button, input, select, textarea { font-family: inherit; }
 }
 .numpad-key:active { transform: scale(0.96); }
 .numpad-key:disabled { opacity: 0.35; cursor: not-allowed; }
-.numpad-key-wide { grid-column: 1 / -1; display: flex; align-items: center; justify-content: center; }
 
 .add-error { margin: 0 0 8px; font: 12px var(--mono); color: var(--terra); text-align: center; }
 .add-helper { margin: 6px 0 0; font: 11px var(--mono); color: var(--muted); text-align: center; }
 
 .tplstrip-empty { margin: 0; padding: 4px 2px; font: 12px var(--mono); color: var(--muted); line-height: 1.5; }
 
-.date-rel { font: 10.5px var(--mono); color: var(--muted); text-transform: uppercase; letter-spacing: 0.06em; white-space: nowrap; }
+/* date + tags-&-options share one row — date box left, disclosure trigger right, options expand below */
+.datetags-row { display: flex; align-items: flex-end; gap: 10px; }
+.datetags-date { display: flex; flex-direction: column; gap: 6px; flex: 0 0 auto; }
+.datetags-trigger { width: auto; flex: 1 1 auto; min-width: 0; }
+.datetags-trigger > span:first-child { flex: 0 0 auto; }
+.opts-chips { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 
 /* tags & options — icon-tile toggles for Fun / Travel / One-off / Save-as-template */
 .toggle-caption { margin: 0; font-size: 11px; color: var(--ink-2); line-height: 1.4; }
@@ -325,7 +338,8 @@ button, input, select, textarea { font-family: inherit; }
   font: 16px var(--sans); outline: none; transition: border-color var(--dur-fast) var(--ease);
 }
 .inp:focus { border-color: var(--terra); }
-textarea.inp { height: auto; padding: 12px 15px; resize: vertical; min-height: 64px; line-height: 1.4; }
+textarea.inp { height: auto; padding: 11px 15px; resize: vertical; min-height: 46px; line-height: 1.4; }
+.inp-date { width: auto; min-width: 0; }
 .inp-num { font-family: var(--mono); }
 
 /* category picker — wrap-flow of auto-width chips */
@@ -339,6 +353,30 @@ textarea.inp { height: auto; padding: 12px 15px; resize: vertical; min-height: 6
 .catpick-item.sel { border-color: var(--terra); background: color-mix(in srgb, var(--terra) 12%, transparent); color: var(--ink); }
 .cat-dot { width: 8px; height: 8px; border-radius: 99px; flex: 0 0 auto; }
 .tx-logo { width: 24px; height: 24px; border-radius: 6px; flex: 0 0 auto; object-fit: contain; }
+
+/* category selector — compact Revolut-style trigger row (label + tappable value link) */
+.catsel-field { margin-top: 4px; }
+.catsel-row {
+  width: 100%; display: flex; align-items: center; justify-content: space-between; gap: 12px;
+  padding: 6px 2px; background: none; border: 0; cursor: pointer;
+}
+.catsel-value { display: flex; align-items: center; gap: 7px; color: var(--terra); font: 500 15px var(--sans); }
+.catsel-icon { display: flex; align-items: center; }
+.catsel-chev { color: var(--muted); transition: transform var(--dur-fast) var(--ease); }
+
+/* category picker — scannable grid of thin line icons tinted their category color */
+.catgrid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; }
+.catgrid-item {
+  display: flex; flex-direction: column; align-items: center; gap: 7px; padding: 13px 6px 10px;
+  background: var(--paper); border: 1px solid var(--hair); border-radius: 14px; cursor: pointer;
+  transition: transform var(--dur-fast) var(--ease), border-color var(--dur) var(--ease), background var(--dur) var(--ease);
+}
+.catgrid-item:hover { transform: translateY(-2px); border-color: var(--hair-strong); }
+.catgrid-item:active { transform: translateY(0); }
+.catgrid-item.sel { border-color: var(--terra); background: color-mix(in srgb, var(--terra) 12%, transparent); }
+.catgrid-icon { display: flex; align-items: center; justify-content: center; }
+.catgrid-label { font-size: 11px; font-weight: 500; color: var(--ink-2); text-align: center; line-height: 1.15; }
+.catgrid-item.sel .catgrid-label { color: var(--ink); }
 
 /* category bars (analysis) */
 .catbar-row { display: flex; align-items: center; gap: 12px; padding: 10px 4px; cursor: pointer; width: 100%; background: none; border: 0; text-align: left; border-bottom: 1px solid var(--hair); }

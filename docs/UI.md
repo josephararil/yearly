@@ -241,26 +241,46 @@ is active.
 
 Redesigned (2026-07) around one unified form shared by `AddSheet` and `EditSheet` — there is no
 Quick/Manual mode split anymore. Body order top → bottom: `TemplateStrip` (AddSheet only) →
-`AmountHero` → `CategoryField` → Description → Note → Date → `OptionsDisclosure`. `Sheet` (`ui.jsx`)
+`AmountHero` → `CategoryField` → Description → Note → `OptionsDisclosure` (Date sits inline in its
+header row). `Sheet` (`ui.jsx`)
 takes an optional `footer` prop rendered as a flex sibling below `.sheet-scroll` (not an overlay —
 `.sheet` is `display:flex; flex-direction:column`, so the footer takes its own row and the scroll area
 shrinks to fit via `flex:1; min-height:0`); both `AddSheet` and `EditSheet` pass their primary CTA row
 as `footer` so it stays pinned while the form scrolls underneath.
 
 **`AmountHero` + `NumPad`** — the single amount UI in the app (no separate manual text input). Big
-serif-adjacent display (€ + `.num`, dims to a placeholder "0.00" when empty) driven by a 3-col `NumPad`
-grid (1–9, ".", "0", "00", plus a full-width backspace row). Backspace: tap deletes one char,
-long-press (500ms) clears to zero; touch handlers call `preventDefault()` to suppress the synthetic
-mouse events mobile browsers fire after `touchend`, avoiding a double-delete. The display formats the
-integer part with thousands separators (`formatAmountDisplay`); the raw value stays a plain numeric
-string for `tx.amount`. Decimal input is capped to 2 places and the "." key disables once a decimal
-point exists.
+serif-adjacent display (€ + `.num`, dims to a placeholder "0.00" when empty) driven by a clean 3×4
+`NumPad` grid (1–9, ".", "0", "00" — no backspace row). Backspace lives **inline** in `AmountHero`, a
+small `.amount-del` button to the right of the number that renders only once `amount` is non-empty (so
+the resting state is clean); equal-width `.amount-side` spacers on both sides keep the number optically
+centered. Backspace: tap deletes one char, long-press (500ms) clears to zero; touch handlers call
+`preventDefault()` to suppress the synthetic mouse events mobile browsers fire after `touchend`,
+avoiding a double-delete. The display formats the integer part with thousands separators
+(`formatAmountDisplay`); the raw value stays a plain numeric string for `tx.amount`. Decimal input is
+capped to 2 places and the "." key disables once a decimal point exists.
 
-**`CategoryField`** — collapsed "CATEGORY — ● label" summary row that expands inline to
-`CategoryPicker`, a wrap-flow of auto-width chips (not a fixed grid). `CategoryPicker` sorts the
-selected category plus the 3 most-recently-used categories (scanned from `store.transactions`, newest
-first) to the front, canonical order for the rest; it's exported on `window.YAdd` and also used by
-`settings.jsx`'s template editor (which must pass `store` for the recency ordering to do anything).
+The **Date** field (`DateField`, `.inp-date` `width:auto`) shrinks to its content and shares one row
+(`.datetags-row`, bottom-aligned) with the **Tags & options** trigger: `OptionsDisclosure` takes the
+date block as its `dateField` prop and renders it to the left of the summary button, with the options
+body expanding full-width below the row. This saves a line and fills the dead space beside the compact
+date box; the old relative "Today"/"Yesterday" label was dropped. The **Note** textarea
+(`textarea.inp`) rests at a single-line `min-height` (46px) and grows on demand rather than reserving a
+large empty box.
+
+**`CategoryField`** — compact Revolut-style trigger row (`.catsel-row`): the "CATEGORY" mono label on
+the left, the current value as a tappable terracotta link on the right (category line icon tinted its
+`c.color` + label + chevron; `.catsel-value`). No full-width bordered button. Tapping the row expands
+`CategoryPicker` inline (no modal). Expanded, `CategoryPicker` is a 3-column grid of tiles
+(`.catgrid`/`.catgrid-item`), each a thin category line icon tinted its `c.color` over a label — not
+colored dots, not filled tiles (the icon carries the color; the tile is paper + hairline, terra
+border/tint when selected). Categories are ordered **frequent-first** by all-time usage count in
+`store.transactions`, ties broken by canonical `YData.CATEGORIES` order (stable and predictable — the
+selected value is not floated). `CategoryPicker` is exported on `window.YAdd` and also used by
+`settings.jsx`'s template editor (pass `store` so the frequency ordering has data).
+
+> The colored icons are a deliberate product choice that softens the Broadsheet spec's "calm color
+> dots / thin ink line icons, no multicolor" rule (`design/BROADSHEET_DESIGN_SPEC.md`) — line icons
+> keep the color to the stroke, never a filled multicolor chip.
 
 **`OptionsDisclosure`** — collapsed "Tags & options" row showing mono chips for any active flag (FUN ·
 TRAVEL · ONE-OFF · TEMPLATE); expands to a row of icon tiles (`.opt-tiles`/`.opt-tile`, one per flag —
