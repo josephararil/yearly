@@ -118,6 +118,39 @@ Notes:
 - Only Joseph runs this bookmarklet, against the joint account — same scope as today's desktop
   pipeline.
 
+### Debugging: 401 "Phone and/or passcode are incorrect"
+
+`scripts/bookmarklet.js` sends a hardcoded `x-device-id`/`x-browser-application`/`x-client-version`
+captured once from a desktop DevTools session (the same values `sync.py`'s `CONSOLE_TEMPLATE`
+uses). Revolut's backend appears to tie `x-device-id` to the authenticated session: a request
+carrying a device id captured on a *different* device is rejected with `401 Phone and/or passcode
+are incorrect` — read as "this looks like a different/untrusted device", not a generic auth error.
+Desktop (same browser session the device id was captured from) works; a phone with a different
+device id does not.
+
+**`scripts/bookmarklet_debug.js`** is a one-time diagnostic bookmarklet that captures your phone's
+*own* real request headers to the same endpoint, without needing DevTools:
+
+<details>
+<summary>Ready-to-paste header-sniffer <code>javascript:</code> URL</summary>
+
+```
+javascript:!function()%7Bconst%20t%3D%22%2Fapi%2Fretail%2Fuser%2Fcurrent%2Ftransactions%22%2Ce%3D%5B%5D%2Cn%3Ddocument.createElement(%22div%22)%3Bn.style.cssText%3D%22position%3Afixed%3Bleft%3A0%3Bright%3A0%3Bbottom%3A0%3Bz-index%3A2147483647%3Bmax-height%3A45vh%3Boverflow%3Aauto%3Bbackground%3A%23111%3Bcolor%3A%230f0%3Bfont-family%3Amonospace%3Bfont-size%3A11px%3Bpadding%3A8px%3Bbox-sizing%3Aborder-box%3Bborder-top%3A2px%20solid%20%23f80%3Bwhite-space%3Apre-wrap%3B%22%3Bconst%20o%3Ddocument.createElement(%22div%22)%3Bo.textContent%3D%22Header%20sniffer%20active%20%E2%80%94%20scroll%20the%20transaction%20list%20or%20pull-to-refresh%20to%20trigger%20a%20request%E2%80%A6%22%2Co.style.cssText%3D%22margin-bottom%3A6px%3Bcolor%3A%23eee%3B%22%3Bconst%20s%3Ddocument.createElement(%22div%22)%2Ci%3Ddocument.createElement(%22div%22)%3Bi.style.cssText%3D%22margin-top%3A6px%3Bdisplay%3Aflex%3Bgap%3A8px%3B%22%3Bconst%20r%3Ddocument.createElement(%22button%22)%3Br.textContent%3D%22Copy%20captured%20headers%22%2Cr.disabled%3D!0%2Cr.style.cssText%3D%22flex%3A1%3Bpadding%3A10px%3Bfont-size%3A13px%3B%22%3Bconst%20p%3Ddocument.createElement(%22button%22)%3Bfunction%20a(t%2Cn)%7Be.push(%7Burl%3At%2Cheaders%3An%7D)%2Co.textContent%3D%60Captured%20%24%7Be.length%7D%20request(s)%20to%20the%20transactions%20endpoint%3A%60%2Cs.textContent%3DJSON.stringify(e%2Cnull%2C2)%2Cr.disabled%3D!1%7Dp.textContent%3D%22Close%22%2Cp.style.cssText%3D%22flex%3A1%3Bpadding%3A10px%3Bfont-size%3A13px%3B%22%2Ci.appendChild(r)%2Ci.appendChild(p)%2Cn.appendChild(o)%2Cn.appendChild(s)%2Cn.appendChild(i)%2Cdocument.body.appendChild(n)%2Cp.onclick%3D()%3D%3En.remove()%2Cr.onclick%3Dasync()%3D%3E%7Bconst%20t%3DJSON.stringify(e%2Cnull%2C2)%3Btry%7Bawait%20navigator.clipboard.writeText(t)%2Cr.textContent%3D%22Copied!%22%2CsetTimeout(()%3D%3E%7Br.textContent%3D%22Copy%20captured%20headers%22%7D%2C1500)%7Dcatch(t)%7Bo.textContent%3D%22Clipboard%20blocked%20%E2%80%94%20select%20the%20text%20below%20manually.%22%2Cs.style.userSelect%3D%22text%22%7D%7D%3Bconst%20d%3Dwindow.fetch%3Bwindow.fetch%3Dfunction(e%2Cn)%7Btry%7Bconst%20o%3D%22string%22%3D%3Dtypeof%20e%3Fe%3Ae%26%26e.url%7C%7C%22%22%3Bif(-1!%3D%3Do.indexOf(t))%7Bconst%20t%3D%7B%7D%2Cs%3Dn%26%26n.headers%7C%7Ce%26%26e.headers%3Bs%26%26(%22undefined%22!%3Dtypeof%20Headers%26%26s%20instanceof%20Headers%3Fs.forEach((e%2Cn)%3D%3E%7Bt%5Bn%5D%3De%7D)%3AObject.keys(s).forEach(e%3D%3E%7Bt%5Be%5D%3Ds%5Be%5D%7D))%2Ca(o%2Ct)%7D%7Dcatch(t)%7B%7Dreturn%20d.apply(this%2Carguments)%7D%3Bconst%20c%3DXMLHttpRequest.prototype.open%2Cl%3DXMLHttpRequest.prototype.setRequestHeader%2Cf%3DXMLHttpRequest.prototype.send%3BXMLHttpRequest.prototype.open%3Dfunction(t%2Ce)%7Breturn%20this.__sniffUrl%3De%2Cthis.__sniffHeaders%3D%7B%7D%2Cc.apply(this%2Carguments)%7D%2CXMLHttpRequest.prototype.setRequestHeader%3Dfunction(t%2Ce)%7Breturn%20this.__sniffHeaders%26%26(this.__sniffHeaders%5Bt%5D%3De)%2Cl.apply(this%2Carguments)%7D%2CXMLHttpRequest.prototype.send%3Dfunction()%7Btry%7Bthis.__sniffUrl%26%26-1!%3D%3Dthis.__sniffUrl.indexOf(t)%26%26a(this.__sniffUrl%2Cthis.__sniffHeaders)%7Dcatch(t)%7B%7Dreturn%20f.apply(this%2Carguments)%7D%7D()%3B
+```
+
+</details>
+
+Usage:
+1. Install as a bookmark, same as above.
+2. Open `app.revolut.com`, logged in, on the transactions/statement screen.
+3. Tap this bookmark **first** — a thin panel appears pinned to the bottom of the screen (it
+   doesn't block the rest of the page, unlike the main bookmarklet's overlay).
+4. Scroll the transaction list (triggers pagination) or pull-to-refresh — this fires a request to
+   the same endpoint, which gets captured and shown in the panel.
+5. Tap **Copy captured headers**, then use the captured `x-device-id` (and any other headers that
+   differ) to update the hardcoded values in `scripts/bookmarklet.js`, regenerate the minified
+   `javascript:` URL, and update the snippet above.
+
 ## Revolut internal API
 
 ```
