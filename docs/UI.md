@@ -255,11 +255,20 @@ integer part with thousands separators (`formatAmountDisplay`); the raw value st
 string for `tx.amount`. Decimal input is capped to 2 places and the "." key disables once a decimal
 point exists.
 
-**`CategoryField`** — collapsed "CATEGORY — ● label" summary row that expands inline to
-`CategoryPicker`, a wrap-flow of auto-width chips (not a fixed grid). `CategoryPicker` sorts the
-selected category plus the 3 most-recently-used categories (scanned from `store.transactions`, newest
-first) to the front, canonical order for the rest; it's exported on `window.YAdd` and also used by
-`settings.jsx`'s template editor (which must pass `store` for the recency ordering to do anything).
+**`CategoryField`** — compact Revolut-style trigger row (`.catsel-row`): the "CATEGORY" mono label on
+the left, the current value as a tappable terracotta link on the right (category line icon tinted its
+`c.color` + label + chevron; `.catsel-value`). No full-width bordered button. Tapping the row expands
+`CategoryPicker` inline (no modal). Expanded, `CategoryPicker` is a 3-column grid of tiles
+(`.catgrid`/`.catgrid-item`), each a thin category line icon tinted its `c.color` over a label — not
+colored dots, not filled tiles (the icon carries the color; the tile is paper + hairline, terra
+border/tint when selected). Categories are ordered **frequent-first** by all-time usage count in
+`store.transactions`, ties broken by canonical `YData.CATEGORIES` order (stable and predictable — the
+selected value is not floated). `CategoryPicker` is exported on `window.YAdd` and also used by
+`settings.jsx`'s template editor (pass `store` so the frequency ordering has data).
+
+> The colored icons are a deliberate product choice that softens the Broadsheet spec's "calm color
+> dots / thin ink line icons, no multicolor" rule (`design/BROADSHEET_DESIGN_SPEC.md`) — line icons
+> keep the color to the stroke, never a filled multicolor chip.
 
 **`OptionsDisclosure`** — collapsed "Tags & options" row showing mono chips for any active flag (FUN ·
 TRAVEL · ONE-OFF · TEMPLATE); expands to a row of icon tiles (`.opt-tiles`/`.opt-tile`, one per flag —

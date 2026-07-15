@@ -340,6 +340,30 @@ textarea.inp { height: auto; padding: 12px 15px; resize: vertical; min-height: 6
 .cat-dot { width: 8px; height: 8px; border-radius: 99px; flex: 0 0 auto; }
 .tx-logo { width: 24px; height: 24px; border-radius: 6px; flex: 0 0 auto; object-fit: contain; }
 
+/* category selector — compact Revolut-style trigger row (label + tappable value link) */
+.catsel-field { margin-top: 4px; }
+.catsel-row {
+  width: 100%; display: flex; align-items: center; justify-content: space-between; gap: 12px;
+  padding: 6px 2px; background: none; border: 0; cursor: pointer;
+}
+.catsel-value { display: flex; align-items: center; gap: 7px; color: var(--terra); font: 500 15px var(--sans); }
+.catsel-icon { display: flex; align-items: center; }
+.catsel-chev { color: var(--muted); transition: transform var(--dur-fast) var(--ease); }
+
+/* category picker — scannable grid of thin line icons tinted their category color */
+.catgrid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; }
+.catgrid-item {
+  display: flex; flex-direction: column; align-items: center; gap: 7px; padding: 13px 6px 10px;
+  background: var(--paper); border: 1px solid var(--hair); border-radius: 14px; cursor: pointer;
+  transition: transform var(--dur-fast) var(--ease), border-color var(--dur) var(--ease), background var(--dur) var(--ease);
+}
+.catgrid-item:hover { transform: translateY(-2px); border-color: var(--hair-strong); }
+.catgrid-item:active { transform: translateY(0); }
+.catgrid-item.sel { border-color: var(--terra); background: color-mix(in srgb, var(--terra) 12%, transparent); }
+.catgrid-icon { display: flex; align-items: center; justify-content: center; }
+.catgrid-label { font-size: 11px; font-weight: 500; color: var(--ink-2); text-align: center; line-height: 1.15; }
+.catgrid-item.sel .catgrid-label { color: var(--ink); }
+
 /* category bars (analysis) */
 .catbar-row { display: flex; align-items: center; gap: 12px; padding: 10px 4px; cursor: pointer; width: 100%; background: none; border: 0; text-align: left; border-bottom: 1px solid var(--hair); }
 .catbar-row:last-child { border-bottom: 0; }

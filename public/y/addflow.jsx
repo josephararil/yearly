@@ -170,53 +170,49 @@
     );
   }
 
-  // Selected + most-recently-used categories float to the front; the rest keep canonical order.
+  // Categories ordered frequent-first (all-time usage count), ties broken by canonical order — a
+  // stable, predictable grid. Each tile is a thin line icon tinted its category color; tap to select.
   function CategoryPicker({ value, onChange, store }) {
     const ordered = React.useMemo(() => {
-      const recentIds = [];
+      const counts = {};
       if (store && Array.isArray(store.transactions)) {
-        const sorted = [...store.transactions].sort((a, b) => (b.date || "").localeCompare(a.date || ""));
-        for (const t of sorted) {
+        for (const t of store.transactions) {
           const id = YData.normalizeCategory(t.category);
-          if (id !== value && !recentIds.includes(id)) recentIds.push(id);
-          if (recentIds.length >= 3) break;
+          counts[id] = (counts[id] || 0) + 1;
         }
       }
-      const frontIds = [value, ...recentIds];
-      const frontSet = new Set(frontIds);
-      const front = frontIds.map((id) => YData.cat(id)).filter(Boolean);
-      const rest = YData.CATEGORIES.filter((c) => !frontSet.has(c.id));
-      return [...front, ...rest];
-    }, [value, store]);
+      const rank = new Map(YData.CATEGORIES.map((c, i) => [c.id, i]));
+      return [...YData.CATEGORIES].sort((a, b) => {
+        const byUse = (counts[b.id] || 0) - (counts[a.id] || 0);
+        return byUse !== 0 ? byUse : rank.get(a.id) - rank.get(b.id);
+      });
+    }, [store]);
     return (
-      <div className="catpick">
+      <div className="catgrid">
         {ordered.map((c) => (
-          <button key={c.id} className={"catpick-item" + (value === c.id ? " sel" : "")} onClick={() => onChange(c.id)}>
-            <span className="cat-dot" style={{ background: c.color }} />
-            <span>{c.label}</span>
+          <button key={c.id} type="button" className={"catgrid-item" + (value === c.id ? " sel" : "")} onClick={() => onChange(c.id)}>
+            <span className="catgrid-icon" style={{ color: c.color }}><window.Icon name={c.icon} size={22} /></span>
+            <span className="catgrid-label">{c.label}</span>
           </button>
         ))}
       </div>
     );
   }
 
-  // Collapsed "CATEGORY — ● General" summary row; tapping expands the wrap-flow chips inline.
+  // Compact "Category   ⟨icon⟩ General ⌄" row — the value reads as a tappable link; tapping expands
+  // the picker grid inline (no modal).
   function CategoryField({ value, onChange, store }) {
     const [open, setOpen] = React.useState(false);
     const c = YData.cat(value);
     return (
-      <div className="field">
-        <button type="button" className="opts-summary" onClick={() => setOpen((o) => !o)} aria-expanded={open}>
+      <div className="field catsel-field">
+        <button type="button" className="catsel-row" onClick={() => setOpen((o) => !o)} aria-expanded={open}>
           <span className="field-label">Category</span>
-          <span style={{ display: "flex", alignItems: "center", gap: 8 }}>
-            <span style={{ display: "flex", alignItems: "center", gap: 8, color: "var(--ink)" }}>
-              <span className="cat-dot" style={{ background: c.color }} />
-              {c.label}
-            </span>
-            <window.Icon name="chevronDown" size={16} style={{
-              color: "var(--muted)", transform: open ? "rotate(180deg)" : "none",
-              transition: "transform var(--dur-fast) var(--ease)",
-            }} />
+          <span className="catsel-value">
+            <span className="catsel-icon" style={{ color: c.color }}><window.Icon name={c.icon} size={16} /></span>
+            <span className="catsel-name">{c.label}</span>
+            <window.Icon name="chevronDown" size={15} className="catsel-chev"
+              style={{ transform: open ? "rotate(180deg)" : "none" }} />
           </span>
         </button>
         <div className={"opts-body" + (open ? " open" : "")}>
