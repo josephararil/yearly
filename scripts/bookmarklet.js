@@ -91,8 +91,23 @@
     while (true) {
       const url = `${BASE}?to=${to}&count=50&walletId=${WALLET}`;
       const res = await fetch(url, { headers, credentials: "include" });
-      const batch = await res.json();
-      if (!batch.length) { status.textContent = "No more transactions."; break; }
+      const bodyText = await res.text();
+      let batch;
+      try {
+        batch = JSON.parse(bodyText);
+      } catch (e) {
+        status.textContent = `Error: HTTP ${res.status} ${res.statusText} — response was not JSON:\n${bodyText.slice(0, 500)}`;
+        textarea.value = bodyText;
+        copyBtn.disabled = false;
+        return;
+      }
+      if (!res.ok || !Array.isArray(batch)) {
+        status.textContent = `Error: HTTP ${res.status} ${res.statusText}\n${JSON.stringify(batch, null, 2).slice(0, 500)}`;
+        textarea.value = JSON.stringify(batch, null, 2);
+        copyBtn.disabled = false;
+        return;
+      }
+      if (!batch.length) { status.textContent = `No more transactions. (fetched ${all.length} total)`; break; }
       all.push(...batch);
       const lastDate = batch[batch.length - 1].startedDate;
       status.textContent = `Fetched ${all.length} transactions... last: ${new Date(lastDate).toISOString().slice(0, 10)}`;
