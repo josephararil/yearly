@@ -111,9 +111,12 @@ instead. Trip *selection* when logging an expense lives in `y/addflow.jsx` (`Tri
 
 ## Screens
 
-- `y/home.jsx` (Overview — hero + `VoiceLine` + FunStrip + TravelStrip + `MonthCurve` monthly chart)
+- `y/home.jsx` (Overview — hero + `VoiceLine` + **one chart with a 4-way switcher** (`MonthCurve` /
+  `ProjectionChart` / `MonthlyBarsChart` / `EstimateChart`) + FunStrip + TravelStrip)
 - `y/analysis.jsx` (Projection/Activity/Fun/Travel tabs — Activity has Categories/Transactions
-  sub-tabs; charts are hand-built SVG that double as the Recharts spec)
+  sub-tabs; charts are hand-built SVG that double as the Recharts spec. **The Projection tab's own
+  "This year" line and "Monthly breakdown" bar charts were moved to the Overview switcher; the tab
+  now holds only "What's happening" callouts + "In numbers" stats.**)
 - `y/settings.jsx` (Budget settings: combined ceiling+buffer / years / fun-budget / travel · Data
   settings: templates / Import & Export submenus (CSV · Revolut mobile import · JSON
   backup-restore) / force-resync / clear)
@@ -137,6 +140,22 @@ hidden on complete/future years (their single `final`/`future` callouts are filt
 inline `Fine / Tight / Slow down` chip in the "This month" header (`pulse-verdict`, month-cap vs
 projected-month-end) is unchanged and independent of the voice line.
 
+### `home.jsx` — the chart switcher
+
+`HomeScreen` renders **one chart region with a 4-way `SegmentedControl`** (`chartView` state) in
+place of the old single "This month" chart — the same principle most apps use (modify the chart in
+front of you, don't scatter period-charts across screens). Views: **Month** (`MonthCurve`) · **Year**
+(`ProjectionChart` + `ChartLegend` + a "this-year" `ChartExplain`) · **By month** (`MonthlyBarsChart`)
+· **Estimate** (`EstimateChart`). The section `<h2>` follows the active view ("This month" / "This
+year" / "Monthly breakdown" / "Estimate over time") and the `pulse-verdict` chip shows only on the
+Month view. Default view is **Month** for a live year, **Year** for a completed/future one (which has
+no meaningful "this month"). All four chart components live in `home.jsx` — `ProjectionChart` and
+`MonthlyBarsChart` were moved here from `analysis.jsx` (load order: `home` precedes `analysis`, so
+they must live at or before `home`), keeping their original `ChartExplain` storage keys (`this-year`,
+`monthly-breakdown`) so saved expand/collapse state persists. `ProjectionChart` and `MonthlyBarsChart`
+are otherwise unchanged from their former Analysis selves (the bar chart lost only its internal
+"Monthly breakdown" section header, now supplied by the switcher).
+
 ### `home.jsx` — `MonthCurve`
 
 Interactive monthly chart for the current month, defined locally in `home.jsx` (not exported from
@@ -159,6 +178,22 @@ dashed Projection line — the month-scale uncertainty cone. See
 (`monthEndBand`). Legend gains a "Range (±€X)" entry whenever the band is present. The verbose
 line-by-line legend below the chart is rendered via `YUI.ChartExplain` (see below).
 
+### `home.jsx` — `EstimateChart` ("Estimate over time")
+
+The new fourth view — a derivative-flavoured chart of the "holy number" (the projected year-end
+total). Where the Month/Year charts only ever climb, this one plots how the *estimate itself* has
+moved as spend accrued (e.g. €30k in spring → €27.5k now), so slowing down shows as a **falling**
+line. Driven entirely by `YCalc.projectionHistory(stats, 5)` — a pure retroactive replay, **no stored
+snapshots** (a footnote states this). Key design choice: the **y-axis is zoomed to the data range
+(never anchored at 0)** — a €2–3k move on a €27k number would be invisible otherwise; the range is
+framed to always include `ceiling` and `mainTarget` so both reference lines stay on-screen and
+toggling them (the two `ToggleChip`s: Ceiling / Main target) never rescales the axis. A compact
+caption above the SVG shows the current estimate + `▲/▼ €X vs 4 wks ago` (sage down / terra up, using
+`projectionAsOf(stats,28)` — the same number as the "trend" callout). Crosshair tooltip snaps to the
+nearest history point (date + estimate). `ChartExplain` key: `estimate-history`. Renders a muted
+one-line fallback for complete/future years and when the year is younger than ~2 weeks
+(`projectionHistory` returns < 2 points).
+
 ### `analysis.jsx` — `AnalysisScreen`
 
 Receives `fun`, `travel`, `store`, `setStore`, `addTx` in addition to `stats`/`focus`/`onEditTx`;
@@ -171,41 +206,24 @@ selves. Focus routing: `"categories"` → Activity tab, Categories sub-tab (with
 `"projection"` → Projection, `"activity"` → Activity tab, Transactions sub-tab, `"fun"` → Fun,
 `"travel"` → Travel. The Transactions sub-tab's "show only" filters include Fun and Travel.
 
-**ProjectionChart** — H=252, interactive: pointer/touch events (pointer move + down, leave, up,
-cancel) show a vertical crosshair with a floating tooltip (€ value + month/day label); on the
-projected portion the tooltip dot switches to `--chart-proj`. `ToggleChip` component (defined above
-`ProjectionChart` in the IIFE) renders small toggle buttons that show/hide individual series — Pace,
-Projection (incomplete year only), Ceiling, and prior-year (when `priorCum` is present). `maxY`
-scales to `max(mainTarget, ceiling, projection, priorMax, projHigh) × 1.1`. When `stats.projLow !=
-null` and Projection is on, a semi-transparent triangular band (vertices: today→projHigh year-end→
-projLow year-end, `--chart-proj` at 10% opacity) is drawn beneath the dashed line; `ChartLegend`
-shows a "Range" rect swatch for it.
-
-**MonthlyBarsChart** — interactive bar chart below the line chart in `ProjectionTab`. One bar per
-calendar month (terra, full opacity for complete months; 55% opacity for the current partial month;
-absent for future months). Three toggleable reference lines via `ToggleChip`s (reused from
-`ProjectionChart`): monthly average (`--chart-pace` dashed, label at left), peak month (`--amber`
-dotted, only when > avg × 1.1, label at right), and — for incomplete current years — the
-`neededMonthlyCap`-based required monthly average (`max(0, mainTarget − spentBeforeCurrentMonth) /
-(12 − curMonth)`, `--chart-proj` dashed, drawn from the current-month slot forward, label at right).
-Each reference line carries an inline text label showing its value (e.g. "avg €1.9k", "peak €2.3k",
-"needed €1.7k"). Pointer/touch events show a vertical crosshair, a dot anchored to the hovered bar
-(or the needed/mo line for future months), and a floating tooltip with the month name and amount;
-future-month tooltips add an "est. needed/mo" sub-label. Hovered bar gets full opacity + stroke
-highlight; hovered month label bolds. Hidden for future years. `LegendItem` helper renders bar and
-line swatches; defined in the same IIFE above `MonthlyBarsChart`. The verbose line-by-line legend
-below it uses `YUI.ChartExplain` (see below), as does the "This year" chart's legend in
-`ProjectionTab`.
+**ProjectionChart** and **MonthlyBarsChart** — the "This year" line chart and "Monthly breakdown"
+bar chart formerly lived here in `ProjectionTab`; they now live in `home.jsx` and render only through
+the Overview chart switcher (see the `home.jsx` sections above). Their internal behavior is unchanged
+(interactive crosshair/tooltip, `ToggleChip` series toggles, `maxY` scaling, `--chart-proj`
+uncertainty band, `LegendItem`/`ChartLegend` swatches). `ProjectionTab` no longer renders any chart —
+after the segment bar it goes straight to "What's happening" callouts and "In numbers" stats.
 
 **`YUI.ChartExplain`** — shared collapsible component (`ui.jsx`) rendering the line-by-line "colored
-dot + label + description" legend used below `MonthCurve`, `ProjectionChart` ("This year"), and
-`MonthlyBarsChart` ("Monthly breakdown"). Takes `{ storageKey, items }`; toggled via a "What's
-this?" button (chevron + label) and persists its open/closed state to
-`localStorage['yearly:explain:' + storageKey]` (defaults to open when unset) so each of the three
-charts remembers its own collapsed/expanded state across reloads independent of the other two.
+dot + label + description" legend used below each Overview chart: `MonthCurve` (`month-curve`),
+`ProjectionChart` (`this-year`), `MonthlyBarsChart` (`monthly-breakdown`), and `EstimateChart`
+(`estimate-history`). Takes `{ storageKey, items }`; toggled via a "What's this?" button (chevron +
+label) and persists its open/closed state to `localStorage['yearly:explain:' + storageKey]` (defaults
+to open when unset) so each chart remembers its own collapsed/expanded state across reloads
+independent of the others.
 
-**"What's happening" section** (`ProjectionTab`) — callouts from `buildCallouts` rendered between
-`MonthlyBarsChart` and "In numbers". Shows all callouts (no density filtering). Receives `callouts`
+**"What's happening" section** (`ProjectionTab`) — callouts from `buildCallouts`, now the first thing
+in the tab (the charts that used to precede it moved to the Overview switcher), rendered above "In
+numbers". Shows all callouts (no density filtering). Receives `callouts`
 and `onCallout` props threaded from `AnalysisScreen` → `App`. Clicking a callout still drills to the
 appropriate tab via `onCallout`. Hidden when `callouts` is empty.
 

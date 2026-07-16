@@ -39,7 +39,15 @@ formula, status thresholds, and each callout detector.
   0 before startMonth).
 - `computeFun(store, asOfDate?)` → per-person fun ledger (see below).
 - `computeTravel(store, asOfDate?)` → family-wide travel ledger (see below).
-- `projectionAsOf` (trend detector).
+- `projectionAsOf(stats, daysBack)` → number — the year-end projection as it *would have been* on a
+  past date, replaying the exact blended-rate math (§projection) over only the transactions dated on
+  or before that date. Powers the trend detector.
+- `projectionHistory(stats, stepDays=5)` → `[{doy, dateStr, projection}]` — a full retroactive
+  series of `projectionAsOf` from ~Jan (`STABLE_DAYS=14`, before which a single early tx makes the
+  rate meaningless) through today, sampled every `stepDays`; the final point uses `stats.projection`
+  so it matches the Hero exactly. A **pure derivation** — no stored daily snapshots, so a backdated
+  or late-imported tx lands on its transaction date. Consumed by the Overview `EstimateChart`
+  ("Estimate over time" view). Empty for complete/future years.
 - `requiredDailyToHit(stats)` → number|null (daily cap to finish on mainTarget; null when N/A).
 - `neededMonthlyCap(stats)` → number (`max(0, (mainTarget − spentBeforeCurrentMonth) / (12 −
   currentMonthIndex))` — used by MonthCurve target line and the "needed/mo" stat).

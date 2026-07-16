@@ -308,6 +308,28 @@ function computeStats(store, year, asOfDate, staleDays = 0) {
     return refSpent + blendedRate * daysLeft * (1 + stats.buffer);
   }
 
+  // Retroactive history of the year-end projection — replays projectionAsOf() across the year so
+  // the UI can chart how the estimate has evolved (e.g. €30k in spring → €27.5k now). A pure
+  // derivation from transaction dates, no stored daily snapshots; a backdated or late-imported tx
+  // therefore lands on its transaction date, not the day it was entered. Skips the opening
+  // STABLE_DAYS, where a single early transaction makes the extrapolated rate meaningless. Returns
+  // [{ doy, dateStr, projection }] oldest→newest, sampled ~stepDays apart and always ending on
+  // today (the final point uses stats.projection so it matches the Hero exactly). Empty for
+  // complete/future years, single-point when the year is younger than STABLE_DAYS.
+  function projectionHistory(stats, stepDays = 5) {
+    if (stats.isFuture || stats.complete) return [];
+    const STABLE_DAYS = 14;
+    const startDoy = Math.min(stats.doy, STABLE_DAYS);
+    const pts = [];
+    for (let doy = startDoy; doy < stats.doy; doy += stepDays) {
+      const daysBack = stats.doy - doy;
+      const ref = new Date(stats.asOf); ref.setDate(ref.getDate() - daysBack);
+      pts.push({ doy, dateStr: localISO(ref), projection: projectionAsOf(stats, daysBack) });
+    }
+    pts.push({ doy: stats.doy, dateStr: stats.asOfStr, projection: stats.projection });
+    return pts;
+  }
+
   // Required daily rate to finish within ceiling. Returns null when not applicable.
   function requiredDailyToHit(stats) {
     if (!stats.isCurrent) return null;
@@ -788,7 +810,7 @@ function computeStats(store, year, asOfDate, staleDays = 0) {
     MONTHS, MONTHS_LONG, eur0, eur2, eurAuto, signedEur, pct, signedPct,
     dayOfYear, daysInYear, parseDate, localISO, fmtDateShort, fmtDateLong, yearTxns,
     cumulativeByDay, priorYearCumulative, aggregateByCategory,
-    rateForMonth, computeStats, computeFun, computeTravel, projectionAsOf, buildCallouts,
+    rateForMonth, computeStats, computeFun, computeTravel, projectionAsOf, projectionHistory, buildCallouts,
     requiredDailyToHit, dailyHeadroom, neededMonthlyCap, projectedMonthEnd, monthEndBand,
   };
 })();
