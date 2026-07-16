@@ -272,8 +272,12 @@ Removed: "Projected finish" and "VS Target" cards (both surfaced on the Overview
 
 **CategoriesTab** catbar rows use `CatIcon` (24px, radius 6); expanding a category shows two
 sub-lists: "Recent in [category]" (last 5 by date, reversed) and "Largest in [category]" (top 5 by
-`amount_eur` descending), both using `TxRow` with `onClick → onEditTx`. **TransactionsTab** — lists **all** transactions (`stats.txns`, including fun-tagged ones); fun tx
-show the person's name as a tag. Filters are hidden behind a compact `sliders` icon button to the
+`amount_eur` descending), both using `TxRow` with `onClick → onEditTx`. Both sub-lists source raw
+`YCalc.yearTxns(store, stats.year)` (filtered to `date <= stats.asOfStr`), **not** the expanded
+`stats.upto` — an amortized parent's drill entry shows the full amount, not a monthly slice.
+**TransactionsTab** — lists **all** raw transactions for the year (same `yearTxns(store,
+stats.year)` source, not `stats.txns`), including fun-tagged ones; fun tx show the person's name as
+a tag. Filters are hidden behind a compact `sliders` icon button to the
 right of the search bar; when active filters exist, a terracotta badge shows the count. Tapping the
 button toggles an inline filter panel with three sections: **Category** (All + one chip per category
 in `stats.catList`), **Sort** (6 options: Newest · Oldest · € High · € Low · A→Z · Z→A — default

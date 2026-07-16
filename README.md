@@ -91,7 +91,7 @@ safety buffer:
 
 ```
 projDays   = daysRemaining + staleDays
-projection = spent + blendedRate × projDays × (1 + buffer)
+projection = spent + blendedRate × projDays × (1 + buffer) + committedFuture
 blendedRate = ytdRate × (doy / daysInYear) + trailing60dRate × (1 − doy / daysInYear)
 ```
 
@@ -111,6 +111,14 @@ blendedRate = ytdRate × (doy / daysInYear) + trailing60dRate × (1 − doy / da
   years. **Known limitation:** `trailingDailyRate` is computed over a window whose last `staleDays`
   are empty, so it slightly understates the blind-day spend; the imputation leans conservative.
 - **Completed and future years**: `projection = spent` (no extrapolation, no buffer).
+- **`committedFuture`** — the sum of not-yet-elapsed amortization slices (`date > asOfStr`) for the
+  viewed year, added with **no buffer** (the amount is fixed, not extrapolated). Without this term,
+  amortized slices dated after today would simply vanish from the projection: they're `oneoff` (see
+  below), so the blended rate skips them, and if they're in the future `spent` hasn't counted them
+  either. `committedFuture` closes that gap so a known future cost (the rest of a spread-out
+  expense, or the rest of this year's virtual depreciation) still shows up in the year-end number.
+  Zero for complete/future years. The same term is added to `projectionAsOf` (trend comparisons) and
+  to `projectedMonthEnd`/the monthly cone (intra-month future slices).
 - All dates use a local `localISO(d)` formatter, **never `toISOString()`** — UTC midnight shifts
   dates backward in UTC+ timezones (EET) and silently drops Dec 31 transactions.
 
@@ -120,6 +128,25 @@ A single €5k holiday would otherwise inflate the year-end projection by ~4× i
 transactions larger than **2% of `ceiling`** — or any transaction explicitly flagged
 `oneoff:true` — are **excluded from the blended rate** while **still counting in `spent`**. They're
 real money, they just shouldn't set your daily pace.
+
+### Amortization
+
+A transaction can carry `amortize_months` (integer ≥ 2) to spread its `amount_eur` evenly across
+that many consecutive calendar months instead of landing entirely in its purchase month — a €1,200
+January insurance premium becomes €100/mo instead of spiking January into a false red alert. An
+optional `virtual:true` marks a no-cash entry (e.g. a €30,000 car depreciated over 180 months) that
+still counts against the ceiling but represents no real purchase.
+
+The engine (`expandAmortized(transactions)` in `calc.jsx`) expands each amortized parent into N
+monthly slices dated on the 1st of each month starting from the parent's own `date`, spilling across
+year boundaries when the spread runs past December, and **drops the parent** — every other
+transaction passes through unchanged. The last slice absorbs the rounding remainder so `Σ slices ===
+amount_eur` exactly. Each slice is tagged `oneoff:true`, which is what excludes it from the blended
+rate (see winsorization above) while it still counts in `spent` once its month has elapsed — and
+`committedFuture` (above) picks it back up for months still ahead. Slices exist only inside the
+expanded copy of the store fed to the projection/callout math; they are **never persisted, never
+synced, and never rendered** — transaction lists and category drill-downs always show the one raw
+parent row, badged `×Nmo` (`VIRTUAL ×Nmo` when `virtual` is set).
 
 ### Forecast uncertainty band
 
@@ -554,6 +581,8 @@ Persisted to `localStorage` under `yearly:store:v1` (and mirrored to D1 via sync
   travel?: true;                // present on travel-budget tx only (family-wide, no owner)
   trip_id?: string;             // references a Trip.id; present iff travel === true
   oneoff?: true;                // excluded from the trend rate (still counts in spent)
+  amortize_months?: number;     // int ≥ 2; spreads amount_eur evenly over N months from date's month
+  virtual?: true;               // no-cash entry (e.g. depreciation); only meaningful with amortize_months
   merchant_logo?: string;       // Revolut-sourced
   merchant_city?: string;       // Revolut-sourced
 }
@@ -611,7 +640,9 @@ on load and on JSON restore.
 │   ├── 0003_oneoff_flag.sql    oneoff INTEGER column
 │   ├── 0004_fix_updated_at_seconds.sql  Retro-fix legacy rows stamped in seconds → milliseconds
 │   ├── 0005_meta.sql           meta key/value table (pipeline freshness signal)
-│   └── 0006_travel_flag.sql    travel INTEGER column (family-wide travel-budget tag)
+│   ├── 0006_travel_flag.sql    travel INTEGER column (family-wide travel-budget tag)
+│   ├── 0007_trip_id.sql        trip_id TEXT column (nullable; references a trip in the settings blob)
+│   └── 0008_amortize.sql       amortize_months INTEGER, virtual INTEGER columns
 │
 ├── scripts/                    Revolut import pipeline (Python + Windows .bat helpers)
 │   ├── revolut_clean.py        Core: Revolut JSON → cleaned SQL/CSV (FX, category rules, skip logic)
