@@ -51,6 +51,13 @@ formula, status thresholds, and each callout detector.
 - `requiredDailyToHit(stats)` → number|null (daily cap to finish on mainTarget; null when N/A).
 - `neededMonthlyCap(stats)` → number (`max(0, (mainTarget − spentBeforeCurrentMonth) / (12 −
   currentMonthIndex))` — used by MonthCurve target line and the "needed/mo" stat).
+- `medianDailySpendYTD(stats)` → number|null (median of per-day totals across every elapsed
+  calendar day this year, incl. €0 days — a mean-resistant read on "typical day" spend). Used by the
+  Analysis "In numbers" Historical actuals group.
+- `historicalMonthRange(store, excludeYm)` → `{min, max, minLabel, maxLabel, n} | null` (all-time
+  highest/lowest calendar-month spend total across every year in `store.transactions`; `excludeYm`
+  ("YYYY-MM") leaves out one partial month, normally the real current month via `new Date()` so an
+  in-progress month never masquerades as the lowest month on record). Used by the same group.
 - `projectedMonthEnd(stats)` → number (current-month daily-rate extrapolation from today to
   month-end; equals `byMonth[m].amount` for complete/future years — shared by MonthCurve and
   StatusHero pulse line). Applies the same lump-sum winsorization as `computeStats`: an
@@ -186,8 +193,11 @@ T3 local facts (~0.35–0.45), T0 redundant-with-Hero (~0.0–0.05). Quick index
 - #10 ceiling (verdict vs `stats.projection`) — **demoted** to `value 0.05`, no longer pinned first.
 
 Two helpers back the pace logic: `requiredDailyToHit(stats)` (over case) and the mirror
-`dailyHeadroom(stats)` (under case) — same `(ceiling − spent)/daysLeft`, opposite gate. Both are
-also consumed by the Analysis "In numbers" bidirectional "To finish on target" StatCard.
+`dailyHeadroom(stats)` (under case) — same `(ceiling − spent)/daysLeft`, opposite gate. These drive
+only the Home pace-guidance callout; the Analysis "In numbers" screen computes its own
+buffer-adjusted "Real daily target" locally in `analysis.jsx` rather than reusing these two, so that
+tile's numbers subtract `bufferAmt` from `spent` before dividing — a deliberately different (more
+conservative) framing from the Home callout's.
 
 Ceiling callout states: `projection > ceiling` → watch/alert — text "trim fun ~€Z/mo" when
 overBy/monthsLeft ≤ funPlanAnnual/12, else "even cutting entire fun budget won't close it; main

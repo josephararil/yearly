@@ -228,18 +228,45 @@ and `onCallout` props threaded from `AnalysisScreen` → `App`. Clicking a callo
 appropriate tab via `onCallout`. Hidden when `callouts` is empty.
 
 **"In numbers" section** (`ProjectionTab`) — appears below "What's happening" with a `section-h`
-title. Receives `fun` and `store` props (passed from `AnalysisScreen`). Stat cards present:
-- Spent YTD, On-pace by today, Blended rate, Buffer adds (existing).
-- **Avg spend/mo** (average over completed months) + sub-line "need ≤€X/mo" coloured sage/terra;
-  `neededMonthly = max(0, ceiling − spent) / monthsRemaining`. Hidden for future years / no data.
-- **90d trend** — compares last-45d daily rate to prior-45d rate; `↑ Increasing` (terra), `↓
-  Decreasing` (sage), or `→ Constant`. Only shown for current year with ≥ 90 days of data.
-- **Total fun budget** — `funPlanAnnual` per year with per-month sub.
-- **Target fun/mo** — `max(0, ceiling − stats.projection) / monthsLeft / numPeople` where
-  `monthsLeft = max(1, daysRemaining / 30.4)`; sage when positive, terra when 0 (`projection ≥
-  ceiling`). Current year only.
-- **FIRE portfolio** — `stats.projection / 0.04`; "at 4% rule" sub. Not shown for future years.
-- vs prior year same point, To finish on target (existing, conditional).
+title, then three `.eyebrow`-labeled sub-groups (each its own `.statgrid`), reusing the same
+`StatCard` tile throughout. Receives `fun` and `store` props (passed from `AnalysisScreen`). Two new
+pure helpers back this section, exported from `calc.jsx`: `medianDailySpendYTD(stats)` (median of
+per-day totals across every elapsed calendar day, incl. €0 days — damps lump-sum skew that a mean
+can't) and `historicalMonthRange(store, excludeYm)` (all-time min/max calendar-month total across
+every year in `store.transactions`; `excludeYm` is always the *real* current in-progress month via
+`new Date()`, not the viewed year's month — a past-year view must still exclude today's partial
+month or it wrongly shows up as the "lowest" month).
+
+- **Historical actuals** — backward-looking, from settled tx data:
+  - Spent YTD + entry count (one tile, existing).
+  - Daily spend (YTD) — `dailyRate` + median sub-line (`medianDailySpendYTD`). Hidden for future years.
+  - Avg spend/mo — average over completed months, sub shows the completed-month count (the
+    "need ≤€X/mo" cue moved to the Targets group's Monthly target tile, see below).
+  - Monthly range — `historicalMonthRange` min–max with the two month labels. Hidden for future years.
+  - vs prior year same point / final (existing, conditional on `stats.priorSpent > 0`).
+- **Projections & forecasts** — forward-looking:
+  - Projected month-end — `YCalc.projectedMonthEnd(stats)`. Current year only.
+  - Projected year-end / Final total (complete years) — `stats.projection` vs ceiling. Hidden for future years.
+  - Blended rate — `trailingDailyRate` + buffer-adds sub (`+€X buffer (Y% missed-entry)`) when not
+    complete, else falls back to the old "YTD avg €X/d" sub (buffer isn't meaningful post-close).
+  - 90d trend — compares last-45d daily rate to prior-45d rate; `↑ Increasing` (terra), `↓
+    Decreasing` (sage), or `→ Constant`. Only shown for current year with ≥ 90 days of data.
+  - FIRE portfolio — `stats.projection / 0.04`; "at 4% rule" sub. Not shown for future years.
+- **Targets & budgets** — dynamic constraints from the ceiling:
+  - Monthly target — baseline (`ceiling / 12`) with the adjusted-cap sub-line
+    (`neededMonthly = YCalc.neededMonthlyCap(stats)`), coloured sage/terra vs `avgMonthly`. Adjusted
+    sub only present for the current year (matches `neededMonthly`'s existing guard).
+  - On-pace by today (existing).
+  - Total fun budget — `funPlanAnnual` per year with per-month sub. Not shown for future years.
+  - **Real daily target** — NEW, local to `analysis.jsx` (does not touch the shared
+    `requiredDailyToHit`/`dailyHeadroom` in `calc.jsx`, which still drive the Home screen's
+    pace-guidance callout unchanged): `(ceiling − (spent + bufferAmt)) / daysRemaining`, floored at
+    0; framed as `≤ €X/day` when `stats.projection > ceiling`, else `room €X/day`. Current year only.
+  - **Daily target (this month)** — NEW: `(neededMonthly − spentThisMonth) / daysLeftInMonth`,
+    floored at 0. Current year only.
+  - Target fun/mo — `max(0, ceiling − stats.projection) / monthsLeft / numPeople` where
+    `monthsLeft = max(1, daysRemaining / 30.4)`; sage when positive, terra when 0 (`projection ≥
+    ceiling`). Current year only.
 
 Removed: "Projected finish" and "VS Target" cards (both surfaced on the Overview hero).
 
