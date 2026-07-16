@@ -231,6 +231,7 @@ function TxTag({ label, color }) {
             <span style={{ minWidth: 0, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{t.description}</span>
             {t.fun && <TxTag label="Fun" color="var(--amber)" />}
             {t.travel && <TxTag label="Travel" color={YData.cat('travel').color} />}
+            {t.amortize_months && <TxTag label={(t.virtual ? "VIRTUAL " : "") + "×" + t.amortize_months + "mo"} color="var(--terra)" />}
           </div>
           <div className="tx-meta">{fmtDateShort(t.date)} · {c.label}{personName ? ` · ${personName}` : ""}</div>
         </span>

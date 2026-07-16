@@ -90,6 +90,7 @@
     open, setOpen, funOn, setFunOn, funPerson, setFunPerson, travelOn, setTravelOn,
     oneOff, setOneOff, saveAsTemplate, setSaveAsTemplate, store, showOneOff, showSaveAsTemplate,
     tripId, setTripId, trips, onCreateTrip, dateField,
+    showAmortize, amortizeOn, setAmortizeOn, amortizeMonths, setAmortizeMonths, virtualOn, setVirtualOn,
   }) {
     const people = (store && store.people) || [];
     const tiles = [
@@ -101,9 +102,13 @@
         key: "travel", icon: "travel", label: "Travel budget", chip: "TRAVEL", on: travelOn, toggle: () => setTravelOn(!travelOn),
         caption: "Tagged to the travel envelope, not monthly spend.",
       },
-      showOneOff && {
+      showOneOff && !amortizeOn && {
         key: "oneOff", icon: "calendar", label: "One-off", chip: "ONE-OFF", on: oneOff, toggle: () => setOneOff(!oneOff),
         caption: "Excluded from the spending-trend forecast — still counts in totals. Large amounts are excluded automatically.",
+      },
+      showAmortize && {
+        key: "amortize", icon: "clock", label: "Amortize", chip: "AMORTIZE", on: amortizeOn, toggle: () => setAmortizeOn(!amortizeOn),
+        caption: "Spread evenly over the coming months instead of hitting this month in full.",
       },
       showSaveAsTemplate && {
         key: "template", icon: "layers", label: "Save as template", chip: "TEMPLATE", on: saveAsTemplate, toggle: () => setSaveAsTemplate(!saveAsTemplate),
@@ -151,6 +156,10 @@
                 )}
                 {travelOn && (
                   <TripField tripId={tripId} onChange={setTripId} trips={trips} onCreateTrip={onCreateTrip} />
+                )}
+                {amortizeOn && (
+                  <AmortizeField months={amortizeMonths} onChangeMonths={setAmortizeMonths}
+                    virtualOn={virtualOn} onChangeVirtual={setVirtualOn} />
                 )}
               </div>
             )}
@@ -282,6 +291,27 @@
     );
   }
 
+  // Months preset chips + numeric override, plus the "no real cash" checkbox for depreciation-style entries.
+  function AmortizeField({ months, onChangeMonths, virtualOn, onChangeVirtual }) {
+    const presets = [3, 6, 12, 24];
+    return (
+      <div className="field">
+        <span className="field-label">Spread over</span>
+        <div style={{ display: "flex", gap: 7, flexWrap: "wrap", alignItems: "center" }}>
+          {presets.map((m) => (
+            <Chip key={m} pressed={months === m} onClick={() => onChangeMonths(m)}>{m}mo</Chip>
+          ))}
+          <input className="inp" type="number" min="2" value={months} style={{ width: 70, height: 36 }}
+            onChange={(e) => onChangeMonths(parseInt(e.target.value, 10) || 0)} />
+        </div>
+        <label style={{ display: "flex", alignItems: "center", gap: 7, marginTop: 8 }}>
+          <input type="checkbox" checked={virtualOn} onChange={(e) => onChangeVirtual(e.target.checked)} />
+          <span>No real cash (virtual)</span>
+        </label>
+      </div>
+    );
+  }
+
   // Horizontal-scroll strip of template tiles at the top of the sheet — Quick is an accelerator on the
   // one unified form, not a separate mode. "See all" expands the full grid inline.
   function TemplateStrip({ templates, selectedId, onPick, allOpen, setAllOpen }) {
@@ -345,6 +375,9 @@
     const [travelOn, setTravelOn] = React.useState(false);
     const [tripId, setTripId] = React.useState(null);
     const [oneOff, setOneOff] = React.useState(false);
+    const [amortizeOn, setAmortizeOn] = React.useState(false);
+    const [amortizeMonths, setAmortizeMonths] = React.useState(12);
+    const [virtualOn, setVirtualOn] = React.useState(false);
     const [saveAsTemplate, setSaveAsTemplate] = React.useState(false);
     const [optsOpen, setOptsOpen] = React.useState(false);
     const [error, setError] = React.useState(null);
@@ -353,6 +386,7 @@
       if (open) {
         setTpl(null); setAllTplOpen(false); setAmount(""); setDraft(blank());
         setFunOn(false); setFunPerson(defaultPerson()); setTravelOn(false); setTripId(null); setOneOff(false);
+        setAmortizeOn(false); setAmortizeMonths(12); setVirtualOn(false);
         setSaveAsTemplate(false); setOptsOpen(false); setError(null);
       }
     }, [open]);
@@ -367,6 +401,10 @@
         if (funOn) { tx.fun = true; tx.person = funPerson; }
         if (travelOn) { tx.travel = true; tx.trip_id = tripId; }
         if (oneOff) tx.oneoff = true;
+        if (amortizeOn && amortizeMonths >= 2) {
+          tx.amortize_months = amortizeMonths;
+          if (virtualOn) tx.virtual = true;
+        }
         if (saveAsTemplate && t.description && t.description.trim() && onSaveTemplate) {
           const tplObj = { id: YData.uid(), name: t.description.trim(), category: t.category };
           const amt = parseFloat(t.amount);
@@ -386,7 +424,7 @@
       setAmount(t.defaultAmount ? String(t.defaultAmount) : "");
     };
 
-    const valid = parseFloat(amount) > 0 && (!travelOn || !!tripId);
+    const valid = parseFloat(amount) > 0 && (!travelOn || !!tripId) && (!amortizeOn || amortizeMonths >= 2);
     const body = (
       <div>
         <TemplateStrip templates={store.templates} selectedId={tpl && tpl.id} onPick={applyTemplate}
@@ -410,6 +448,9 @@
           oneOff={oneOff} setOneOff={setOneOff} saveAsTemplate={saveAsTemplate} setSaveAsTemplate={setSaveAsTemplate}
           store={store} showOneOff={true} showSaveAsTemplate={true}
           tripId={tripId} setTripId={setTripId} trips={store.trips} onCreateTrip={onCreateTrip}
+          showAmortize={true} amortizeOn={amortizeOn} setAmortizeOn={setAmortizeOn}
+          amortizeMonths={amortizeMonths} setAmortizeMonths={setAmortizeMonths}
+          virtualOn={virtualOn} setVirtualOn={setVirtualOn}
           dateField={(
             <div className="datetags-date">
               <span className="field-label">Date</span>
@@ -425,7 +466,9 @@
           {valid ? "Add €" + amount : "Add expense"}
         </Button>
         {!valid && !error && (
-          <p className="add-helper">{travelOn && !tripId ? "Select a trip" : "Enter an amount"}</p>
+          <p className="add-helper">
+            {travelOn && !tripId ? "Select a trip" : amortizeOn && amortizeMonths < 2 ? "Spread over at least 2 months" : "Enter an amount"}
+          </p>
         )}
       </div>
     );
@@ -445,6 +488,9 @@
     const [travelOn, setTravelOn] = React.useState(false);
     const [tripId, setTripId] = React.useState(null);
     const [oneOff, setOneOff] = React.useState(false);
+    const [amortizeOn, setAmortizeOn] = React.useState(false);
+    const [amortizeMonths, setAmortizeMonths] = React.useState(12);
+    const [virtualOn, setVirtualOn] = React.useState(false);
     const [optsOpen, setOptsOpen] = React.useState(false);
     React.useEffect(() => {
       if (txn) {
@@ -454,12 +500,15 @@
         setTravelOn(!!txn.travel);
         setTripId(txn.trip_id || null);
         setOneOff(!!txn.oneoff);
+        setAmortizeOn(!!txn.amortize_months);
+        setAmortizeMonths(txn.amortize_months || 12);
+        setVirtualOn(!!txn.virtual);
         setOptsOpen(false);
       }
     }, [txn]);
     const set = (patch) => setDraft((d) => ({ ...d, ...patch }));
     if (!draft) return <Sheet open={open} onClose={onClose} title="Edit" />;
-    const valid = parseFloat(draft.amount) > 0 && (!travelOn || !!tripId);
+    const valid = parseFloat(draft.amount) > 0 && (!travelOn || !!tripId) && (!amortizeOn || amortizeMonths >= 2);
 
     const body = (
       <div>
@@ -482,6 +531,9 @@
           oneOff={oneOff} setOneOff={setOneOff} saveAsTemplate={false} setSaveAsTemplate={() => {}}
           store={store} showOneOff={true} showSaveAsTemplate={false}
           tripId={tripId} setTripId={setTripId} trips={store && store.trips} onCreateTrip={onCreateTrip}
+          showAmortize={true} amortizeOn={amortizeOn} setAmortizeOn={setAmortizeOn}
+          amortizeMonths={amortizeMonths} setAmortizeMonths={setAmortizeMonths}
+          virtualOn={virtualOn} setVirtualOn={setVirtualOn}
           dateField={(
             <div className="datetags-date">
               <span className="field-label">Date</span>
@@ -500,6 +552,8 @@
               if (funOn) { updated.fun = true; updated.person = funPerson; } else { delete updated.fun; delete updated.person; }
               if (travelOn) { updated.travel = true; updated.trip_id = tripId; } else { delete updated.travel; delete updated.trip_id; }
               if (oneOff) { updated.oneoff = true; } else { delete updated.oneoff; }
+              if (amortizeOn && amortizeMonths >= 2) { updated.amortize_months = amortizeMonths; } else { delete updated.amortize_months; }
+              if (amortizeOn && virtualOn) { updated.virtual = true; } else { delete updated.virtual; }
               onSave(updated); onClose();
             }}>
             Save changes
