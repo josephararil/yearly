@@ -339,6 +339,44 @@ function computeStats(store, year, asOfDate, staleDays = 0) {
     return Math.max(0, (stats.ceiling - stats.spent) / daysLeft);
   }
 
+  // Median of daily spend totals across every elapsed calendar day of the year (incl. €0 days).
+  // Unlike dailyRate (a mean), the median is unmoved by a handful of large/lump days — it answers
+  // "what does a typical day cost" rather than "what's the average including outliers."
+  function medianDailySpendYTD(stats) {
+    if (!stats.doy) return null;
+    const byDate = {};
+    stats.upto.forEach((t) => { byDate[t.date] = (byDate[t.date] || 0) + t.amount_eur; });
+    const start = new Date(Number(stats.year), 0, 1);
+    const vals = [];
+    for (let i = 0; i < stats.doy; i++) {
+      const d = new Date(start); d.setDate(d.getDate() + i);
+      vals.push(byDate[localISO(d)] || 0);
+    }
+    vals.sort((a, b) => a - b);
+    const n = vals.length;
+    const mid = Math.floor(n / 2);
+    return n % 2 ? vals[mid] : (vals[mid - 1] + vals[mid]) / 2;
+  }
+
+  // All-time highest/lowest calendar-month spend totals across every year in store.transactions.
+  // excludeYm (typically the in-progress current month, "YYYY-MM") is left out since it's a
+  // partial month, not a completed one. Returns null if there's no completed month to compare.
+  function historicalMonthRange(store, excludeYm) {
+    const totals = {};
+    (store.transactions || []).forEach((t) => {
+      const ym = t.date.slice(0, 7);
+      if (ym === excludeYm) return;
+      totals[ym] = (totals[ym] || 0) + t.amount_eur;
+    });
+    const entries = Object.entries(totals);
+    if (entries.length === 0) return null;
+    entries.sort((a, b) => a[1] - b[1]);
+    const label = (ym) => { const [y, m] = ym.split("-").map(Number); return MONTHS[m - 1] + " " + y; };
+    const [minYm, min] = entries[0];
+    const [maxYm, max] = entries[entries.length - 1];
+    return { min, max, minLabel: label(minYm), maxLabel: label(maxYm), n: entries.length };
+  }
+
   // Affordable daily rate from here that still lands within the ceiling — the mirror of
   // requiredDailyToHit for the under-ceiling case. Same number, opposite framing ("room for")
   // vs "spend ≤"). Returns null when over ceiling (use requiredDailyToHit) or not applicable.
@@ -812,5 +850,6 @@ function computeStats(store, year, asOfDate, staleDays = 0) {
     cumulativeByDay, priorYearCumulative, aggregateByCategory,
     rateForMonth, computeStats, computeFun, computeTravel, projectionAsOf, projectionHistory, buildCallouts,
     requiredDailyToHit, dailyHeadroom, neededMonthlyCap, projectedMonthEnd, monthEndBand,
+    medianDailySpendYTD, historicalMonthRange,
   };
 })();
