@@ -1,0 +1,2 @@
+ALTER TABLE transactions ADD COLUMN amortize_months INTEGER;
+ALTER TABLE transactions ADD COLUMN virtual INTEGER NOT NULL DEFAULT 0;
