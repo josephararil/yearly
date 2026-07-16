@@ -56,6 +56,47 @@
       .sort((a, b) => (a.date < b.date ? -1 : a.date > b.date ? 1 : 0));
   }
 
+  // ym ("YYYY-MM") + k months, wrapping across year boundaries.
+  function addMonths(ym, k) {
+    const [y, m] = ym.split("-").map(Number);
+    const total = (m - 1) + k;
+    const ny = y + Math.floor(total / 12);
+    const nm = (total % 12) + 1;
+    return ny + "-" + String(nm).padStart(2, "0");
+  }
+
+  // Expands each amortized parent (amortize_months >= 2) into N monthly slices dated on the 1st,
+  // starting from the parent's own date's month and spilling across year boundaries. The parent
+  // itself is dropped — only slices are emitted. Every other transaction passes through unchanged
+  // (identity for the common case). Slices are `oneoff:true` so they're excluded from the
+  // extrapolated rate everywhere `isLump` is checked, and are dated so the last slice absorbs the
+  // rounding remainder (Σ slices === parent's amount_eur, cent-accurate).
+  function expandAmortized(transactions) {
+    const out = [];
+    (transactions || []).forEach((t) => {
+      const n = t.amortize_months;
+      if (!(n >= 2)) { out.push(t); return; }
+      const startYm = t.date.slice(0, 7);
+      const totalCents = Math.round(t.amount_eur * 100);
+      const baseCents = Math.floor(totalCents / n);
+      let allocatedCents = 0;
+      for (let k = 0; k < n; k++) {
+        const cents = k === n - 1 ? totalCents - allocatedCents : baseCents;
+        allocatedCents += cents;
+        out.push({
+          ...t,
+          id: t.id + "__am" + k,
+          date: addMonths(startYm, k) + "-01",
+          amount_eur: cents / 100,
+          oneoff: true,
+          _amortized: true,
+          _parent: t.id,
+        });
+      }
+    });
+    return out;
+  }
+
   // Cumulative spend by day-of-year (index 0..365). Shared with analysis.jsx.
   // Array size and Math.min(365,...) are intentionally fixed: on a leap year, Dec 31 (doy=366)
   // merges into the last chart bucket (index 365). This is a cosmetic chart approximation only.
@@ -211,8 +252,14 @@ function computeStats(store, year, asOfDate, staleDays = 0) {
     const daysRemaining = Math.max(0, diy - doy);
     const projDays = isCurrent ? daysRemaining + staleDays : daysRemaining;
     const extrapolated = trailingDailyRate * projDays;
-    const projNoBuffer = (complete || isFuture) ? spent : spent + extrapolated;
-    const projection = (complete || isFuture) ? spent : spent + extrapolated * (1 + buffer);
+    // Committed-future: amortization slices dated after asOf are `oneoff` (excluded from the
+    // rate), so without this term they'd simply vanish from the projection instead of counting
+    // as the known future cost they are. Deterministic — no buffer, since the amount is fixed.
+    const committedFuture = (complete || isFuture) ? 0 : txns
+      .filter((t) => t._amortized && t.date > asOfStr)
+      .reduce((a, t) => a + t.amount_eur, 0);
+    const projNoBuffer = (complete || isFuture) ? spent : spent + extrapolated + committedFuture;
+    const projection = (complete || isFuture) ? spent : spent + extrapolated * (1 + buffer) + committedFuture;
     const bufferAmt = projection - projNoBuffer;
 
     const pace = (doy / diy) * ceiling;
@@ -305,7 +352,10 @@ function computeStats(store, year, asOfDate, staleDays = 0) {
     const yearWeight = refDoy / daysInYear(stats.year);
     const blendedRate = ytdRate * yearWeight + rawTrailing * (1 - yearWeight);
     const daysLeft = Math.max(0, daysInYear(stats.year) - refDoy);
-    return refSpent + blendedRate * daysLeft * (1 + stats.buffer);
+    const committedFuture = stats.txns
+      .filter((t) => t._amortized && t.date > refStr)
+      .reduce((a, t) => a + t.amount_eur, 0);
+    return refSpent + blendedRate * daysLeft * (1 + stats.buffer) + committedFuture;
   }
 
   // Retroactive history of the year-end projection — replays projectionAsOf() across the year so
@@ -756,7 +806,11 @@ function computeStats(store, year, asOfDate, staleDays = 0) {
       .filter((t) => t.date.startsWith(monthStr) && !isLump(t))
       .reduce((a, t) => a + t.amount_eur, 0);
     const rate = dayOfMonth > 0 ? recurringSoFar / dayOfMonth : 0;
-    return spentSoFar + rate * (daysInMonth - dayOfMonth);
+    // Committed-future: intra-month amortization slices still ahead of asOf, added deterministically.
+    const committedFuture = stats.txns
+      .filter((t) => t._amortized && t.date.startsWith(monthStr) && t.date > stats.asOfStr)
+      .reduce((a, t) => a + t.amount_eur, 0);
+    return spentSoFar + rate * (daysInMonth - dayOfMonth) + committedFuture;
   }
 
   // Ceiling allowance per remaining month (incl. the current one).
@@ -847,7 +901,7 @@ function computeStats(store, year, asOfDate, staleDays = 0) {
   window.YCalc = {
     MONTHS, MONTHS_LONG, eur0, eur2, eurAuto, signedEur, pct, signedPct,
     dayOfYear, daysInYear, parseDate, localISO, fmtDateShort, fmtDateLong, yearTxns,
-    cumulativeByDay, priorYearCumulative, aggregateByCategory,
+    cumulativeByDay, priorYearCumulative, aggregateByCategory, expandAmortized,
     rateForMonth, computeStats, computeFun, computeTravel, projectionAsOf, projectionHistory, buildCallouts,
     requiredDailyToHit, dailyHeadroom, neededMonthlyCap, projectedMonthEnd, monthEndBand,
     medianDailySpendYTD, historicalMonthRange,

@@ -1053,6 +1053,49 @@
       Math.abs(stale10Complete.projection - stale10Complete.spent) < 0.001,
       'projection=' + stale10Complete.projection.toFixed(2) + ' spent=' + stale10Complete.spent.toFixed(2));
 
+    // ---- expandAmortized + committed-future projection ----
+    section('expandAmortized — identity + slicing + committed-future projection');
+
+    // Identity: no amortize_months present → every tx passes through unchanged (same reference).
+    const identityExpanded = YCalc.expandAmortized(richStore.transactions);
+    assert('expandAmortized identity: same length', identityExpanded.length === richStore.transactions.length,
+      'got ' + identityExpanded.length + ' expected ' + richStore.transactions.length);
+    assert('expandAmortized identity: same references throughout',
+      identityExpanded.every((t, i) => t === richStore.transactions[i]));
+
+    // €1,200 / 12-month tx dated January → 12 monthly slices of €100, Σ === 1200.
+    const amortTxn = { id: 'am1', date: '2026-01-10', description: 'Insurance', amount_eur: 1200, category: 'insurance', source: 'manual', amortize_months: 12 };
+    const amortSlices = YCalc.expandAmortized([amortTxn]);
+    assert('amortize: 12 slices emitted (parent dropped)', amortSlices.length === 12, 'got ' + amortSlices.length);
+    assert('amortize: each slice is €100', amortSlices.every((t) => Math.abs(t.amount_eur - 100) < 0.001),
+      amortSlices.map((t) => t.amount_eur).join(','));
+    assert('amortize: Σ slices === 1200',
+      Math.abs(amortSlices.reduce((a, t) => a + t.amount_eur, 0) - 1200) < 0.001,
+      'got ' + amortSlices.reduce((a, t) => a + t.amount_eur, 0));
+    assert('amortize: dates run Jan→Dec 2026, first-of-month',
+      amortSlices.map((t) => t.date).join(',') === Array.from({ length: 12 }, (_, k) => '2026-' + String(k + 1).padStart(2, '0') + '-01').join(','),
+      amortSlices.map((t) => t.date).join(','));
+    assert('amortize: slices flagged oneoff + _amortized', amortSlices.every((t) => t.oneoff === true && t._amortized === true));
+    assert('amortize: slices reference parent id', amortSlices.every((t) => t._parent === 'am1'));
+
+    // Mid-year current-year: only elapsed slices count in spent; year-end projection ≈ 1200.
+    const amortStore = {
+      currentYear: 2026,
+      people: [],
+      wishlist: [],
+      years: { '2026': { ceiling: 25000, buffer: 0.0 } },
+      density: 'balanced',
+      templates: [],
+      transactions: YCalc.expandAmortized([amortTxn]),
+    };
+    // asOf = Jun 7 → Jan-Jun slices (6 × €100 = 600) elapsed; Jul-Dec (6 × €100 = 600) committed-future.
+    const amortStats = YCalc.computeStats(amortStore, 2026, new Date('2026-06-07T12:00:00Z'));
+    assert('amortize mid-year: spent === 600 (only elapsed slices)', Math.abs(amortStats.spent - 600) < 0.01, 'got ' + amortStats.spent);
+    assert('amortize mid-year: projection ≈ 1200 (elapsed + committed-future)',
+      Math.abs(amortStats.projection - 1200) < 0.01, 'got ' + amortStats.projection.toFixed(2));
+    assert('amortize mid-year: projNoBuffer ≈ 1200 too (committed-future is unbuffered)',
+      Math.abs(amortStats.projNoBuffer - 1200) < 0.01, 'got ' + amortStats.projNoBuffer.toFixed(2));
+
     // ---- Summary ----
     const total = passed + failed;
     const summary = document.getElementById('summary');
