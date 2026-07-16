@@ -56,7 +56,7 @@ Full local-dev notes (the no-backend 404 handling, reload-loop fix) are in
    a second server on a random port nobody is looking at. Full SW + preview workflow, including the
    port-conflict and hard-refresh procedures: [docs/PWA-AND-DEV.md](docs/PWA-AND-DEV.md#claude-code-preview--how-to-deploy-locally-for-testing).
 2. **`APP_VERSION` (`settings.jsx` footer) and `CACHE_NAME` (`sw.js`) move together** — currently
-   `v69` / `yearly-v69`. Bump both on every release.
+   `v72` / `yearly-v72`. Bump both on every release.
 3. **`localISO(d)`, never `toISOString()`** for dates in `calc.jsx` — `toISOString()` is UTC and
    silently drops Dec 31 transactions in UTC+ timezones (EET).
 3b. **`updated_at` is milliseconds everywhere** — `Date.now()` in the worker, `Date.now()` for the
@@ -124,9 +124,19 @@ The essentials every session needs:
   projDays / 7`), making `alert` harder to trip while data is stale.
 
 **Projection (damped blend):** `projDays = daysRemaining + staleDays`, `projection = spent +
-blendedRate × projDays × (1 + buffer)`, `blendedRate = YTD_rate × (doy/365) +
+blendedRate × projDays × (1 + buffer) + committedFuture`, `blendedRate = YTD_rate × (doy/365) +
 trailing_60d_rate × (1 − doy/365)`. Buffer uplifts only the extrapolated remainder (so on Dec 31
-with no stale days projection = spent). Complete/future years: `projection = spent`.
+with no stale days or committed future, projection = spent). Complete/future years: `projection = spent`.
+
+**Amortization:** a tx can carry `amortize_months` (int ≥ 2) to spread `amount_eur` evenly over N
+months from its own month (optional `virtual:true` = no-cash entry, e.g. depreciation, that still
+counts vs the ceiling). `YCalc.expandAmortized(transactions)` explodes each such parent into N
+`oneoff` monthly slices (dated the 1st, spilling across years, last slice absorbs the cent
+remainder) and drops the parent. `committedFuture` = not-yet-elapsed slices, added deterministically
+(no buffer). **`app.jsx` feeds an expanded `calcStore` to `computeStats`/`buildCallouts` only;
+`computeFun`/`computeTravel` stay on raw `store`.** Invariant: **slices exist only for aggregate
+math — never persisted, synced, or rendered.** Any UI that lists individual tx reads raw
+`store.transactions` (analysis lists use `yearTxns(store, …)`). Detail in ARCHITECTURE.md.
 
 **Conventions that are easy to break** (see ARCHITECTURE.md for the why): `localISO` not
 `toISOString`; lump-sum winsorization (tx > 2% of `ceiling`, or `oneoff:true`, excluded from the
@@ -138,9 +148,12 @@ ceiling verdict (#8) is always prepended first.
 ## State root — `y/app.jsx`
 
 `App` is the single stateful root. `store` (persisted to localStorage on every mutation) is the only
-durable state; everything else is ephemeral UI state. Three memoized derivations drive the UI:
-`stats = YCalc.computeStats(store, viewYear, undefined, viewYear===currentYear ? staleDays : 0)`,
-`callouts = YCalc.buildCallouts(store, stats)`, `fun = YCalc.computeFun(store)`. `staleDays` is
+durable state; everything else is ephemeral UI state. A memoized `calcStore = { ...store,
+transactions: YCalc.expandAmortized(store.transactions) }` (amortization expansion; see the engine
+section) feeds the ceiling math. Memoized derivations drive the UI:
+`stats = YCalc.computeStats(calcStore, viewYear, undefined, viewYear===currentYear ? staleDays : 0)`,
+`callouts = YCalc.buildCallouts(calcStore, stats)`, `fun = YCalc.computeFun(store)`,
+`travel = YCalc.computeTravel(store)` — note `fun`/`travel` stay on **raw** `store`. `staleDays` is
 derived from `lastSyncTs` (state, set after `reconcile()` via `YSync.getLastSyncTs()`). Navigation is in-memory route state (`home` | `analysis` | `settings`), not
 URL routing. `viewYear` is independent of `store.currentYear`; a past year flips the app into
 completed-year mode. Sync wiring, callout→Analysis focus routing, and undo-on-delete are detailed in

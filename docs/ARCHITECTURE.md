@@ -33,6 +33,11 @@ formula, status thresholds, and each callout detector.
   ignored for complete/future years. When `staleDays === 0` output is byte-identical to the
   pre-stale baseline.
 - `buildCallouts(store, stats)` — the value-ranked detector engine (10 detectors).
+- `expandAmortized(transactions)` → `Transaction[]` — expands each tx with `amortize_months >= 2`
+  into N monthly slices (dated on the 1st, spilling across year boundaries, last slice absorbs the
+  rounding remainder) and drops the parent; every other tx passes through unchanged (identity for
+  the common case). Slices are `_amortized:true`, `_parent:<parentId>`, and `oneoff:true`. Callers
+  feed it a copy of the store (see "Expanded vs raw store" below) — it never mutates its input.
 - `cumulativeByDay(txns)` → `number[366]` (shared with `analysis.jsx`).
 - `priorYearCumulative(store, year, asOfDate)` → number (prior year spend at same day-of-year).
 - `rateForMonth(person, ym)` → number (latest applicable rate for a person in a "YYYY-MM";
@@ -103,15 +108,23 @@ see README §Callout detectors threshold table for the full rationale.
 ### Projection formula (damped blend)
 
 `projDays = daysRemaining + staleDays` (staleDays=0 when no stale signal).
-`projection = spent + blendedRate × projDays × (1 + buffer)` where `blendedRate =
+`projection = spent + blendedRate × projDays × (1 + buffer) + committedFuture` where `blendedRate =
 YTD_rate × (doy/365) + trailing_60d_rate × (1 − doy/365)`. The buffer uplifts only the
-extrapolated remainder, so on Dec 31 with no stale days projection equals spent exactly;
-`funProjection` carries no buffer by design. Early in the year the blend trusts recent momentum
-(thin YTD history); late in the year it locks onto the full-year average, so a July holiday
+extrapolated remainder, so on Dec 31 with no stale days and no committed future, projection equals
+spent exactly; `funProjection` carries no buffer by design. Early in the year the blend trusts recent
+momentum (thin YTD history); late in the year it locks onto the full-year average, so a July holiday
 doesn't hijack the December projection. For complete/future years `projection = spent`.
-`projectionAsOf` uses the same blend for consistent trend comparisons. Band widening: `weeksRemaining
-= projDays / 7`, so a non-zero `staleDays` widens `bandAmt` and lowers `projLow`, making the
-`alert` verdict harder to trip while data is stale (correct — the forecast is less certain).
+`projectionAsOf` uses the same blend (+ `committedFuture` relative to its reference date) for
+consistent trend comparisons. Band widening: `weeksRemaining = projDays / 7`, so a non-zero
+`staleDays` widens `bandAmt` and lowers `projLow`, making the `alert` verdict harder to trip while
+data is stale (correct — the forecast is less certain).
+
+**`committedFuture`** = sum of `amount_eur` for slices with `t._amortized && t.date > asOfStr` (zero
+for complete/future years). Amortized slices are `oneoff`, so the blended rate never extrapolates
+them; without this term a slice dated after `asOf` would simply disappear from the projection
+instead of counting as the known future cost it is. Deterministic, no buffer applied — the amount is
+fixed, not extrapolated. Mirrored in `projectedMonthEnd`/`monthEndBand` for intra-month future
+slices (`t.date.startsWith(monthStr) && t.date > asOfStr`).
 
 ### `computeStats` returns
 
@@ -263,8 +276,9 @@ templates, and `loadStore`/`saveStore`/`resetStore`/`migrateStore`.
   `travel:true` (family-wide travel tag, independent of the `Travel` category and of `fun`).
   Optional `oneoff:true` — excludes the tx from the blended rate used in projection (still
   counts in `spent`). Always absent on Revolut import (defaults to 0); toggled in-app via Manual
-  add / edit sheet. Optional Revolut-sourced fields: `merchant_logo` (URL string),
-  `merchant_city` (string).
+  add / edit sheet. Optional `amortize_months` (int ≥ 2) and `virtual:true` — see
+  `expandAmortized` above; also absent on Revolut import, user-owned like `oneoff`. Optional
+  Revolut-sourced fields: `merchant_logo` (URL string), `merchant_city` (string).
 - `years[y].ceiling` — renamed from `years[y].target` (sacred household ceiling, never derived).
 
 `buildSeed()` — returns a blank store: `transactions: []`, `wishlist: []`, `trips: []`,
@@ -363,10 +377,30 @@ ones.
 `App` is the single stateful root. `store` (persisted via a `setStore` that writes the whole
 object to localStorage on every mutation) is the only durable state; `route` / `viewYear` /
 `analysisFocus` / `addOpen` / `editTx` / `yearOpen` / `deletedTx` / `showToast` are ephemeral UI
-state. Four memoized derivations drive everything visible: `stats =
-YCalc.computeStats(store, viewYear)`, `callouts = YCalc.buildCallouts(store, stats)`, `fun =
+state. A memoized `calcStore = { ...store, transactions: YCalc.expandAmortized(store.transactions) }`
+(depends on `[store]` only — expansion is view-independent, so it's stable across `viewYear`
+changes) feeds **only** `computeStats`/`buildCallouts`; `computeFun`/`computeTravel` stay on the raw
+`store`. Four memoized derivations drive everything visible: `stats =
+YCalc.computeStats(calcStore, viewYear)`, `callouts = YCalc.buildCallouts(calcStore, stats)`, `fun =
 YCalc.computeFun(store)` (all-time per-person fun ledger), and `travel = YCalc.computeTravel(store)`
-(family-wide travel ledger) — all recomputed on any store change. `onOpenFun`/`onOpenTravel` set
+(family-wide travel ledger) — all recomputed on any store change.
+
+**Expanded vs raw store.** `stats.txns`/`stats.upto` are therefore amortization *slices*, correct
+for every aggregate/chart consumer (home `MonthCurve`/`MonthBreakdown`/`projectionHistory`, all
+callout detectors — none need edits, they just iterate `amount_eur`/`date`/flags). `computeFun` and
+`computeTravel` deliberately read the raw `store` instead, so their per-row lists (`fun.jsx`,
+`travel.jsx`) never show slices — the trade-off is that a fun/travel-tagged amortized purchase is
+smoothed in the ceiling view but lands whole in its buy month in the Fun/Travel envelopes (accepted
+v1 boundary, not "fixed"). `analysis.jsx`'s `TransactionsTab` and `CategoriesTab` drill lists also
+source raw transactions (`YCalc.yearTxns(store, stats.year)`, filtered to `date <= stats.asOfStr`)
+rather than the expanded `stats.txns`/`stats.upto`, so a category's bar amount can be smoothed while
+its drill list still shows the full parent — the `×Nmo` badge on `TxRow` explains the discrepancy.
+**Invariant:** slices exist only inside `calcStore` for aggregate math; they are never persisted,
+never enqueued to the sync outbox, and never rendered or counted as individual rows — any UI that
+lists/counts individual transactions reads raw `store.transactions`. Add/edit/delete already operate
+on the raw store.
+
+`onOpenFun`/`onOpenTravel` set
 `analysisFocus = { section:"fun"|"travel" }` and route to the matching Analysis tab. `fun`, `travel`,
 `store`, `setStore`, and `addTx` are passed to `AnalysisScreen` (for `FunTab`/`TravelTab`); `fun`,
 `travel`, `store`, `onOpenFun`, and `onOpenTravel` are passed to `HomeScreen` (for the strips).

@@ -48,6 +48,8 @@
       oneoff: tx.oneoff ? 1 : 0,
       travel: tx.travel ? 1 : 0,
       trip_id: tx.trip_id || null,
+      amortize_months: tx.amortize_months != null ? tx.amortize_months : null,
+      virtual: tx.virtual ? 1 : 0,
     };
   }
 
@@ -77,6 +79,8 @@
     if (row.oneoff)            tx.oneoff            = true;
     if (row.travel)            tx.travel            = true;
     if (row.trip_id)           tx.trip_id           = row.trip_id;
+    if (row.amortize_months != null) tx.amortize_months = row.amortize_months;
+    if (row.virtual)           tx.virtual           = true;
     if (row.original_amount  != null) tx.original_amount  = row.original_amount;
     if (row.original_currency)        tx.original_currency = row.original_currency;
     if (row.merchant_logo)            tx.merchant_logo     = row.merchant_logo;

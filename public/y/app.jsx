@@ -83,8 +83,9 @@
     }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
     const staleDays = lastSyncTs ? Math.max(0, Math.floor((Date.now() - lastSyncTs) / 86400000)) : 0;
-    const stats = React.useMemo(() => YCalc.computeStats(store, viewYear, undefined, viewYear === store.currentYear ? staleDays : 0), [store, viewYear, staleDays]);
-    const callouts = React.useMemo(() => YCalc.buildCallouts(store, stats), [store, stats]);
+    const calcStore = React.useMemo(() => ({ ...store, transactions: YCalc.expandAmortized(store.transactions) }), [store]);
+    const stats = React.useMemo(() => YCalc.computeStats(calcStore, viewYear, undefined, viewYear === store.currentYear ? staleDays : 0), [calcStore, viewYear, staleDays]);
+    const callouts = React.useMemo(() => YCalc.buildCallouts(calcStore, stats), [calcStore, stats]);
     const fun = React.useMemo(() => YCalc.computeFun(store), [store]);
     const travel = React.useMemo(() => YCalc.computeTravel(store), [store]);
 

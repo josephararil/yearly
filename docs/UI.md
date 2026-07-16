@@ -272,8 +272,12 @@ Removed: "Projected finish" and "VS Target" cards (both surfaced on the Overview
 
 **CategoriesTab** catbar rows use `CatIcon` (24px, radius 6); expanding a category shows two
 sub-lists: "Recent in [category]" (last 5 by date, reversed) and "Largest in [category]" (top 5 by
-`amount_eur` descending), both using `TxRow` with `onClick → onEditTx`. **TransactionsTab** — lists **all** transactions (`stats.txns`, including fun-tagged ones); fun tx
-show the person's name as a tag. Filters are hidden behind a compact `sliders` icon button to the
+`amount_eur` descending), both using `TxRow` with `onClick → onEditTx`. Both sub-lists source raw
+`YCalc.yearTxns(store, stats.year)` (filtered to `date <= stats.asOfStr`), **not** the expanded
+`stats.upto` — an amortized parent's drill entry shows the full amount, not a monthly slice.
+**TransactionsTab** — lists **all** raw transactions for the year (same `yearTxns(store,
+stats.year)` source, not `stats.txns`), including fun-tagged ones; fun tx show the person's name as
+a tag. Filters are hidden behind a compact `sliders` icon button to the
 right of the search bar; when active filters exist, a terracotta badge shows the count. Tapping the
 button toggles an inline filter panel with three sections: **Category** (All + one chip per category
 in `stats.catList`), **Sort** (6 options: Newest · Oldest · € High · € Low · A→Z · Z→A — default
@@ -328,10 +332,10 @@ selected value is not floated). `CategoryPicker` is exported on `window.YAdd` an
 > keep the color to the stroke, never a filled multicolor chip.
 
 **`OptionsDisclosure`** — collapsed "Tags & options" row showing mono chips for any active flag (FUN ·
-TRAVEL · ONE-OFF · TEMPLATE); expands to a row of icon tiles (`.opt-tiles`/`.opt-tile`, one per flag —
-entertainment/travel/calendar/layers icons), each toggled by tapping the tile (active state = terra
-border/tint + a small check badge, no separate switch control). Captions for whichever tiles are
-active stack below the row (`.opt-details`), each stating the consequence:
+TRAVEL · ONE-OFF · AMORTIZE · TEMPLATE); expands to a row of icon tiles (`.opt-tiles`/`.opt-tile`, one
+per flag — entertainment/travel/calendar/clock/layers icons), each toggled by tapping the tile (active
+state = terra border/tint + a small check badge, no separate switch control). Captions for whichever
+tiles are active stack below the row (`.opt-details`), each stating the consequence:
 - **Fun budget** — reveals a Chip owner picker (Joseph/Marti) below the tile row when on. `commit()`/
   `onSave()` write `fun:true` + `person`; `EditSheet` pre-populates from `txn.fun`/`txn.person` and
   deletes both keys when toggled off.
@@ -346,7 +350,17 @@ active stack below the row (`.opt-details`), each stating the consequence:
   `travelOn` (footer helper reads "Select a trip" until one is chosen); `EditSheet` pre-fills
   `tripId` from `txn.trip_id` and deletes both keys when toggled off.
 - **One-off** — writes/deletes `oneoff:true`; causes `isLump()` in `calc.jsx` to exclude the tx from
-  the blended rate while keeping it in `spent`.
+  the blended rate while keeping it in `spent`. Hidden while Amortize is on (redundant — an amortized
+  parent is already rate-excluded via its slices, see `expandAmortized` in
+  [ARCHITECTURE.md](ARCHITECTURE.md)).
+- **Amortize** — reveals `AmortizeField` below the caption: preset `Chip`s (3/6/12/24) plus a numeric
+  `<input type="number">` for the month count, and a "No real cash (virtual)" checkbox (only meaningful
+  with Amortize on, so it lives here rather than as its own tile). `commit()`/`onSave()` write
+  `amortize_months` (int ≥ 2) and, if checked, `virtual:true`; `EditSheet` pre-populates both from
+  `txn.amortize_months`/`txn.virtual` and deletes both keys when toggled off. Both sheets' `valid`
+  additionally requires `amortizeMonths >= 2` when `amortizeOn` (footer helper: "Spread over at least 2
+  months"). `TxRow` (`ui.jsx`) renders a `×Nmo` badge beside the Fun/Travel tags (`VIRTUAL ×Nmo` when
+  `virtual` is set).
 - **Save as template** — `AddSheet` only (`OptionsDisclosure` takes `showOneOff`/`showSaveAsTemplate`
   booleans, which also control which tiles render; `EditSheet` passes `showSaveAsTemplate={false}`).
   When on, `commit()` builds `{ id, name: description.trim(), category, defaultAmount? }` (amount only
