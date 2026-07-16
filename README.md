@@ -413,21 +413,33 @@ Top to bottom:
 - **Travel strip** (`TravelStrip`) — a glanceable indicator: the family-wide travel balance
   available (sage/terra), the monthly allowance and this-month usage, and the nearest trip goal.
   Tappable → Analysis Travel tab.
-- **This month** — `MonthCurve`, an interactive day-by-day cumulative chart for the current month
-  with toggleable Pace / Projection / Target / Month-end / Prev-month series and an explanatory
-  legend. The Projection line carries its own **uncertainty cone** (see below) — a translucent
-  triangle, same treatment as the year chart's band, that starts wide on day 1 and narrows to
-  nothing by month-end.
+- **One chart, four views** — a single chart region with a segmented switcher, so you *modify the
+  chart in front of you* rather than hunt for period-charts across screens. The views:
+  - **This month** — `MonthCurve`, an interactive day-by-day cumulative chart for the current month
+    with toggleable Pace / Projection / Target / Month-end / Prev-month series. The Projection line
+    carries its own **uncertainty cone** — a translucent triangle that starts wide and narrows to
+    nothing by month-end.
+  - **This year** — the full-year cumulative line (actual + dashed projection + pace + ceiling +
+    prior-year, with the year's uncertainty band).
+  - **Monthly breakdown** — a per-month bar chart with average / peak / needed reference lines.
+  - **Estimate over time** — how the projected year-end total (the number the whole app is about)
+    has *moved* as spend accrued: it falls when you slow down and rises when you speed up, which no
+    cumulative chart can show. It is a **pure retroactive derivation** (`YCalc.projectionHistory`)
+    — the projection is simply re-run *as of* each past date over the transactions known by then, so
+    the full history is available immediately with **nothing stored day-to-day**. The y-axis is
+    zoomed to the data range (it does not start at zero) so a small move on a large number is
+    actually visible, framed by the ceiling and main-target reference lines, with a "vs 4 weeks ago"
+    delta caption. (Because it keys off transaction *dates*, a backdated or late-imported tx appears
+    on its own date, not the day it was entered.)
 
 ### Analysis — the deep surface ([`analysis.jsx`](public/y/analysis.jsx))
 
 A segmented control: **Projection · Categories · Activity · Fun · Travel**.
 
-- **Projection** — a full-year interactive line chart (actual cumulative + dashed projection + pace
-  + ceiling + prior-year, with the uncertainty band drawn as a translucent triangle), a per-month
-  bar chart with average/peak/needed reference lines, the full callouts list ("What's happening"),
-  and an "In numbers" stat grid (Spent YTD, blended rate, buffer adds, avg spend/mo, 90-day trend,
-  total fun budget, target fun/mo, a "FIRE portfolio" curiosity at the 4% rule, and more).
+- **Projection** — the full callouts list ("What's happening") and an "In numbers" stat grid (Spent
+  YTD, blended rate, buffer adds, avg spend/mo, 90-day trend, total fun budget, target fun/mo, a
+  "FIRE portfolio" curiosity at the 4% rule, and more). The year line chart and monthly bar chart
+  that used to live here now live in the Overview chart switcher (above).
 - **Categories** — every category with spend, ranked, as an expandable bar row (share %, entry
   count, MoM change). Expanding shows the most recent and largest transactions in that category.
 - **Activity** — search by description, filter chips for every category, a 6-way sort, "show only"
