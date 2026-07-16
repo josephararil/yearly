@@ -219,11 +219,14 @@
     );
   }
 
-  function CategoriesTab({ stats, focusCategory, onEditTx, people }) {
+  function CategoriesTab({ stats, focusCategory, onEditTx, people, store }) {
     const [sel, setSel] = React.useState(focusCategory || null);
     React.useEffect(() => { if (focusCategory) setSel(focusCategory); }, [focusCategory]);
     const curMonth = stats.asOf.getMonth();
     const max = stats.catList[0] ? stats.catList[0].amount : 1;
+    const rawUpto = React.useMemo(() => (
+      stats.isFuture ? [] : YCalc.yearTxns(store, stats.year).filter((t) => t.date <= stats.asOfStr)
+    ), [store, stats.year, stats.asOfStr, stats.isFuture]);
     return (
       <div className="stagger" style={{ display: "flex", flexDirection: "column", gap: 16 }}>
         <div>
@@ -262,13 +265,13 @@
                     <CatTrend cid={c.id} catMonth={stats.catMonth} upToMonth={curMonth} />
                     <div className="muted" style={{ fontSize: 11, fontFamily: "var(--mono)", margin: "8px 2px 4px", textTransform: "uppercase", letterSpacing: "0.1em" }}>Recent in {cat.label}</div>
                     <div className="txlist">
-                      {stats.upto.filter((t) => t.category === c.id).slice().reverse().slice(0, 5).map((t) => (
+                      {rawUpto.filter((t) => t.category === c.id).slice().reverse().slice(0, 5).map((t) => (
                         <TxRow key={t.id} t={t} onClick={onEditTx ? () => onEditTx(t) : undefined} people={people} />
                       ))}
                     </div>
                     <div className="muted" style={{ fontSize: 11, fontFamily: "var(--mono)", margin: "14px 2px 4px", textTransform: "uppercase", letterSpacing: "0.1em" }}>Largest in {cat.label}</div>
                     <div className="txlist">
-                      {stats.upto.filter((t) => t.category === c.id).slice().sort((a, b) => b.amount_eur - a.amount_eur).slice(0, 5).map((t) => (
+                      {rawUpto.filter((t) => t.category === c.id).slice().sort((a, b) => b.amount_eur - a.amount_eur).slice(0, 5).map((t) => (
                         <TxRow key={t.id} t={t} onClick={onEditTx ? () => onEditTx(t) : undefined} people={people} />
                       ))}
                     </div>
@@ -304,7 +307,7 @@
     );
   }
 
-  function TransactionsTab({ stats, onEditTx, people }) {
+  function TransactionsTab({ stats, onEditTx, people, store }) {
     const [q, setQ] = React.useState("");
     const [fc, setFc] = React.useState(null);
     const [sort, setSort] = React.useState("date-desc");
@@ -315,7 +318,9 @@
 
     const activeCount = (fc ? 1 : 0) + (sort !== "date-desc" ? 1 : 0) + (filterManual ? 1 : 0) + (filterFun ? 1 : 0) + (filterTravel ? 1 : 0);
 
-    let list = stats.txns.slice();
+    const rawTxns = React.useMemo(() => YCalc.yearTxns(store, stats.year), [store, stats.year]);
+
+    let list = rawTxns.slice();
     if (fc) list = list.filter((t) => t.category === fc);
     if (filterManual) list = list.filter((t) => t.source === "manual");
     if (filterFun) list = list.filter((t) => t.fun);
@@ -395,17 +400,17 @@
             <div className="txlist">{list.map((t) => <TxRow key={t.id} t={t} onClick={() => onEditTx(t)} people={people} />)}</div>
           ) : <div className="empty">No matching transactions.</div>}
         </div>
-        <div className="muted" style={{ textAlign: "center", fontFamily: "var(--mono)", fontSize: 11 }}>{list.length} of {stats.txns.length} entries</div>
+        <div className="muted" style={{ textAlign: "center", fontFamily: "var(--mono)", fontSize: 11 }}>{list.length} of {rawTxns.length} entries</div>
       </div>
     );
   }
 
-  function ActivityMergedTab({ stats, subtab, setSubtab, focusCategory, onEditTx, people }) {
+  function ActivityMergedTab({ stats, subtab, setSubtab, focusCategory, onEditTx, people, store }) {
     return (
       <div className="stagger" style={{ display: "flex", flexDirection: "column", gap: 16 }}>
         <SegmentedControl options={["Categories", "Transactions"]} value={subtab} onChange={setSubtab} />
-        {subtab === "Categories" && <CategoriesTab stats={stats} focusCategory={focusCategory} onEditTx={onEditTx} people={people} />}
-        {subtab === "Transactions" && <TransactionsTab stats={stats} onEditTx={onEditTx} people={people} />}
+        {subtab === "Categories" && <CategoriesTab stats={stats} focusCategory={focusCategory} onEditTx={onEditTx} people={people} store={store} />}
+        {subtab === "Transactions" && <TransactionsTab stats={stats} onEditTx={onEditTx} people={people} store={store} />}
       </div>
     );
   }
@@ -434,6 +439,7 @@
             focusCategory={focus && focus.category}
             onEditTx={onEditTx}
             people={store && store.people || []}
+            store={store}
           />
         )}
         {tab === "Fun" && <YFun.FunTab fun={fun} store={store} setStore={setStore} addTx={addTx} />}
