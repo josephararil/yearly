@@ -268,6 +268,15 @@ export default {
         let body;
         try { body = await request.json(); } catch { return json({ error: "invalid JSON" }, 400); }
 
+        // The settings row is settings-only. Transactions live in their own table;
+        // travelWishlist is a removed feature. Strip both server-side so a stale client
+        // can never re-contaminate the blob (a legacy client once wrote the full store here,
+        // bloating the row ~120×). This endpoint is the authoritative gate.
+        if (body && typeof body === "object") {
+          delete body.transactions;
+          delete body.travelWishlist;
+        }
+
         const now = Date.now();
         await env.DB
           .prepare(`

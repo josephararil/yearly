@@ -148,7 +148,29 @@
 
   // ---- flush internals ----
   async function _flush() {
-    // 1. Flush transaction outbox
+    // 1. Flush settings FIRST (capture-then-clear so an edit mid-flight isn't lost).
+    // Settings must land before transactions: a travel tx carries a trip_id that references
+    // a trip living only in the settings blob. Flushing tx first opened a window where the
+    // trip_id reached the server before its trip, so a fresh device would pull the tx but
+    // find no matching trip ("No trips yet"). Settings never reference transactions, so this
+    // ordering is strictly safer.
+    const isDirty = localStorage.getItem(DIRTY_KEY) === '1';
+    if (isDirty && _getStore) {
+      localStorage.removeItem(DIRTY_KEY);
+      const { transactions: _t, ...settings } = _getStore();
+      const result = await syncFetch('/api/settings', {
+        method:  'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body:    JSON.stringify(settings),
+      });
+      if (!result) {
+        localStorage.setItem(DIRTY_KEY, '1'); // restore on failure
+        return;
+      }
+      if (result.updated_at) setAppliedAt(result.updated_at);
+    }
+
+    // 2. Flush transaction outbox
     const outbox = getOutbox();
     if (outbox.length > 0) {
       // Capture (id → __seq) so a mid-flight update (same id, higher __seq) survives the filter.
@@ -167,23 +189,6 @@
       }
       // Keep any entry whose __seq advanced mid-flight — its newer version was never sent.
       setOutbox(getOutbox().filter(x => sent.get(x.id) !== x.__seq));
-    }
-
-    // 2. Flush settings (capture-then-clear so an edit mid-flight isn't lost)
-    const isDirty = localStorage.getItem(DIRTY_KEY) === '1';
-    if (isDirty && _getStore) {
-      localStorage.removeItem(DIRTY_KEY);
-      const { transactions: _t, ...settings } = _getStore();
-      const result = await syncFetch('/api/settings', {
-        method:  'PUT',
-        headers: { 'Content-Type': 'application/json' },
-        body:    JSON.stringify(settings),
-      });
-      if (!result) {
-        localStorage.setItem(DIRTY_KEY, '1'); // restore on failure
-        return;
-      }
-      if (result.updated_at) setAppliedAt(result.updated_at);
     }
   }
 

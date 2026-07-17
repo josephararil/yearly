@@ -56,7 +56,11 @@ meta(key TEXT PRIMARY KEY, value INTEGER NOT NULL)
 --   in-app edit (edit-proof freshness signal).
 
 settings(id INTEGER PK CHECK(id=1), blob TEXT, updated_at INTEGER)
--- single row; blob is a JSON-serialised settings object
+-- single row; blob is a JSON-serialised **settings-only** object
+-- (people, years, templates, wishlist, travel, trips, density, …).
+-- NEVER transactions (they have their own table) and never travelWishlist (removed feature).
+-- A clean blob is ~1.5 KB. A legacy client once wrote the full store here (incl. all transactions),
+-- bloating the row to ~180 KB; PUT /api/settings now strips both keys server-side to prevent recurrence.
 ```
 
 `amount_eur` is stored as `REAL` (mirrors the JS field directly). `fun`, `deleted`, `e_commerce`,
@@ -77,7 +81,7 @@ All under `/api/*`. Server clock is authoritative; every write stamps `updated_a
 | `POST` | `/api/transactions` | Batch upsert array of tx records; returns `{now, count}` |
 | `POST` | `/api/revolut/ingest` | Field-preserving batch upsert for the mobile Revolut import pipeline; returns `{now, count}` |
 | `GET` | `/api/settings` | `{blob:{…}, updated_at}` or `{blob:null}` |
-| `PUT` | `/api/settings` | Upsert settings blob; returns `{now, updated_at}` |
+| `PUT` | `/api/settings` | Upsert settings blob (strips `transactions`/`travelWishlist` server-side); returns `{now, updated_at}` |
 | `GET` | `/api/export` | Full dump: `{exported_at, transactions:[all incl. deleted], settings}` |
 
 `GET /api/sync/check` returns a cheap one-round-trip aggregate: `tx_count` (COUNT WHERE deleted=0), `sum_eur_cents` (SUM(amount_eur)*100 rounded to INTEGER to avoid float drift), `settings_updated_at` (settings row's `updated_at` or 0), `last_revolut_sync_ts` (value from `meta` WHERE key=`'last_revolut_sync_ts'`, or `null` if the row/table doesn't exist — graceful for pre-migration deployments). Runs on every app open; intended to be fast (full table scan is acceptable at current scale).

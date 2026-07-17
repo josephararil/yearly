@@ -56,7 +56,7 @@ Full local-dev notes (the no-backend 404 handling, reload-loop fix) are in
    a second server on a random port nobody is looking at. Full SW + preview workflow, including the
    port-conflict and hard-refresh procedures: [docs/PWA-AND-DEV.md](docs/PWA-AND-DEV.md#claude-code-preview--how-to-deploy-locally-for-testing).
 2. **`APP_VERSION` (`settings.jsx` footer) and `CACHE_NAME` (`sw.js`) move together** — currently
-   `v75` / `yearly-v75`. Bump both on every release.
+   `v76` / `yearly-v76`. Bump both on every release.
 3. **`localISO(d)`, never `toISOString()`** for dates in `calc.jsx` — `toISOString()` is UTC and
    silently drops Dec 31 transactions in UTC+ timezones (EET).
 3b. **`updated_at` is milliseconds everywhere** — `Date.now()` in the worker, `Date.now()` for the
@@ -68,6 +68,12 @@ Full local-dev notes (the no-backend 404 handling, reload-loop fix) are in
    any mismatch.
 4. **Don't rename `ceiling` back to `target`.** `ceiling` is the stored, sacred household number;
    `mainTarget` = `ceiling − funPlanAnnual` is derived. See vocabulary below.
+4b. **The D1 `settings` blob is settings-only** — people/years/templates/wishlist/travel/trips/
+   density, never `transactions` (own table) and never `travelWishlist` (removed). The client strips
+   `transactions` before every settings PUT (`sync.jsx` `_flush`/`bootstrap`), and `PUT /api/settings`
+   strips `transactions`/`travelWishlist` again server-side (authoritative gate). A clean blob is
+   ~1.5 KB; if you ever see it balloon, a stale client wrote the full store into it. `_flush` sends
+   **settings before transactions** so a `trip_id` never reaches the server ahead of its trip.
 5. **After changing `calc.jsx` or `data.jsx`, run the regression test** (`calc.test.html`, all rows
    PASS) — see [docs/PWA-AND-DEV.md](docs/PWA-AND-DEV.md) for the browser and Node shortcuts.
 5b. **Don't `wrangler d1 migrations apply` against remote** — its tracking table is out of sync and
