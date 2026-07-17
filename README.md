@@ -148,6 +148,11 @@ expanded copy of the store fed to the projection/callout math; they are **never 
 synced, and never rendered** — transaction lists and category drill-downs always show the one raw
 parent row, badged `×Nmo` (`VIRTUAL ×Nmo` when `virtual` is set).
 
+A read-only presentation layer surfaces this math to the user: the Analysis Projection tab shows
+what's been amortized so far this year (real vs virtual, share of spend, this year's still-to-come
+total) with a Composition/By-month/By-year chart switcher, and the Activity tab's **Amortized**
+sub-tab lists every real/virtual parent with its own schedule and progress.
+
 ### Forecast uncertainty band
 
 Once **≥4 complete weeks** of recurring data exist (current incomplete year only), the projection

@@ -2,7 +2,7 @@
 (function () {
   const { YData, YCalc, YUI, YFun, YTravel } = window;
   const { eur0, eurAuto, signedEur, signedPct, pct, MONTHS, fmtDateShort } = YCalc;
-  const { TxRow, CatIcon, CalloutCard, SectionH } = YUI;
+  const { TxRow, CatIcon, CalloutCard, SectionH, TxTag } = YUI;
   const DS = window.ApertureDesignSystem_72a4cd || {};
   const SegmentedControl = DS.SegmentedControl, Input = DS.Input, Chip = DS.Chip;
 
@@ -43,6 +43,264 @@
         <div className="stat-label">{label}</div>
         <div className={"stat-val" + (mono ? " num" : "")} style={color ? { color } : undefined}>{value}</div>
         {sub && <div className="stat-sub">{sub}</div>}
+      </div>
+    );
+  }
+
+  // ── Amortization mini chart-switcher (Projection "In numbers") ───────────────────────────────
+  function AmLegendItem({ c, dash, rect, label, opacity }) {
+    return (
+      <span style={{ display: "inline-flex", alignItems: "center", gap: 5, fontSize: 11, color: "var(--muted)", fontFamily: "var(--mono)" }}>
+        {rect
+          ? <svg width="14" height="10"><rect x="0" y="2" width="14" height="6" rx="1.5" fill={c} opacity={opacity != null ? opacity : 0.82} /></svg>
+          : <svg width="18" height="6"><line x1="0" y1="3" x2="18" y2="3" stroke={c} strokeWidth="2.2" strokeDasharray={dash || "0"} strokeLinecap="round" /></svg>}
+        {label}
+      </span>
+    );
+  }
+
+  // Shared hover tooltip box — mirrors the home.jsx chart tooltip idiom, with the tx clamped to
+  // stay fully inside the SVG viewport (never clips at the left/right edge).
+  function AmTooltip({ hover, W, padT }) {
+    if (!hover) return null;
+    const tw = 108, th = 34;
+    let tx = hover.x > W / 2 ? hover.x - tw - 8 : hover.x + 8;
+    tx = Math.max(4, Math.min(W - tw - 4, tx));
+    const ty = Math.max((padT || 4) + 2, hover.y - th - 6);
+    return (
+      <>
+        <rect x={tx} y={ty} width={tw} height={th} rx="5" fill="var(--paper)" stroke="var(--hair-strong)" strokeWidth="0.8" />
+        <text x={tx + tw / 2} y={ty + 14} textAnchor="middle" fontSize="11" fill="var(--ink)" fontFamily="var(--mono)" fontWeight="600">{eurAuto(hover.val)}</text>
+        <text x={tx + tw / 2} y={ty + 27} textAnchor="middle" fontSize="9" fill="var(--muted)" fontFamily="var(--mono)">{hover.label}</text>
+      </>
+    );
+  }
+
+  // Composition — one horizontal stacked bar of spent-to-date: non-amortized (neutral) · real
+  // (terracotta) · virtual (sage).
+  function AmComposition({ am, stats }) {
+    const W = 340, H = 74, padX = 4, barY = 20, barH = 26;
+    const total = Math.max(1, stats.spent);
+    const nonAm = Math.max(0, stats.spent - am.ytd.total);
+    const segs = [
+      { key: "non", label: "Non-amortized", value: nonAm, color: "var(--muted)" },
+      { key: "real", label: "Real (cash)", value: am.ytd.real, color: "var(--chart-actual)" },
+      { key: "virtual", label: "Virtual (no-cash)", value: am.ytd.virtual, color: "var(--sage)" },
+    ];
+    let x = padX;
+    const rects = segs.map((s) => {
+      const w = (s.value / total) * (W - padX * 2);
+      const r = { ...s, x, w };
+      x += w;
+      return r;
+    });
+    const svgRef = React.useRef(null);
+    const [hover, setHover] = React.useState(null);
+    const handlePointer = (e) => {
+      const svg = svgRef.current;
+      if (!svg) return;
+      const rect = svg.getBoundingClientRect();
+      const scaleX = W / rect.width;
+      const rawX = (e.clientX - rect.left) * scaleX;
+      const seg = rects.find((r) => r.w > 0 && rawX >= r.x && rawX < r.x + r.w);
+      if (!seg) { setHover(null); return; }
+      setHover({ x: seg.x + seg.w / 2, y: barY, val: seg.value, label: seg.label, key: seg.key });
+    };
+    const handleEnd = () => setHover(null);
+    return (
+      <div>
+        <svg ref={svgRef} viewBox={`0 0 ${W} ${H}`} width="100%"
+          style={{ display: "block", touchAction: "none", cursor: "crosshair" }}
+          onPointerMove={handlePointer} onPointerDown={handlePointer}
+          onPointerLeave={handleEnd} onPointerUp={handleEnd} onPointerCancel={handleEnd}>
+          {rects.filter((r) => r.w > 0).map((r) => (
+            <rect key={r.key} x={r.x} y={barY} width={Math.max(1, r.w)} height={barH}
+              fill={r.color} opacity={hover && hover.key === r.key ? 1 : 0.85}
+              stroke={hover && hover.key === r.key ? "var(--ink)" : "none"} strokeWidth={hover && hover.key === r.key ? 1 : 0} />
+          ))}
+          {hover && (
+            <>
+              <line x1={hover.x} y1={4} x2={hover.x} y2={barY + barH + 4} stroke="var(--ink-2)" strokeWidth="0.8" strokeDasharray="3 3" opacity="0.5" />
+              <AmTooltip hover={hover} W={W} padT={4} />
+            </>
+          )}
+        </svg>
+        <div style={{ display: "flex", gap: 12, flexWrap: "wrap", marginTop: 8, justifyContent: "center" }}>
+          <AmLegendItem c="var(--muted)" rect label="Non-amortized" />
+          <AmLegendItem c="var(--chart-actual)" rect label="Real (cash)" />
+          <AmLegendItem c="var(--sage)" rect label="Virtual (no-cash)" />
+        </div>
+      </div>
+    );
+  }
+
+  // By month — 12 bars, real+virtual stacked (elapsed solid, future faded), plus a faint dashed
+  // "as purchased (raw)" overlay drawn first so the smoothing is visible wherever it pokes above.
+  function AmByMonth({ am, stats }) {
+    const W = 340, H = 170, padL = 34, padR = 8, padT = 12, padB = 20;
+    const barArea = W - padL - padR;
+    const slot = barArea / 12;
+    const bw = Math.max(8, Math.floor(slot * 0.6));
+    const barLeft = (m) => padL + m * slot + (slot - bw) / 2;
+    const barCenter = (m) => padL + m * slot + slot / 2;
+
+    const rows = am.byMonth.map((mo) => ({ ...mo, total: mo.real + mo.virtual }));
+    const maxY = Math.max(1, ...rows.map((r) => r.total), ...rows.map((r) => r.rawPurchased)) * 1.15;
+    const sy = (v) => padT + (1 - v / maxY) * (H - padT - padB);
+    const baseline = sy(0);
+
+    const svgRef = React.useRef(null);
+    const [hover, setHover] = React.useState(null);
+    const handlePointer = (e) => {
+      const svg = svgRef.current;
+      if (!svg) return;
+      const rect = svg.getBoundingClientRect();
+      const scaleX = W / rect.width;
+      const rawX = (e.clientX - rect.left) * scaleX;
+      const m = Math.max(0, Math.min(11, Math.floor((rawX - padL) / slot)));
+      const r = rows[m];
+      setHover({ x: barCenter(m), y: sy(r.total), val: r.total, label: MONTHS[m], month: m });
+    };
+    const handleEnd = () => setHover(null);
+
+    return (
+      <div>
+        <svg ref={svgRef} viewBox={`0 0 ${W} ${H}`} width="100%"
+          style={{ display: "block", touchAction: "none", cursor: "crosshair" }}
+          onPointerMove={handlePointer} onPointerDown={handlePointer}
+          onPointerLeave={handleEnd} onPointerUp={handleEnd} onPointerCancel={handleEnd}>
+
+          <line x1={padL} y1={baseline} x2={W - padR} y2={baseline} stroke="var(--chart-grid)" strokeWidth="0.8" />
+
+          <polyline
+            points={rows.map((r, m) => `${barCenter(m)},${sy(r.rawPurchased)}`).join(" ")}
+            fill="none" stroke="var(--chart-target)" strokeWidth="1.2" strokeDasharray="3 3" opacity="0.55" />
+          {rows.map((r, m) => r.rawPurchased > 0 && (
+            <circle key={"raw" + m} cx={barCenter(m)} cy={sy(r.rawPurchased)} r="2" fill="var(--chart-target)" opacity="0.55" />
+          ))}
+
+          {rows.map((r, m) => {
+            const isHov = hover && hover.month === m;
+            const op = r.elapsed ? (isHov ? 1 : 0.85) : (isHov ? 0.7 : 0.4);
+            const hReal = (r.real / maxY) * (H - padT - padB);
+            const hVirt = (r.virtual / maxY) * (H - padT - padB);
+            return (
+              <g key={m}>
+                {r.real > 0 && <rect x={barLeft(m)} y={baseline - hReal} width={bw} height={Math.max(1, hReal)} fill="var(--chart-actual)" opacity={op} />}
+                {r.virtual > 0 && <rect x={barLeft(m)} y={baseline - hReal - hVirt} width={bw} height={Math.max(1, hVirt)} fill="var(--sage)" opacity={op} />}
+              </g>
+            );
+          })}
+
+          {rows.map((r, m) => (
+            <text key={"lbl" + m} x={barCenter(m)} y={H - 4} textAnchor="middle" fontSize="9"
+              fill={hover && hover.month === m ? "var(--ink)" : "var(--chart-axis)"} fontFamily="var(--mono)">{MONTHS[m][0]}</text>
+          ))}
+
+          {hover && (
+            <>
+              <line x1={hover.x} y1={padT} x2={hover.x} y2={baseline} stroke="var(--ink-2)" strokeWidth="0.8" strokeDasharray="3 3" opacity="0.5" />
+              <AmTooltip hover={hover} W={W} padT={padT} />
+            </>
+          )}
+        </svg>
+        <div style={{ display: "flex", gap: 12, flexWrap: "wrap", marginTop: 8, justifyContent: "center" }}>
+          <AmLegendItem c="var(--chart-actual)" rect label="Real (cash)" />
+          <AmLegendItem c="var(--sage)" rect label="Virtual (no-cash)" />
+          <AmLegendItem c="var(--chart-target)" dash="3 3" label="As purchased (raw)" />
+        </div>
+      </div>
+    );
+  }
+
+  // By year — one bar per am.byYear entry (this year highlighted, future years faded), stacked
+  // real/virtual. This is the per-year future breakdown (e.g. a multi-year amortization spilling
+  // beyond viewYear).
+  function AmByYear({ am, stats }) {
+    const years = am.byYear;
+    const n = Math.max(1, years.length);
+    const W = 340, H = 170, padL = 34, padR = 8, padT = 12, padB = 20;
+    const barArea = W - padL - padR;
+    const slot = barArea / n;
+    const bw = Math.max(10, Math.floor(slot * 0.55));
+    const barLeft = (i) => padL + i * slot + (slot - bw) / 2;
+    const barCenter = (i) => padL + i * slot + slot / 2;
+
+    const rows = years.map((y) => ({ ...y, total: y.real + y.virtual }));
+    const maxY = Math.max(1, ...rows.map((r) => r.total)) * 1.15;
+    const sy = (v) => padT + (1 - v / maxY) * (H - padT - padB);
+    const baseline = sy(0);
+
+    const svgRef = React.useRef(null);
+    const [hover, setHover] = React.useState(null);
+    const handlePointer = (e) => {
+      const svg = svgRef.current;
+      if (!svg) return;
+      const rect = svg.getBoundingClientRect();
+      const scaleX = W / rect.width;
+      const rawX = (e.clientX - rect.left) * scaleX;
+      const i = Math.max(0, Math.min(n - 1, Math.floor((rawX - padL) / slot)));
+      const r = rows[i];
+      if (!r) return;
+      setHover({ x: barCenter(i), y: sy(r.total), val: r.total, label: String(r.year), i });
+    };
+    const handleEnd = () => setHover(null);
+
+    return (
+      <div>
+        <svg ref={svgRef} viewBox={`0 0 ${W} ${H}`} width="100%"
+          style={{ display: "block", touchAction: "none", cursor: "crosshair" }}
+          onPointerMove={handlePointer} onPointerDown={handlePointer}
+          onPointerLeave={handleEnd} onPointerUp={handleEnd} onPointerCancel={handleEnd}>
+
+          <line x1={padL} y1={baseline} x2={W - padR} y2={baseline} stroke="var(--chart-grid)" strokeWidth="0.8" />
+
+          {rows.map((r, i) => {
+            const isHov = hover && hover.i === i;
+            const isCurYear = r.year === stats.year;
+            const isFuture = r.year > stats.year;
+            const op = isFuture ? (isHov ? 0.7 : 0.4) : (isHov || isCurYear ? 1 : 0.85);
+            const hReal = (r.real / maxY) * (H - padT - padB);
+            const hVirt = (r.virtual / maxY) * (H - padT - padB);
+            return (
+              <g key={r.year}>
+                {r.real > 0 && <rect x={barLeft(i)} y={baseline - hReal} width={bw} height={Math.max(1, hReal)} fill="var(--chart-actual)" opacity={op} />}
+                {r.virtual > 0 && <rect x={barLeft(i)} y={baseline - hReal - hVirt} width={bw} height={Math.max(1, hVirt)} fill="var(--sage)" opacity={op} />}
+              </g>
+            );
+          })}
+
+          {rows.map((r, i) => (
+            <text key={"lbl" + r.year} x={barCenter(i)} y={H - 4} textAnchor="middle" fontSize="9"
+              fontWeight={r.year === stats.year ? "600" : "400"}
+              fill={hover && hover.i === i ? "var(--ink)" : "var(--chart-axis)"} fontFamily="var(--mono)">{r.year}</text>
+          ))}
+
+          {hover && (
+            <>
+              <line x1={hover.x} y1={padT} x2={hover.x} y2={baseline} stroke="var(--ink-2)" strokeWidth="0.8" strokeDasharray="3 3" opacity="0.5" />
+              <AmTooltip hover={hover} W={W} padT={padT} />
+            </>
+          )}
+        </svg>
+        <div style={{ display: "flex", gap: 12, flexWrap: "wrap", marginTop: 8, justifyContent: "center" }}>
+          <AmLegendItem c="var(--chart-actual)" rect label="Real (cash)" />
+          <AmLegendItem c="var(--sage)" rect label="Virtual (no-cash)" />
+        </div>
+      </div>
+    );
+  }
+
+  function AmortizationChart({ am, stats }) {
+    const [view, setView] = React.useState("Composition");
+    return (
+      <div style={{ marginTop: 12 }}>
+        <SegmentedControl options={["Composition", "By month", "By year"]} value={view} onChange={setView} />
+        <div style={{ marginTop: 10 }}>
+          {view === "Composition" && <AmComposition am={am} stats={stats} />}
+          {view === "By month" && <AmByMonth am={am} stats={stats} />}
+          {view === "By year" && <AmByYear am={am} stats={stats} />}
+        </div>
       </div>
     );
   }
@@ -96,6 +354,9 @@
     const dailyTargetThisMonth = stats.isCurrent && neededMonthly !== null && daysLeftMonth > 0
       ? Math.max(0, (neededMonthly - spentThisMonth) / daysLeftMonth)
       : null;
+
+    // Amortization — read-only explanatory layer (see YCalc.amortizationBreakdown).
+    const am = YCalc.amortizationBreakdown(store, stats.year, stats.asOfStr);
 
     return (
       <div className="stagger" style={{ display: "flex", flexDirection: "column", gap: 24 }}>
@@ -212,6 +473,34 @@
                 )}
               </div>
             </div>
+
+            {am.hasAmortized && !stats.isFuture && (
+              <div>
+                <div className="eyebrow" style={{ marginBottom: 4 }}>Amortization</div>
+                <div className="statgrid">
+                  <StatCard
+                    label="Amortized YTD"
+                    value={eur0(am.ytd.total)}
+                    sub={stats.spent > 0 ? pct(am.ytd.total / stats.spent) + " of spend" : undefined}
+                  />
+                  {stats.isCurrent && (
+                    <StatCard
+                      label="This month"
+                      value={eur0(am.month.total)}
+                      sub={stats.byMonth[curMonth].amount > 0
+                        ? pct(am.month.total / stats.byMonth[curMonth].amount) + " of this month"
+                        : undefined}
+                    />
+                  )}
+                  <StatCard label="Real (cash)" value={eur0(am.ytd.real)} />
+                  <StatCard label="Virtual (no-cash)" value={eur0(am.ytd.virtual)} color="var(--sage)" sub="no-cash" />
+                  {stats.isCurrent && (
+                    <StatCard label="Committed this year" value={eur0(am.committedThisYear)} sub={`rest of ${stats.year}`} />
+                  )}
+                </div>
+                <AmortizationChart am={am} stats={stats} />
+              </div>
+            )}
 
           </div>
         </div>
@@ -405,12 +694,79 @@
     );
   }
 
+  // Amortized ledger row — a RAW parent (never a slice); tap → onEditTx opens the edit sheet.
+  function AmortParentRow({ p, store, onEditTx }) {
+    const fillColor = p.real ? "var(--chart-actual)" : "var(--sage)";
+    const width = Math.max(3, (p.elapsedMonths / p.amortize_months) * 100);
+    const handleClick = () => {
+      const raw = store.transactions.find((t) => t.id === p.id);
+      if (raw) onEditTx(raw);
+    };
+    return (
+      <button className="catbar-row" onClick={handleClick}>
+        <CatIcon catId={p.category} size={24} radius={6} />
+        <span className="catbar-main">
+          <span className="catbar-top">
+            <span className="catbar-name" style={{ display: "flex", alignItems: "center", gap: 6, minWidth: 0 }}>
+              <span style={{ overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{p.description}</span>
+              <TxTag label={(p.virtual ? "VIRTUAL " : "") + "×" + p.amortize_months + "mo"} color="var(--terra)" />
+            </span>
+            <span className="catbar-amt num">{eurAuto(p.amount_eur)}</span>
+          </span>
+          <span className="catbar-track"><span className="catbar-fill" style={{ width: width + "%", background: fillColor }} /></span>
+          <span className="catbar-sub">
+            <span>{eur0(p.monthly)}/mo · {p.startYm}→{p.endYm}</span>
+            <span>{eur0(p.remainingAmt)} remaining · {p.remaining} mo left</span>
+          </span>
+        </span>
+      </button>
+    );
+  }
+
+  function AmortSection({ title, list, store, onEditTx }) {
+    if (!list.length) return null;
+    const subtotal = list.reduce((a, p) => a + p.amount_eur, 0);
+    return (
+      <div>
+        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline", marginBottom: 2 }}>
+          <div className="eyebrow">{title}</div>
+          <span className="muted num" style={{ fontSize: 12 }}>{eurAuto(subtotal)}</span>
+        </div>
+        {list.map((p) => <AmortParentRow key={p.id} p={p} store={store} onEditTx={onEditTx} />)}
+      </div>
+    );
+  }
+
+  function AmortizedTab({ store, stats, onEditTx, people }) {
+    const am = React.useMemo(
+      () => YCalc.amortizationBreakdown(store, stats.year, stats.asOfStr),
+      [store, stats.year, stats.asOfStr]
+    );
+    if (!am.hasAmortized) {
+      return <div className="empty">No amortized transactions this year.</div>;
+    }
+    const real = am.parents.filter((p) => p.real);
+    const virtual = am.parents.filter((p) => !p.real);
+    return (
+      <div className="stagger" style={{ display: "flex", flexDirection: "column", gap: 16 }}>
+        <div className="statgrid">
+          <StatCard label="Outstanding real" value={eur0(am.totals.real)} sub="cash" />
+          <StatCard label="Outstanding virtual" value={eur0(am.totals.virtual)} sub="no-cash" color="var(--sage)" />
+          <StatCard label="Active amortizations" value={String(am.parents.length)} mono={false} />
+        </div>
+        <AmortSection title="Real (cash)" list={real} store={store} onEditTx={onEditTx} />
+        <AmortSection title="Virtual (no-cash)" list={virtual} store={store} onEditTx={onEditTx} />
+      </div>
+    );
+  }
+
   function ActivityMergedTab({ stats, subtab, setSubtab, focusCategory, onEditTx, people, store }) {
     return (
       <div className="stagger" style={{ display: "flex", flexDirection: "column", gap: 16 }}>
-        <SegmentedControl options={["Categories", "Transactions"]} value={subtab} onChange={setSubtab} />
+        <SegmentedControl options={["Categories", "Transactions", "Amortized"]} value={subtab} onChange={setSubtab} />
         {subtab === "Categories" && <CategoriesTab stats={stats} focusCategory={focusCategory} onEditTx={onEditTx} people={people} store={store} />}
         {subtab === "Transactions" && <TransactionsTab stats={stats} onEditTx={onEditTx} people={people} store={store} />}
+        {subtab === "Amortized" && <AmortizedTab store={store} stats={stats} onEditTx={onEditTx} people={people} />}
       </div>
     );
   }

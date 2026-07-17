@@ -344,5 +344,5 @@ function TxTag({ label, color }) {
     );
   }
 
-  window.YUI = { CatIcon, DeltaChip, StatusHero, CalloutCard, TxRow, Sheet, SectionH, Toast, rich, tint, ChartExplain };
+  window.YUI = { CatIcon, DeltaChip, StatusHero, CalloutCard, TxRow, TxTag, Sheet, SectionH, Toast, rich, tint, ChartExplain };
 })();
