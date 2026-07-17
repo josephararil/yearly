@@ -54,6 +54,13 @@ formula, status thresholds, and each callout detector.
   }`; `hasAmortized:false` when no parent overlaps `viewYear`, and callers render nothing.
 - `cumulativeByDay(txns)` → `number[366]` (shared with `analysis.jsx`).
 - `priorYearCumulative(store, year, asOfDate)` → number (prior year spend at same day-of-year).
+- `burnDownSeries(stats)` → `{ diy, doy, ceiling, target[], actual[], maxActualDay, actualToday,
+  projEnd, complete, isFuture }` for the Overview **Burndown** chart (budget *remaining* falling to
+  €0). `target[d] = ceiling − d·ceiling/diy` (ideal pace-down); `actual[d] = ceiling −
+  cumulativeSpend(d)` over `stats.upto` (amortization-expanded, so lumps don't crash the line);
+  `projEnd = ceiling − stats.projection` — the run-rate line is anchored to the engine's canonical
+  year-end figure (buffer + committed slices included), never a naive daily-rate extrapolation, so
+  it can't disagree with the headline projection. Leap-safe via `stats.daysInYear`.
 - `rateForMonth(person, ym)` → number (latest applicable rate for a person in a "YYYY-MM";
   0 before startMonth).
 - `computeFun(store, asOfDate?)` → per-person fun ledger (see below).

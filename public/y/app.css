@@ -484,6 +484,14 @@ input[type="range"].rng::-moz-range-thumb { width: 22px; height: 22px; border: 1
 }
 .ds-seg-item.active { background: var(--paper); color: var(--ink); box-shadow: 0 1px 4px rgba(60,52,38,0.18); }
 
+/* Home chart nav: full-width & even when there's room, horizontally scrollable (labels never
+   compressed) when there isn't — so all five tabs stay readable on a narrow phone. Scoped so the
+   shared SegmentedControl keeps its default behaviour everywhere else. */
+.chart-nav { overflow-x: auto; -webkit-overflow-scrolling: touch; scrollbar-width: none; }
+.chart-nav::-webkit-scrollbar { display: none; }
+.chart-nav .ds-seg-fill { width: max-content; min-width: 100%; }
+.chart-nav .ds-seg-item { min-width: max-content; }
+
 .ds-input {
   display: flex; align-items: center; gap: 9px;
   height: 46px; padding: 0 15px; border-radius: 13px;
