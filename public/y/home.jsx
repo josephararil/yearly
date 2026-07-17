@@ -835,6 +835,177 @@
     );
   }
 
+  // ── "Burn Down" — budget *remaining* falling toward €0 rather than spend rising from €0.
+  // Actual (solid terracotta) is contrasted against the ideal linear Target pace-down (faint dashed)
+  // and a dashed Projected run-rate extension that lands on the engine's canonical year-end number
+  // (ceiling − projection). The gap between Actual and Target — the "cushion" — is the whole point:
+  // above the pace line you've banked a buffer; below it you're spending ahead of pace.
+  function BurnDownChart({ stats }) {
+    const W = 340, H = 252, padL = 44, padR = 14, padT = 20, padB = 24;
+    const svgRef = React.useRef(null);
+    const [hover, setHover] = React.useState(null);
+    const [showTarget, setShowTarget] = React.useState(true);
+    const [showProj, setShowProj] = React.useState(true);
+
+    if (stats.isFuture) {
+      return (
+        <p className="muted" style={{ textAlign: "center", padding: "24px 0", fontSize: 12, fontFamily: "var(--mono)" }}>
+          Nothing logged yet for {stats.year} — the burn-down starts once you begin spending.
+        </p>
+      );
+    }
+
+    const bd = YCalc.burnDownSeries(stats);
+    const diy = bd.diy, ceiling = bd.ceiling;
+    const x0 = padL, x1 = W - padR, y0 = padT, y1 = H - padB;
+
+    // Frame: ceiling on top, 0 (and any overspend dip below it) at the bottom.
+    let hi = ceiling, lo = Math.min(0, bd.projEnd, bd.actualToday);
+    const span = Math.max(1, hi - lo);
+    hi += span * 0.05; lo -= span * 0.05;
+    const sx = (d) => x0 + (d / diy) * (x1 - x0);
+    const sy = (v) => y1 - ((v - lo) / (hi - lo)) * (y1 - y0);
+
+    const canProj = !bd.complete && showProj;
+
+    // Actual line — sampled weekly to keep the path light, plus the exact last day.
+    const actDays = [];
+    for (let d = 0; d <= bd.maxActualDay; d += 7) actDays.push(d);
+    if (actDays[actDays.length - 1] !== bd.maxActualDay) actDays.push(bd.maxActualDay);
+    const actPts = actDays.map((d) => [sx(d), sy(bd.actual[d])]);
+    const actLine = actPts.map((p) => p.join(",")).join(" ");
+
+    // Y gridlines — nice round steps across the framed range, with an emphasized €0 baseline.
+    const roughStep = (hi - lo) / 4;
+    const mag = Math.pow(10, Math.floor(Math.log10(Math.max(roughStep, 1))));
+    const mult = roughStep / mag;
+    const step = mult <= 1 ? mag : mult <= 2 ? 2 * mag : mult <= 5 ? 5 * mag : 10 * mag;
+    const yTicks = [];
+    for (let v = Math.ceil(lo / step) * step; v <= hi; v += step) yTicks.push(Math.round(v));
+    if (!yTicks.includes(0) && lo <= 0 && hi >= 0) yTicks.push(0);
+
+    const showMonths = [0, 2, 4, 6, 8, 10];
+
+    // Caption: remaining now + today's cushion vs the pace line.
+    const targetToday = bd.target[Math.min(diy, bd.doy)];
+    const cushionToday = bd.actualToday - targetToday;
+    const cushionColor = cushionToday >= 0 ? "var(--sage)" : "var(--terra)";
+
+    const handlePointer = (e) => {
+      const svg = svgRef.current;
+      if (!svg) return;
+      const rect = svg.getBoundingClientRect();
+      const scaleX = W / rect.width;
+      const rawX = (e.clientX - rect.left) * scaleX;
+      const clampedX = Math.max(x0, Math.min(x1, rawX));
+      const day = Math.max(0, Math.min(diy, Math.round(((clampedX - x0) / (x1 - x0)) * diy)));
+      let remaining, isProj = false;
+      if (day <= bd.maxActualDay) {
+        remaining = bd.actual[day];
+      } else if (canProj) {
+        const t = (day - bd.doy) / Math.max(1, diy - bd.doy);
+        remaining = bd.actualToday + t * (bd.projEnd - bd.actualToday);
+        isProj = true;
+      } else {
+        remaining = bd.actual[bd.maxActualDay];
+      }
+      const targetRem = bd.target[day];
+      const delta = remaining - targetRem;
+      let month = 0;
+      for (let m = 1; m < MONTH_STARTS.length; m++) { if (MONTH_STARTS[m] <= day) month = m; }
+      const dayOfMonth = day - MONTH_STARTS[month] + 1;
+      setHover({ x: sx(day), y: sy(remaining), remaining, delta, isProj, label: MONTHS[month] + " " + dayOfMonth + " · Day " + day });
+    };
+    const handleEnd = () => setHover(null);
+
+    return (
+      <div>
+        <div style={{ display: "flex", gap: 6, flexWrap: "wrap", marginBottom: 10 }}>
+          <ToggleChip label="Target" active={showTarget} color="var(--chart-pace)" onClick={() => setShowTarget(!showTarget)} />
+          {!bd.complete && <ToggleChip label="Projection" active={showProj} color="var(--chart-proj)" onClick={() => setShowProj(!showProj)} />}
+        </div>
+
+        {/* Remaining now + today's cushion vs the pace line — the number you came to see. */}
+        <div style={{ display: "flex", alignItems: "baseline", gap: 10, marginBottom: 8, fontFamily: "var(--mono)" }}>
+          <span style={{ fontSize: 20, fontWeight: 600, color: "var(--ink)" }} className="num">{eur0(bd.actualToday)}</span>
+          <span style={{ fontSize: 12, color: cushionColor }}>
+            {cushionToday >= 0 ? "▲ " + eur0(cushionToday) + " cushion" : "▼ " + eur0(Math.abs(cushionToday)) + " behind pace"}
+          </span>
+        </div>
+
+        <svg ref={svgRef} viewBox={`0 0 ${W} ${H}`} width="100%"
+          style={{ display: "block", overflow: "visible", touchAction: "none", cursor: "crosshair" }}
+          onPointerMove={handlePointer} onPointerDown={handlePointer}
+          onPointerLeave={handleEnd} onPointerUp={handleEnd} onPointerCancel={handleEnd}>
+
+          {/* Y grid + labels — €0 baseline drawn stronger */}
+          {yTicks.map((v, i) => (
+            <g key={i}>
+              <line x1={x0} y1={sy(v)} x2={x1} y2={sy(v)}
+                stroke={v === 0 ? "var(--hair-strong)" : "var(--chart-grid)"} strokeWidth={v === 0 ? "1.2" : "1"} />
+              <text x={x0 - 6} y={sy(v) + 3} textAnchor="end" fontSize="9" fill="var(--chart-axis)" fontFamily="var(--mono)">{eurK(v)}</text>
+            </g>
+          ))}
+
+          {/* X month labels */}
+          {showMonths.map((m) => (
+            <text key={m} x={sx(MONTH_STARTS[m])} y={H - 8} textAnchor="middle" fontSize="9" fill="var(--chart-axis)" fontFamily="var(--mono)">{MONTHS[m]}</text>
+          ))}
+
+          {/* Target pace-down: (Day 0, ceiling) → (Day diy, €0) */}
+          {showTarget && (
+            <>
+              <line x1={sx(0)} y1={sy(ceiling)} x2={sx(diy)} y2={sy(0)} stroke="var(--chart-pace)" strokeWidth="1.4" strokeDasharray="4 4" opacity="0.8" />
+              <text x={x0 + 3} y={sy(ceiling) - 5} fontSize="9" fill="var(--chart-pace)" fontFamily="var(--mono)">target</text>
+            </>
+          )}
+
+          {/* Projected run-rate extension: tip of Actual → (Day diy, ceiling − projection) */}
+          {canProj && (
+            <>
+              <line x1={sx(bd.doy)} y1={sy(bd.actualToday)} x2={sx(diy)} y2={sy(bd.projEnd)} stroke="var(--chart-proj)" strokeWidth="2.2" strokeDasharray="6 5" strokeLinecap="round" />
+              <circle cx={sx(diy)} cy={sy(bd.projEnd)} r="3.2" fill="var(--chart-proj)" />
+            </>
+          )}
+
+          {/* Actual burn-down */}
+          <polyline points={actLine} fill="none" stroke="var(--chart-actual)" strokeWidth="2.6" strokeLinecap="round" strokeLinejoin="round" />
+          <circle cx={sx(bd.maxActualDay)} cy={sy(bd.actual[bd.maxActualDay])} r="3.6" fill="var(--chart-actual)" stroke="var(--paper)" strokeWidth="1.5" />
+
+          {/* Hover crosshair + tooltip */}
+          {hover && (
+            <>
+              <line x1={hover.x} y1={y0} x2={hover.x} y2={y1} stroke="var(--ink-2)" strokeWidth="0.8" strokeDasharray="3 3" opacity="0.5" />
+              <circle cx={hover.x} cy={hover.y} r="4" fill={hover.isProj ? "var(--chart-proj)" : "var(--chart-actual)"} stroke="var(--paper)" strokeWidth="2" />
+              {(() => {
+                const tw = 126, th = 50;
+                const tx = hover.x > W / 2 ? hover.x - tw - 8 : hover.x + 8;
+                const ty = Math.max(y0 + 2, hover.y - th - 4);
+                const dColor = hover.delta >= 0 ? "var(--sage)" : "var(--terra)";
+                const dText = (hover.delta >= 0 ? "+" + eur0(hover.delta) + " cushion" : "−" + eur0(Math.abs(hover.delta)) + " behind pace");
+                return (
+                  <>
+                    <rect x={tx} y={ty} width={tw} height={th} rx="5" fill="var(--paper)" stroke="var(--hair-strong)" strokeWidth="0.8" />
+                    <text x={tx + tw / 2} y={ty + 14} textAnchor="middle" fontSize="10" fill="var(--muted)" fontFamily="var(--mono)">{hover.label}</text>
+                    <text x={tx + tw / 2} y={ty + 29} textAnchor="middle" fontSize="11" fill="var(--ink)" fontFamily="var(--mono)" fontWeight="600">Remaining {eur0(hover.remaining)}</text>
+                    <text x={tx + tw / 2} y={ty + 43} textAnchor="middle" fontSize="10" fill={dColor} fontFamily="var(--mono)">{dText}</text>
+                  </>
+                );
+              })()}
+            </>
+          )}
+        </svg>
+
+        <ChartExplain storageKey="burn-down" items={[
+          { color: "var(--chart-actual)", label: `Actual remaining (${eur0(bd.actualToday)})`, desc: "how much of your annual ceiling is still left to spend (amortized, so lump-sum days don't crash the line)" },
+          { color: "var(--chart-pace)", label: "Target remaining", desc: "the ideal linear path — spending exactly 1/365th of your ceiling every day, sliding from the ceiling to €0" },
+          ...(!bd.complete ? [{ color: "var(--chart-proj)", label: `Projected (→${eur0(bd.projEnd)})`, desc: "where your current blended run-rate lands you on Dec 31 — the same year-end figure the rest of the app shows" }] : []),
+          { color: cushionColor, label: "Cushion (delta)", desc: "your distance from the pace line — above it you've banked a buffer, below it you're spending ahead of pace and must slow down" },
+        ]} />
+      </div>
+    );
+  }
+
   function StaleBanner({ staleDays }) {
     return (
       <div style={{
@@ -893,8 +1064,8 @@
 
     // One chart, four views, one place. Month view is the default for a live year; a completed or
     // future year has no meaningful "this month" so it opens on the year view instead.
-    const CHART_VIEWS = ["Month", "Year", "By month", "Estimate"];
-    const CHART_TITLES = { Month: "This month", Year: "This year", "By month": "Monthly breakdown", Estimate: "Estimate over time" };
+    const CHART_VIEWS = ["Month", "Year", "By month", "Estimate", "Burn Down"];
+    const CHART_TITLES = { Month: "This month", Year: "This year", "By month": "Monthly breakdown", Estimate: "Estimate over time", "Burn Down": "Burn down" };
     const [chartView, setChartView] = React.useState(stats.isCurrent ? "Month" : "Year");
 
     return (
@@ -932,6 +1103,7 @@
           )}
           {chartView === "By month" && <MonthlyBarsChart stats={stats} />}
           {chartView === "Estimate" && <EstimateChart stats={stats} />}
+          {chartView === "Burn Down" && <BurnDownChart stats={stats} />}
         </div>
 
         <div>

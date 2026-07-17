@@ -209,6 +209,32 @@
       .reduce((a, t) => a + t.amount_eur, 0);
   }
 
+  // Burn-down series for the Overview "Burn Down" chart. Plots budget *remaining* falling toward
+  // €0 instead of spend rising from €0. Consumes `stats.upto` — the already amortization-expanded
+  // transaction list — so a big lump doesn't crash the actual line in a single day. Leap years are
+  // handled dynamically via stats.daysInYear (the cum lookup still folds a leap Dec 31 into index
+  // 365, the same cosmetic approximation cumulativeByDay documents).
+  //   target[d]  = ceiling − d × ceiling/diy       (d = 0..diy) — ideal linear pace-down
+  //   actual[d]  = ceiling − cumulativeSpend(d)     (d = 0..maxActualDay) — where we really are
+  //   projEnd    = ceiling − projection             — the engine's canonical Dec-31 landing, so the
+  //                dashed run-rate line lands exactly where the rest of the app says it will
+  //                (includes buffer + committed-future slices, not just the raw blended rate).
+  function burnDownSeries(stats) {
+    const diy = stats.daysInYear;
+    const ceiling = stats.ceiling;
+    const cum = cumulativeByDay(stats.upto);
+    const maxActualDay = stats.complete ? diy : stats.isFuture ? 0 : stats.doy;
+    const target = [], actual = [];
+    for (let d = 0; d <= diy; d++) target.push(ceiling - d * (ceiling / diy));
+    for (let d = 0; d <= maxActualDay; d++) actual.push(ceiling - cum[Math.min(365, d)]);
+    return {
+      diy, doy: stats.doy, ceiling, target, actual, maxActualDay,
+      actualToday: ceiling - stats.spent,
+      projEnd: ceiling - stats.projection,
+      complete: stats.complete, isFuture: stats.isFuture,
+    };
+  }
+
   // ---- computeStats helpers ----
 
   function aggregateByCategory(upto, spent) {
@@ -994,7 +1020,7 @@ function computeStats(store, year, asOfDate, staleDays = 0) {
   window.YCalc = {
     MONTHS, MONTHS_LONG, eur0, eur2, eurAuto, signedEur, pct, signedPct,
     dayOfYear, daysInYear, parseDate, localISO, fmtDateShort, fmtDateLong, yearTxns,
-    cumulativeByDay, priorYearCumulative, aggregateByCategory, expandAmortized, amortizationBreakdown,
+    cumulativeByDay, priorYearCumulative, burnDownSeries, aggregateByCategory, expandAmortized, amortizationBreakdown,
     rateForMonth, computeStats, computeFun, computeTravel, projectionAsOf, projectionHistory, buildCallouts,
     requiredDailyToHit, dailyHeadroom, neededMonthlyCap, projectedMonthEnd, monthEndBand,
     medianDailySpendYTD, historicalMonthRange,
