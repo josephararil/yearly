@@ -97,6 +97,99 @@
     return out;
   }
 
+  // amortizationBreakdown — pure, read-only analytics layer over amortized transactions. Expands
+  // store.transactions internally (reuse expandAmortized) but returns only aggregates + RAW parent
+  // metadata — slices themselves are never exposed, persisted, or rendered (same invariant as
+  // computeStats' committedFuture). Every per-parent figure (elapsedMonths/spentSoFar/remainingAmt)
+  // is derived by counting/summing that parent's OWN slices vs asOfStr — never a calendar
+  // month-diff — so it reconciles to the cent with the engine's aggregate math.
+  // Parent scoping (`parents`) is schedule-overlap with viewYear (startYm..endYm span), NOT
+  // yearTxns — a long amortization (e.g. a 120-mo virtual car) can have a purchase date years
+  // before viewYear yet still be "active" during it. `byYear`/`totals` look at ALL years any slice
+  // touches (not just viewYear) — the point is to show the whole future allocation, not just the
+  // viewed year's slice.
+  function amortizationBreakdown(store, viewYear, asOfStr) {
+    const transactions = store.transactions || [];
+    const allParents = transactions.filter((t) => t.amortize_months >= 2);
+    const amortSlices = expandAmortized(transactions).filter((s) => s._amortized);
+    const byParent = {};
+    amortSlices.forEach((s) => { (byParent[s._parent] = byParent[s._parent] || []).push(s); });
+
+    const yearStr = String(viewYear);
+    const lo = yearStr + "-01", hi = yearStr + "-12";
+
+    const parentMeta = (t) => {
+      const n = t.amortize_months;
+      const startYm = t.date.slice(0, 7);
+      const endYm = addMonths(startYm, n - 1);
+      const slices = byParent[t.id] || [];
+      const elapsedSlices = slices.filter((s) => s.date <= asOfStr);
+      const elapsedMonths = elapsedSlices.length;
+      const spentSoFar = elapsedSlices.reduce((a, s) => a + s.amount_eur, 0);
+      return {
+        ...t,
+        monthly: t.amount_eur / n,
+        startYm, endYm,
+        elapsedMonths, remaining: n - elapsedMonths,
+        spentSoFar, remainingAmt: t.amount_eur - spentSoFar,
+        real: !t.virtual,
+      };
+    };
+
+    const parents = allParents
+      .filter((t) => {
+        const startYm = t.date.slice(0, 7);
+        const endYm = addMonths(startYm, t.amortize_months - 1);
+        return startYm <= hi && endYm >= lo;
+      })
+      .map(parentMeta);
+
+    const sumSplit = (list) => ({
+      total: list.reduce((a, s) => a + s.amount_eur, 0),
+      real: list.filter((s) => !s.virtual).reduce((a, s) => a + s.amount_eur, 0),
+      virtual: list.filter((s) => s.virtual).reduce((a, s) => a + s.amount_eur, 0),
+    });
+
+    // Year-scoped slices (viewYear only) — feed ytd/month/committedThisYear/byMonth.
+    const yearSlices = amortSlices.filter((s) => s.date.slice(0, 4) === yearStr);
+    const ytd = sumSplit(yearSlices.filter((s) => s.date <= asOfStr));
+
+    const ym = asOfStr.slice(0, 7);
+    const month = { ...sumSplit(yearSlices.filter((s) => s.date.slice(0, 7) === ym)), ym };
+
+    const committedThisYear = yearSlices.filter((s) => s.date > asOfStr).reduce((a, s) => a + s.amount_eur, 0);
+
+    // rawPurchased — the un-smoothed "as purchased" spikes: raw parents whose OWN date falls in
+    // viewYear, grouped by that date's month (independent of the schedule-overlap `parents` scope).
+    const rawParentsInYear = allParents.filter((t) => t.date.slice(0, 4) === yearStr);
+
+    const byMonth = Array.from({ length: 12 }, (_, m) => {
+      const monthKey = String(m + 1).padStart(2, "0");
+      const monthStr = yearStr + "-" + monthKey;
+      const split = sumSplit(yearSlices.filter((s) => s.date.slice(5, 7) === monthKey));
+      const rawPurchased = rawParentsInYear
+        .filter((t) => t.date.slice(5, 7) === monthKey)
+        .reduce((a, t) => a + t.amount_eur, 0);
+      return { month: m, real: split.real, virtual: split.virtual, elapsed: (monthStr + "-01") <= asOfStr, rawPurchased };
+    });
+
+    // byYear — ALL years any slice touches (ascending), not just viewYear.
+    const yearsTouched = Array.from(new Set(amortSlices.map((s) => s.date.slice(0, 4)))).sort();
+    const byYear = yearsTouched.map((yr) => {
+      const split = sumSplit(amortSlices.filter((s) => s.date.slice(0, 4) === yr));
+      return { year: Number(yr), real: split.real, virtual: split.virtual };
+    });
+
+    // totals — all not-yet-elapsed slices, across all years.
+    const outstanding = sumSplit(amortSlices.filter((s) => s.date > asOfStr));
+
+    return {
+      hasAmortized: parents.length > 0,
+      parents, ytd, month, committedThisYear, byMonth, byYear,
+      totals: { real: outstanding.real, virtual: outstanding.virtual, outstanding: outstanding.total },
+    };
+  }
+
   // Cumulative spend by day-of-year (index 0..365). Shared with analysis.jsx.
   // Array size and Math.min(365,...) are intentionally fixed: on a leap year, Dec 31 (doy=366)
   // merges into the last chart bucket (index 365). This is a cosmetic chart approximation only.
@@ -901,7 +994,7 @@ function computeStats(store, year, asOfDate, staleDays = 0) {
   window.YCalc = {
     MONTHS, MONTHS_LONG, eur0, eur2, eurAuto, signedEur, pct, signedPct,
     dayOfYear, daysInYear, parseDate, localISO, fmtDateShort, fmtDateLong, yearTxns,
-    cumulativeByDay, priorYearCumulative, aggregateByCategory, expandAmortized,
+    cumulativeByDay, priorYearCumulative, aggregateByCategory, expandAmortized, amortizationBreakdown,
     rateForMonth, computeStats, computeFun, computeTravel, projectionAsOf, projectionHistory, buildCallouts,
     requiredDailyToHit, dailyHeadroom, neededMonthlyCap, projectedMonthEnd, monthEndBand,
     medianDailySpendYTD, historicalMonthRange,

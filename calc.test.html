@@ -1096,6 +1096,109 @@
     assert('amortize mid-year: projNoBuffer ≈ 1200 too (committed-future is unbuffered)',
       Math.abs(amortStats.projNoBuffer - 1200) < 0.01, 'got ' + amortStats.projNoBuffer.toFixed(2));
 
+    // ---- amortizationBreakdown — same-year parents (real vs virtual split, cent-accurate) ----
+    section('amortizationBreakdown — same-year parents (real vs virtual split, cent-accurate)');
+    const abYear = 2026;
+    const abAsOf = '2026-09-15';
+    const abRealParent = { id: 'abr1', date: '2026-07-10', description: 'RealAm', amount_eur: 1000, category: 'shopping', source: 'manual', amortize_months: 12 };
+    const abVirtParent = { id: 'abv1', date: '2026-07-10', description: 'VirtAm', amount_eur: 500, category: 'shopping', source: 'manual', amortize_months: 12, virtual: true };
+    const abStore = {
+      currentYear: 2026, people: [], wishlist: [],
+      years: { '2026': { ceiling: 25000, buffer: 0.04 }, '2027': { ceiling: 25000, buffer: 0.04 } },
+      density: 'balanced', templates: [],
+      transactions: [abRealParent, abVirtParent],
+    };
+    const ab = YCalc.amortizationBreakdown(abStore, abYear, abAsOf);
+
+    assert('amortizationBreakdown: hasAmortized === true', ab.hasAmortized === true);
+    assert('amortizationBreakdown: parents.length === 2 (both overlap viewYear)', ab.parents.length === 2, 'got ' + ab.parents.length);
+
+    const abRealMeta = ab.parents.find(p => p.id === 'abr1');
+    const abVirtMeta = ab.parents.find(p => p.id === 'abv1');
+    assert('amortizationBreakdown: real parent .real === true', abRealMeta && abRealMeta.real === true);
+    assert('amortizationBreakdown: virtual parent .real === false', abVirtMeta && abVirtMeta.real === false);
+    assert('amortizationBreakdown: startYm/endYm span Jul 2026 → Jun 2027 (12 mo)',
+      abRealMeta && abRealMeta.startYm === '2026-07' && abRealMeta.endYm === '2027-06',
+      abRealMeta ? (abRealMeta.startYm + '→' + abRealMeta.endYm) : 'missing');
+
+    // byMonth (viewYear=2026 only) sums must equal exactly the portion of each parent's slices
+    // that land in 2026 — cent-accurate, and real/virtual must never cross-contaminate.
+    const byMonthRealSum = ab.byMonth.reduce((a, m) => a + m.real, 0);
+    const byMonthVirtSum = ab.byMonth.reduce((a, m) => a + m.virtual, 0);
+    const abRealSlices2026 = YCalc.expandAmortized([abRealParent]).filter(s => s.date.slice(0, 4) === '2026');
+    const abVirtSlices2026 = YCalc.expandAmortized([abVirtParent]).filter(s => s.date.slice(0, 4) === '2026');
+    const expectedRealByMonth = abRealSlices2026.reduce((a, s) => a + s.amount_eur, 0);
+    const expectedVirtByMonth = abVirtSlices2026.reduce((a, s) => a + s.amount_eur, 0);
+    assert('amortizationBreakdown: byMonth real sum (2026 portion) cent-accurate',
+      Math.abs(byMonthRealSum - expectedRealByMonth) < 0.005,
+      'got ' + byMonthRealSum.toFixed(4) + ' expected ' + expectedRealByMonth.toFixed(4));
+    assert('amortizationBreakdown: byMonth virtual sum (2026 portion) cent-accurate',
+      Math.abs(byMonthVirtSum - expectedVirtByMonth) < 0.005,
+      'got ' + byMonthVirtSum.toFixed(4) + ' expected ' + expectedVirtByMonth.toFixed(4));
+    assert('amortizationBreakdown: real parent contributes nothing to .virtual (no cross-contamination)',
+      Math.abs(byMonthVirtSum - expectedVirtByMonth) < 0.005 && byMonthVirtSum < expectedRealByMonth,
+      'virtSum=' + byMonthVirtSum.toFixed(2) + ' realSum=' + byMonthRealSum.toFixed(2));
+
+    // byYear sums across ALL years must equal each parent's full amount_eur, cent-accurate.
+    const byYearRealSum = ab.byYear.reduce((a, y) => a + y.real, 0);
+    const byYearVirtSum = ab.byYear.reduce((a, y) => a + y.virtual, 0);
+    assert('amortizationBreakdown: byYear real sum === 1000 (full real parent amount)',
+      Math.abs(byYearRealSum - 1000) < 0.005, 'got ' + byYearRealSum.toFixed(4));
+    assert('amortizationBreakdown: byYear virtual sum === 500 (full virtual parent amount)',
+      Math.abs(byYearVirtSum - 500) < 0.005, 'got ' + byYearVirtSum.toFixed(4));
+    assert('amortizationBreakdown: byYear covers 2 years (2026, 2027), ascending',
+      ab.byYear.length === 2 && ab.byYear[0].year === 2026 && ab.byYear[1].year === 2027,
+      '[' + ab.byYear.map(y => y.year).join(',') + ']');
+
+    // ---- amortizationBreakdown — cross-year 24-month parent (Nov of viewYear−1) ----
+    section('amortizationBreakdown — cross-year 24-month parent (Nov of viewYear−1)');
+    const cyParent = { id: 'cy1', date: '2025-11-05', description: 'CrossYear', amount_eur: 2400, category: 'insurance', source: 'manual', amortize_months: 24 };
+    const cyStore = {
+      currentYear: 2026, people: [], wishlist: [],
+      years: { '2025': { ceiling: 25000, buffer: 0.04 }, '2026': { ceiling: 25000, buffer: 0.04 }, '2027': { ceiling: 25000, buffer: 0.04 } },
+      density: 'balanced', templates: [],
+      transactions: [cyParent],
+    };
+    const cyAsOf = '2026-03-15';
+    const cyAb = YCalc.amortizationBreakdown(cyStore, 2026, cyAsOf);
+
+    assert('cross-year: hasAmortized === true', cyAb.hasAmortized === true);
+    assert('cross-year: parent appears for viewYear=2026 (schedule-overlap, not yearTxns)',
+      cyAb.parents.length === 1, 'got ' + cyAb.parents.length);
+    const cyMeta = cyAb.parents[0];
+    assert('cross-year: startYm === 2025-11 (parent purchase month, prior year)', cyMeta.startYm === '2025-11', 'got ' + cyMeta.startYm);
+    assert('cross-year: endYm === 2027-10 (24 months from 2025-11)', cyMeta.endYm === '2027-10', 'got ' + cyMeta.endYm);
+
+    // Exactly 12 of the 24 slices fall within viewYear 2026.
+    const cySlices = YCalc.expandAmortized([cyParent]);
+    const cySlices2026 = cySlices.filter(s => s.date.slice(0, 4) === '2026');
+    assert('cross-year: exactly 12 slices land in viewYear 2026', cySlices2026.length === 12, 'got ' + cySlices2026.length);
+
+    // elapsedMonths/spentSoFar must come from counting/summing slices (spanning the 2025→2026
+    // boundary), never a calendar month-diff off the parent's own (2025) date.
+    const cyElapsedSlices = cySlices.filter(s => s.date <= cyAsOf);
+    assert('cross-year: elapsedMonths counted via slices, spanning 2025+2026',
+      cyMeta.elapsedMonths === cyElapsedSlices.length, 'got ' + cyMeta.elapsedMonths + ' expected ' + cyElapsedSlices.length);
+    assert('cross-year: elapsedMonths includes the 2 prior-year (2025) slices plus current-year ones',
+      cyMeta.elapsedMonths >= 2, 'got ' + cyMeta.elapsedMonths);
+    const cyExpectedSpent = cyElapsedSlices.reduce((a, s) => a + s.amount_eur, 0);
+    assert('cross-year: spentSoFar cent-accurate', Math.abs(cyMeta.spentSoFar - cyExpectedSpent) < 0.005,
+      'got ' + cyMeta.spentSoFar.toFixed(4) + ' expected ' + cyExpectedSpent.toFixed(4));
+    assert('cross-year: remainingAmt = amount_eur − spentSoFar',
+      Math.abs(cyMeta.remainingAmt - (cyParent.amount_eur - cyMeta.spentSoFar)) < 0.005,
+      'got ' + cyMeta.remainingAmt.toFixed(4));
+    assert('cross-year: remaining = amortize_months − elapsedMonths',
+      cyMeta.remaining === cyParent.amortize_months - cyMeta.elapsedMonths, 'got ' + cyMeta.remaining);
+
+    // byYear splits across three years (2025, 2026, 2027), ascending, summing to amount_eur.
+    assert('cross-year: byYear covers 3 years, ascending (2025, 2026, 2027)',
+      cyAb.byYear.map(y => y.year).join(',') === '2025,2026,2027', cyAb.byYear.map(y => y.year).join(','));
+    const cyByYearSum = cyAb.byYear.reduce((a, y) => a + y.real + y.virtual, 0);
+    assert('cross-year: byYear sum === amount_eur (2400), cent-accurate',
+      Math.abs(cyByYearSum - 2400) < 0.005, 'got ' + cyByYearSum.toFixed(4));
+    assert('cross-year: parent is real (not virtual) → byYear virtual totals are all 0',
+      cyAb.byYear.every(y => y.virtual === 0));
+
     // ---- Summary ----
     const total = passed + failed;
     const summary = document.getElementById('summary');
