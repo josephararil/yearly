@@ -56,7 +56,7 @@ Full local-dev notes (the no-backend 404 handling, reload-loop fix) are in
    a second server on a random port nobody is looking at. Full SW + preview workflow, including the
    port-conflict and hard-refresh procedures: [docs/PWA-AND-DEV.md](docs/PWA-AND-DEV.md#claude-code-preview--how-to-deploy-locally-for-testing).
 2. **`APP_VERSION` (`settings.jsx` footer) and `CACHE_NAME` (`sw.js`) move together** — currently
-   `v72` / `yearly-v72`. Bump both on every release.
+   `v73` / `yearly-v73`. Bump both on every release.
 3. **`localISO(d)`, never `toISOString()`** for dates in `calc.jsx` — `toISOString()` is UTC and
    silently drops Dec 31 transactions in UTC+ timezones (EET).
 3b. **`updated_at` is milliseconds everywhere** — `Date.now()` in the worker, `Date.now()` for the
@@ -136,7 +136,10 @@ remainder) and drops the parent. `committedFuture` = not-yet-elapsed slices, add
 (no buffer). **`app.jsx` feeds an expanded `calcStore` to `computeStats`/`buildCallouts` only;
 `computeFun`/`computeTravel` stay on raw `store`.** Invariant: **slices exist only for aggregate
 math — never persisted, synced, or rendered.** Any UI that lists individual tx reads raw
-`store.transactions` (analysis lists use `yearTxns(store, …)`). Detail in ARCHITECTURE.md.
+`store.transactions` (analysis lists use `yearTxns(store, …)`). `YCalc.amortizationBreakdown(store,
+viewYear, asOfStr)` exposes read-only real/virtual aggregates + raw parent metadata for the
+Analysis "Amortization" block and "Amortized" ledger, honoring the same invariant. Detail in
+ARCHITECTURE.md.
 
 **Conventions that are easy to break** (see ARCHITECTURE.md for the why): `localISO` not
 `toISOString`; lump-sum winsorization (tx > 2% of `ceiling`, or `oneoff:true`, excluded from the

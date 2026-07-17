@@ -7,7 +7,11 @@ touching `ui.jsx`, `fun.jsx`, or a screen module. Engine/state internals are in
 ## `y/ui.jsx` (`window.YUI`) — shared primitives
 
 Exports: `StatusHero`, `CalloutCard`, `TxRow`, `CatIcon`, `DeltaChip`, `Sheet`, `SectionH`,
-`Toast`, and `rich` (renders numbers inside text in the mono `.num` style).
+`Toast`, `TxTag`, and `rich` (renders numbers inside text in the mono `.num` style).
+
+`TxTag({ label, color })` — small pill badge (mono 9px uppercase, tinted background/border from
+`color`); used inline by `TxRow` for the Fun/Travel/`×Nmo`/`VIRTUAL` badges and, now that it's
+exported, reused directly by `analysis.jsx`'s Amortized ledger rows (see below).
 
 > `GaugeHero`, `PaceBar`, `ProjSpark`, and `SpendCurve` have all been removed. The hero is fixed
 > to numerals; the Overview monthly chart is `MonthCurve`, defined locally in `home.jsx`.
@@ -270,6 +274,32 @@ month or it wrongly shows up as the "lowest" month).
 
 Removed: "Projected finish" and "VS Target" cards (both surfaced on the Overview hero).
 
+**"Amortization" block** (`ProjectionTab`) — a 4th `.eyebrow` group, rendered only when
+`YCalc.amortizationBreakdown(store, stats.year, stats.asOfStr).hasAmortized` is true and the year
+isn't future (`am` is computed once per render, local `const am = ...`). StatCards (same `StatCard`
+tile as the other groups): **Amortized YTD** (`am.ytd.total`, sub = % of `stats.spent`); **This
+month** (`am.month.total`, sub = % of `stats.byMonth[curMonth].amount`, current year only); **Real
+(cash)** (`am.ytd.real`); **Virtual (no-cash)** (`am.ytd.virtual`, `--sage` colored, sub "no-cash");
+**Committed this year** (`am.committedThisYear`, sub "rest of {year}", current year only).
+
+Below the cards, `AmortizationChart` — a local `SegmentedControl` (`Composition` / `By month` / `By
+year`, default Composition) swapping between three small inline-SVG charts, all sharing the
+`MonthlyBarsChart` pointer-hover idiom (crosshair line + a `--paper`/`--hair-strong` tooltip box
+showing the label + `eurAuto` amount; the tooltip x is clamped inside the SVG viewport via a shared
+`AmTooltip` helper so it never clips at the edges). Color encoding is consistent across all three:
+non-amortized/neutral = `--muted`, real = `--chart-actual` (terracotta), virtual = `--sage`;
+not-yet-elapsed months/years are faded (lower opacity).
+- **`AmComposition`** — one horizontal stacked bar of YTD spend: non-amortized (`stats.spent −
+  am.ytd.total`) · real · virtual. Hovering a segment highlights it and shows its label + €.
+- **`AmByMonth`** — 12 bars (`am.byMonth[m].real + .virtual` stacked, elapsed solid / future
+  faded), plus a faint dashed **"as purchased (raw)"** overlay (`--chart-target`, low opacity, its
+  own legend entry) tracing `am.byMonth[m].rawPurchased` — the un-smoothed spend as it was actually
+  purchased that month, drawn behind the smoothed bars so the smoothing effect is visible.
+- **`AmByYear`** — one stacked bar per `am.byYear` entry (all years any amortized slice touches,
+  not just `stats.year`); the current year is bold/full-opacity, future years faded. This is the
+  per-year future-allocation view (e.g. a multi-year amortization spilling well past the viewed
+  year).
+
 **CategoriesTab** catbar rows use `CatIcon` (24px, radius 6); expanding a category shows two
 sub-lists: "Recent in [category]" (last 5 by date, reversed) and "Largest in [category]" (top 5 by
 `amount_eur` descending), both using `TxRow` with `onClick → onEditTx`. Both sub-lists source raw
@@ -285,6 +315,24 @@ Newest), and **Show only** — three boolean toggles: **Manual** (keeps only `t.
 **Fun** (keeps only `t.fun === true`), and **Travel** (keeps only `t.travel === true`). Active
 filters use `--terra` border/background; the filter button itself turns terracotta when any filter
 is active.
+
+**`AmortizedTab`** — the third Activity sub-tab (`ActivityMergedTab`'s `SegmentedControl` is now
+**Categories / Transactions / Amortized**), a read-only ledger of RAW amortized parents (never
+slices — same invariant as everywhere else) sourced from
+`YCalc.amortizationBreakdown(store, stats.year, stats.asOfStr).parents`, which is already scoped by
+schedule-overlap so a long amortization purchased in a prior year still appears. Empty state ("No
+amortized transactions this year.") when `!am.hasAmortized`. A compact summary `.statgrid` up top:
+outstanding **real** and outstanding **virtual** (`am.totals`) and a count of active amortizations.
+Below it, two `.eyebrow`-labeled sections — **Real (cash)** and **Virtual (no-cash)**
+(`AmortSection`, each with its own €-subtotal, hidden entirely when empty) — each listing one
+`AmortParentRow` per parent:
+- `CatIcon` + description + `eurAuto(amount_eur)` total + a `TxTag` (`×Nmo`, prefixed `VIRTUAL` for
+  no-cash parents).
+- A schedule progress bar (`.catbar-track`/`.catbar-fill`, width = `elapsedMonths / amortize_months`
+  ×100%, fill `--chart-actual` for real / `--sage` for virtual).
+- A mono muted sub line: `€X/mo · startYm→endYm` and `€Y remaining · Z mo left`.
+- The whole row is a button — tapping it looks the parent back up in `store.transactions` by `id`
+  and calls `onEditTx`, reusing the existing edit sheet (the parent is a real, editable store tx).
 
 ### `addflow.jsx`
 

@@ -38,6 +38,20 @@ formula, status thresholds, and each callout detector.
   rounding remainder) and drops the parent; every other tx passes through unchanged (identity for
   the common case). Slices are `_amortized:true`, `_parent:<parentId>`, and `oneoff:true`. Callers
   feed it a copy of the store (see "Expanded vs raw store" below) — it never mutates its input.
+- `amortizationBreakdown(store, viewYear, asOfStr)` — pure, read-only analytics layer over
+  amortized transactions, powering the Analysis "Amortization" block and "Amortized" ledger (see
+  UI.md). Expands `store.transactions` internally (calls `expandAmortized` itself) but returns only
+  **aggregates + RAW parent metadata** — never the slices themselves, preserving the same
+  raw-vs-expanded invariant as `computeStats`'s `committedFuture`. Per-parent figures
+  (`elapsedMonths`, `spentSoFar`, `remainingAmt`) are derived by counting/summing that parent's own
+  slices against `asOfStr`, never a calendar month-diff, so they reconcile to the cent with the
+  aggregate math. `parents` is scoped by **schedule overlap**, not `yearTxns`: a parent is included
+  iff its slice span (`startYm..endYm`) overlaps `viewYear` at all, so a long amortization (e.g. a
+  120-month virtual car) purchased years before `viewYear` still surfaces as "active" during it —
+  filtering by the parent's own purchase-year would silently drop it. `byYear`/`totals` look across
+  **all** years any slice touches (not just `viewYear`), to show the whole future allocation.
+  Returns `{ hasAmortized, parents[], ytd, month, committedThisYear, byMonth[12], byYear[], totals
+  }`; `hasAmortized:false` when no parent overlaps `viewYear`, and callers render nothing.
 - `cumulativeByDay(txns)` → `number[366]` (shared with `analysis.jsx`).
 - `priorYearCumulative(store, year, asOfDate)` → number (prior year spend at same day-of-year).
 - `rateForMonth(person, ym)` → number (latest applicable rate for a person in a "YYYY-MM";
