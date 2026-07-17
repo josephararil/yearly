@@ -95,6 +95,10 @@
     }
     // wishlist default
     if (!s.wishlist) s.wishlist = [];
+    // travelWishlist: removed feature. Drop it so it stops being re-uploaded into the
+    // settings blob. (Note: we deliberately do NOT delete s.transactions here — migrateStore
+    // also runs on the local full store in loadStore, where transactions is authoritative.)
+    if ('travelWishlist' in s) delete s.travelWishlist;
     // travel budget defaults (family-wide; startMonth mirrors the people migration)
     if (!s.travel) {
       const earliest = s.years ? Object.keys(s.years).sort()[0] || "2026" : "2026";

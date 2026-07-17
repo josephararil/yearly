@@ -346,11 +346,17 @@ Backend API contract is in [BACKEND.md](BACKEND.md).
   flush.
 - `YSync.markSettingsDirty()` — marks settings for push and schedules a flush. Called
   automatically from `app.jsx`'s `setStore` wrapper whenever only non-transactions keys change.
-- `YSync.flush()` — push outbox in chunks of 75, then PUT settings if dirty. Captures `(id →
-  __seq)` pairs before the POST; entries updated mid-flight (same id, higher `__seq`) survive the
-  post-flush filter and are re-sent next flush. Clears the dirty flag before the PUT and restores
-  it on failure. Concurrent calls share one in-flight promise (reentrancy latch); the cursor is
-  never advanced here — only `pull()` advances the cursor.
+- `YSync.flush()` — **PUT settings if dirty first, then** push outbox in chunks of 75. Settings
+  must land before transactions: a travel tx carries a `trip_id` referencing a trip that lives only
+  in the settings blob, so flushing tx first opened a window where the `trip_id` reached the server
+  before its trip (a fresh device would then pull the tx but find no matching trip → "No trips yet").
+  Settings never reference transactions, so settings-first is strictly safer. The settings PUT
+  strips `transactions` before sending; the worker strips `transactions`/`travelWishlist` again
+  server-side (see BACKEND.md). Captures `(id → __seq)` pairs before the POST; entries updated
+  mid-flight (same id, higher `__seq`) survive the post-flush filter and are re-sent next flush.
+  Clears the dirty flag before the PUT and restores it on failure. Concurrent calls share one
+  in-flight promise (reentrancy latch); the cursor is never advanced here — only `pull()` advances
+  the cursor.
 - `YSync.pull()` — calls `flush()` first (prevents golden-source pull from clobbering unsynced
   writes), then `GET /api/sync?since=cursor`, merges tx by id (deleted rows are removed), applies
   settings only when `updated_at > appliedAt`, updates cursor.
