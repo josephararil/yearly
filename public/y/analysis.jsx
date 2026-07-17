@@ -2,7 +2,7 @@
 (function () {
   const { YData, YCalc, YUI, YFun, YTravel } = window;
   const { eur0, eurAuto, signedEur, signedPct, pct, MONTHS, fmtDateShort } = YCalc;
-  const { TxRow, CatIcon, CalloutCard, SectionH } = YUI;
+  const { TxRow, CatIcon, CalloutCard, SectionH, TxTag } = YUI;
   const DS = window.ApertureDesignSystem_72a4cd || {};
   const SegmentedControl = DS.SegmentedControl, Input = DS.Input, Chip = DS.Chip;
 
@@ -694,12 +694,79 @@
     );
   }
 
+  // Amortized ledger row — a RAW parent (never a slice); tap → onEditTx opens the edit sheet.
+  function AmortParentRow({ p, store, onEditTx }) {
+    const fillColor = p.real ? "var(--chart-actual)" : "var(--sage)";
+    const width = Math.max(3, (p.elapsedMonths / p.amortize_months) * 100);
+    const handleClick = () => {
+      const raw = store.transactions.find((t) => t.id === p.id);
+      if (raw) onEditTx(raw);
+    };
+    return (
+      <button className="catbar-row" onClick={handleClick}>
+        <CatIcon catId={p.category} size={24} radius={6} />
+        <span className="catbar-main">
+          <span className="catbar-top">
+            <span className="catbar-name" style={{ display: "flex", alignItems: "center", gap: 6, minWidth: 0 }}>
+              <span style={{ overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{p.description}</span>
+              <TxTag label={(p.virtual ? "VIRTUAL " : "") + "×" + p.amortize_months + "mo"} color="var(--terra)" />
+            </span>
+            <span className="catbar-amt num">{eurAuto(p.amount_eur)}</span>
+          </span>
+          <span className="catbar-track"><span className="catbar-fill" style={{ width: width + "%", background: fillColor }} /></span>
+          <span className="catbar-sub">
+            <span>{eur0(p.monthly)}/mo · {p.startYm}→{p.endYm}</span>
+            <span>{eur0(p.remainingAmt)} remaining · {p.remaining} mo left</span>
+          </span>
+        </span>
+      </button>
+    );
+  }
+
+  function AmortSection({ title, list, store, onEditTx }) {
+    if (!list.length) return null;
+    const subtotal = list.reduce((a, p) => a + p.amount_eur, 0);
+    return (
+      <div>
+        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline", marginBottom: 2 }}>
+          <div className="eyebrow">{title}</div>
+          <span className="muted num" style={{ fontSize: 12 }}>{eurAuto(subtotal)}</span>
+        </div>
+        {list.map((p) => <AmortParentRow key={p.id} p={p} store={store} onEditTx={onEditTx} />)}
+      </div>
+    );
+  }
+
+  function AmortizedTab({ store, stats, onEditTx, people }) {
+    const am = React.useMemo(
+      () => YCalc.amortizationBreakdown(store, stats.year, stats.asOfStr),
+      [store, stats.year, stats.asOfStr]
+    );
+    if (!am.hasAmortized) {
+      return <div className="empty">No amortized transactions this year.</div>;
+    }
+    const real = am.parents.filter((p) => p.real);
+    const virtual = am.parents.filter((p) => !p.real);
+    return (
+      <div className="stagger" style={{ display: "flex", flexDirection: "column", gap: 16 }}>
+        <div className="statgrid">
+          <StatCard label="Outstanding real" value={eur0(am.totals.real)} sub="cash" />
+          <StatCard label="Outstanding virtual" value={eur0(am.totals.virtual)} sub="no-cash" color="var(--sage)" />
+          <StatCard label="Active amortizations" value={String(am.parents.length)} mono={false} />
+        </div>
+        <AmortSection title="Real (cash)" list={real} store={store} onEditTx={onEditTx} />
+        <AmortSection title="Virtual (no-cash)" list={virtual} store={store} onEditTx={onEditTx} />
+      </div>
+    );
+  }
+
   function ActivityMergedTab({ stats, subtab, setSubtab, focusCategory, onEditTx, people, store }) {
     return (
       <div className="stagger" style={{ display: "flex", flexDirection: "column", gap: 16 }}>
-        <SegmentedControl options={["Categories", "Transactions"]} value={subtab} onChange={setSubtab} />
+        <SegmentedControl options={["Categories", "Transactions", "Amortized"]} value={subtab} onChange={setSubtab} />
         {subtab === "Categories" && <CategoriesTab stats={stats} focusCategory={focusCategory} onEditTx={onEditTx} people={people} store={store} />}
         {subtab === "Transactions" && <TransactionsTab stats={stats} onEditTx={onEditTx} people={people} store={store} />}
+        {subtab === "Amortized" && <AmortizedTab store={store} stats={stats} onEditTx={onEditTx} people={people} />}
       </div>
     );
   }
