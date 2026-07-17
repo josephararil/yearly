@@ -1,6 +1,6 @@
 // settings.jsx — target, buffer, years, templates, CSV import/export, clear.
 (function () {
-  const APP_VERSION = 'v76';
+  const APP_VERSION = 'v77';
   const { YData, YCalc, YUI } = window;
   const { eur0, eur2, signedPct, computeStats, localISO } = YCalc;
   const { Sheet, DeltaChip } = YUI;
@@ -737,7 +737,15 @@
         const names = await caches.keys();
         await Promise.all(names.map((n) => caches.delete(n)));
       }
-      localStorage.removeItem('yearly:store:v1');
+      // Wipe the ENTIRE yearly: namespace, not just the store. Removing only
+      // 'yearly:store:v1' left the sync bookkeeping behind — notably
+      // 'yearly:settings:appliedAt' and 'yearly:bootstrapped' — so on reload
+      // bootstrap() no-oped and pull() gated the settings blob out
+      // (updated_at <= appliedAt). Transactions re-hydrated but settings
+      // (people/years/trips/…) did not, leaving e.g. "No trips yet" after a clear.
+      Object.keys(localStorage)
+        .filter((k) => k.startsWith('yearly:'))
+        .forEach((k) => localStorage.removeItem(k));
       window.location.reload();
     };
     return (

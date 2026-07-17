@@ -213,12 +213,16 @@
     const result = await syncFetch(`/api/sync?since=${since}`);
     if (!result || !_applyServer) return;
 
-    // Pre-compute settings merge outside the state updater (no side-effects inside updater)
+    // Pre-compute settings merge outside the state updater (no side-effects inside updater).
+    // A force pull must re-apply settings unconditionally (server wins) — the appliedAt gate is
+    // only meant to skip re-applying a blob we just pushed during normal sync. Without the force
+    // bypass, "Force resync" re-hydrated transactions but silently skipped settings whenever
+    // appliedAt was already current (e.g. after a partial local wipe), leaving trips/people empty.
     const appliedAt = getAppliedAt();
     const incomingSettings = result.settings;
     let settingsPatch = null;
     let newAppliedAt  = null;
-    if (incomingSettings && incomingSettings.updated_at > appliedAt) {
+    if (incomingSettings && (force || incomingSettings.updated_at > appliedAt)) {
       const migrated = window.YData.migrateStore(incomingSettings.blob);
       const { transactions: _t, ...rest } = migrated;
       settingsPatch = rest;

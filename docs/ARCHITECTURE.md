@@ -339,6 +339,13 @@ Backend API contract is in [BACKEND.md](BACKEND.md).
 - `yearly:settings:appliedAt` — `updated_at` of the last settings blob pulled from the server;
   prevents re-applying a blob we just pushed.
 
+**All six sync keys** (`yearly:sync:cursor`, `yearly:outbox:v1`, `yearly:outbox:seq`,
+`yearly:settings:dirty`, `yearly:bootstrapped`, `yearly:settings:appliedAt`) plus the store
+(`yearly:store:v1`) live under the `yearly:` prefix. **"Clear all data" (settings.jsx `doClear`)
+must remove the ENTIRE `yearly:` namespace**, not just the store — leaving `appliedAt`/`bootstrapped`
+behind makes bootstrap no-op and gates the settings blob out of the re-pull, so transactions
+re-hydrate but settings (people/years/trips/…) come back empty.
+
 **Public API:**
 - `YSync.init({ getStore, applyServer })` — called once on mount. `getStore()` returns the live
   store via a ref; `applyServer(updater)` maps to the app's `setStore`.
@@ -359,7 +366,10 @@ Backend API contract is in [BACKEND.md](BACKEND.md).
   the cursor.
 - `YSync.pull()` — calls `flush()` first (prevents golden-source pull from clobbering unsynced
   writes), then `GET /api/sync?since=cursor`, merges tx by id (deleted rows are removed), applies
-  settings only when `updated_at > appliedAt`, updates cursor.
+  settings when `updated_at > appliedAt`, updates cursor. `pull({ force: true })` refetches from
+  `since=0` **and applies settings unconditionally** (server wins) — the `appliedAt` gate only skips
+  re-applying a blob we just pushed during normal sync, so the force escape hatch must bypass it or
+  it would silently skip settings when `appliedAt` is already current.
 - `YSync.reconcile()` — compares `GET /api/sync/check` aggregate against the local store; triggers
   `pull({ force: true })` on any mismatch. Also captures `last_revolut_sync_ts` from the check
   response and stores it internally. Returns `{ ok, before, after, recovered }`. Offline-safe
