@@ -874,6 +874,21 @@
     if (actDays[actDays.length - 1] !== bd.maxActualDay) actDays.push(bd.maxActualDay);
     const actPts = actDays.map((d) => [sx(d), sy(bd.actual[d])]);
     const actLine = actPts.map((p) => p.join(",")).join(" ");
+    // Undershade the remaining-budget region: from the actual line down to the €0 baseline.
+    const uid = "bd" + stats.year;
+    const areaPts = actPts.length
+      ? `${actPts[0][0]},${sy(0)} ${actLine} ${actPts[actPts.length - 1][0]},${sy(0)}`
+      : "";
+
+    // Over-budget wedge: when the run-rate projection lands below €0, the stretch of the dashed
+    // line that dips under the baseline is filled with a faint terracotta wash — so it reads as
+    // "into the red" instead of a broken line trailing into empty space.
+    let overWedge = null;
+    if (canProj && bd.projEnd < 0 && bd.actualToday > 0) {
+      const t = bd.actualToday / (bd.actualToday - bd.projEnd);
+      const dCross = bd.doy + t * (diy - bd.doy);
+      overWedge = `${sx(dCross)},${sy(0)} ${sx(diy)},${sy(0)} ${sx(diy)},${sy(bd.projEnd)}`;
+    }
 
     // Y gridlines — nice round steps across the framed range, with an emphasized €0 baseline.
     const roughStep = (hi - lo) / 4;
@@ -938,6 +953,13 @@
           onPointerMove={handlePointer} onPointerDown={handlePointer}
           onPointerLeave={handleEnd} onPointerUp={handleEnd} onPointerCancel={handleEnd}>
 
+          <defs>
+            <linearGradient id={uid} x1="0" y1="0" x2="0" y2="1">
+              <stop offset="0%" stopColor="var(--chart-actual)" stopOpacity="0.22" />
+              <stop offset="100%" stopColor="var(--chart-actual)" stopOpacity="0" />
+            </linearGradient>
+          </defs>
+
           {/* Y grid + labels — €0 baseline drawn stronger */}
           {yTicks.map((v, i) => (
             <g key={i}>
@@ -960,6 +982,14 @@
             </>
           )}
 
+          {/* Over-budget wedge below €0 */}
+          {overWedge && (
+            <>
+              <polygon points={overWedge} fill="var(--terra)" opacity="0.1" stroke="none" />
+              <text x={sx(diy) - 2} y={sy(0) + 12} textAnchor="end" fontSize="8.5" fill="var(--terra)" fontFamily="var(--mono)" opacity="0.7">over ceiling</text>
+            </>
+          )}
+
           {/* Projected run-rate extension: tip of Actual → (Day diy, ceiling − projection) */}
           {canProj && (
             <>
@@ -968,7 +998,8 @@
             </>
           )}
 
-          {/* Actual burn-down */}
+          {/* Actual burn-down + remaining-budget undershade */}
+          {areaPts && <polygon points={areaPts} fill={`url(#${uid})`} />}
           <polyline points={actLine} fill="none" stroke="var(--chart-actual)" strokeWidth="2.6" strokeLinecap="round" strokeLinejoin="round" />
           <circle cx={sx(bd.maxActualDay)} cy={sy(bd.actual[bd.maxActualDay])} r="3.6" fill="var(--chart-actual)" stroke="var(--paper)" strokeWidth="1.5" />
 
@@ -1064,8 +1095,8 @@
 
     // One chart, four views, one place. Month view is the default for a live year; a completed or
     // future year has no meaningful "this month" so it opens on the year view instead.
-    const CHART_VIEWS = ["Month", "Year", "By month", "Estimate", "Burn Down"];
-    const CHART_TITLES = { Month: "This month", Year: "This year", "By month": "Monthly breakdown", Estimate: "Estimate over time", "Burn Down": "Burn down" };
+    const CHART_VIEWS = ["Month", "Year", "By month", "Estimate", "Burndown"];
+    const CHART_TITLES = { Month: "This month", Year: "This year", "By month": "Monthly breakdown", Estimate: "Estimate over time", Burndown: "Burn down" };
     const [chartView, setChartView] = React.useState(stats.isCurrent ? "Month" : "Year");
 
     return (
@@ -1082,7 +1113,7 @@
             {chartView === "Month" && verdict && <span className={`pulse-verdict ${verdict.cls}`}>{verdict.text}</span>}
             <span className="spacer" />
           </div>
-          <div style={{ marginTop: 12, marginBottom: 14 }}>
+          <div className="chart-nav" style={{ marginTop: 12, marginBottom: 14 }}>
             <SegmentedControl options={CHART_VIEWS} value={chartView} fill onChange={setChartView} />
           </div>
           {chartView === "Month" && <MonthCurve stats={stats} store={store} />}
@@ -1103,7 +1134,7 @@
           )}
           {chartView === "By month" && <MonthlyBarsChart stats={stats} />}
           {chartView === "Estimate" && <EstimateChart stats={stats} />}
-          {chartView === "Burn Down" && <BurnDownChart stats={stats} />}
+          {chartView === "Burndown" && <BurnDownChart stats={stats} />}
         </div>
 
         <div>

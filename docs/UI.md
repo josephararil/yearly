@@ -146,14 +146,17 @@ projected-month-end) is unchanged and independent of the voice line.
 
 ### `home.jsx` — the chart switcher
 
-`HomeScreen` renders **one chart region with a 4-way `SegmentedControl`** (`chartView` state) in
+`HomeScreen` renders **one chart region with a 5-way `SegmentedControl`** (`chartView` state) in
 place of the old single "This month" chart — the same principle most apps use (modify the chart in
 front of you, don't scatter period-charts across screens). Views: **Month** (`MonthCurve`) · **Year**
 (`ProjectionChart` + `ChartLegend` + a "this-year" `ChartExplain`) · **By month** (`MonthlyBarsChart`)
-· **Estimate** (`EstimateChart`). The section `<h2>` follows the active view ("This month" / "This
-year" / "Monthly breakdown" / "Estimate over time") and the `pulse-verdict` chip shows only on the
-Month view. Default view is **Month** for a live year, **Year** for a completed/future one (which has
-no meaningful "this month"). All four chart components live in `home.jsx` — `ProjectionChart` and
+· **Estimate** (`EstimateChart`) · **Burndown** (`BurnDownChart`). The section `<h2>` follows the
+active view ("This month" / "This year" / "Monthly breakdown" / "Estimate over time" / "Burn down")
+and the `pulse-verdict` chip shows only on the Month view. Default view is **Month** for a live year,
+**Year** for a completed/future one (which has no meaningful "this month"). The switcher lives in a
+`.chart-nav` wrapper (scoped CSS in `app.css`): full-width & evenly distributed when it fits,
+horizontally scrollable with full-size labels when it doesn't — so all five tabs stay readable on a
+narrow phone without compressing/clipping any label. All five chart components live in `home.jsx` — `ProjectionChart` and
 `MonthlyBarsChart` were moved here from `analysis.jsx` (load order: `home` precedes `analysis`, so
 they must live at or before `home`), keeping their original `ChartExplain` storage keys (`this-year`,
 `monthly-breakdown`) so saved expand/collapse state persists. `ProjectionChart` and `MonthlyBarsChart`
@@ -197,6 +200,26 @@ caption above the SVG shows the current estimate + `▲/▼ €X vs 4 wks ago` (
 nearest history point (date + estimate). `ChartExplain` key: `estimate-history`. Renders a muted
 one-line fallback for complete/future years and when the year is younger than ~2 weeks
 (`projectionHistory` returns < 2 points).
+
+### `home.jsx` — `BurnDownChart` ("Burn down")
+
+The fifth view — budget **remaining** falling toward €0 instead of spend rising from €0. Driven by
+`YCalc.burnDownSeries(stats)` (see [ARCHITECTURE.md](ARCHITECTURE.md#the-brain--ycalcjsx-windowycalc)),
+which consumes `stats.upto` (the already amortization-expanded list, so a lump-sum day can't crash
+the line). Three series over a day-of-year x-axis (0 → `daysInYear`, leap-safe): **Actual** (solid
+terracotta `--chart-actual`, cumulative remaining to today) with a `--chart-actual` gradient
+undershade down to the €0 baseline (same fade as the Month/Year area fills); **Target** (faint dashed
+`--chart-pace`, the ideal linear pace-down from ceiling to €0); **Projection** (dashed `--chart-proj`
+run-rate extension from today's tip to `ceiling − stats.projection` on Dec 31 — anchored to the
+engine's canonical year-end figure, *not* a naive rate line, so it never disagrees with the rest of
+the app). Two `ToggleChip`s: Target / Projection (Projection hidden for completed years). The y-axis
+frames `[min(0, projEnd, actualToday) − pad, ceiling + pad]`; the €0 gridline is drawn stronger, and
+when the projection lands below €0 a faint `--terra` **"over ceiling" wedge** fills the sub-zero
+stretch of the dashed line so the dip reads as intentional red territory rather than a broken line.
+Compact caption above the SVG: remaining now + `▲ €X cushion` (sage) / `▼ €X behind pace` (terra) vs
+today's pace point. Crosshair tooltip shows date · Day N, `Remaining €X`, and the signed cushion
+(delta = actual − target, sage when positive / terra when negative). `ChartExplain` key: `burn-down`.
+Muted fallback for future years (nothing logged yet).
 
 ### `analysis.jsx` — `AnalysisScreen`
 
