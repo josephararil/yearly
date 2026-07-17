@@ -59,19 +59,51 @@
     );
   }
 
+  // Small pill toggle — mirrors home.jsx's ToggleChip idiom (chart series toggles).
+  function AmToggleChip({ label, active, color, onClick }) {
+    return (
+      <button onClick={onClick} style={{
+        height: 26, padding: "0 10px", borderRadius: 99, flexShrink: 0,
+        fontFamily: "var(--mono)", fontSize: 11, fontWeight: 500,
+        cursor: "pointer", whiteSpace: "nowrap",
+        border: "1px solid " + (active ? color : "var(--hair)"),
+        background: active ? "color-mix(in srgb, " + color + " 12%, transparent)" : "transparent",
+        color: active ? "var(--ink)" : "var(--muted)",
+      }}>{label}</button>
+    );
+  }
+
   // Shared hover tooltip box — mirrors the home.jsx chart tooltip idiom, with the tx clamped to
-  // stay fully inside the SVG viewport (never clips at the left/right edge).
+  // stay fully inside the SVG viewport (never clips at the left/right edge). Composition passes a
+  // single value (hover.val); By-month/By-year pass real+virtual too, rendering a taller
+  // Real/Virtual/Total breakdown instead.
   function AmTooltip({ hover, W, padT }) {
     if (!hover) return null;
-    const tw = 108, th = 34;
+    const multi = hover.real != null;
+    const tw = multi ? 128 : 108, th = multi ? 64 : 34;
     let tx = hover.x > W / 2 ? hover.x - tw - 8 : hover.x + 8;
     tx = Math.max(4, Math.min(W - tw - 4, tx));
     const ty = Math.max((padT || 4) + 2, hover.y - th - 6);
+    if (!multi) {
+      return (
+        <>
+          <rect x={tx} y={ty} width={tw} height={th} rx="5" fill="var(--paper)" stroke="var(--hair-strong)" strokeWidth="0.8" />
+          <text x={tx + tw / 2} y={ty + 14} textAnchor="middle" fontSize="11" fill="var(--ink)" fontFamily="var(--mono)" fontWeight="600">{eurAuto(hover.val)}</text>
+          <text x={tx + tw / 2} y={ty + 27} textAnchor="middle" fontSize="9" fill="var(--muted)" fontFamily="var(--mono)">{hover.label}</text>
+        </>
+      );
+    }
+    const lx = tx + 8, ax = tx + tw - 8;
     return (
       <>
         <rect x={tx} y={ty} width={tw} height={th} rx="5" fill="var(--paper)" stroke="var(--hair-strong)" strokeWidth="0.8" />
-        <text x={tx + tw / 2} y={ty + 14} textAnchor="middle" fontSize="11" fill="var(--ink)" fontFamily="var(--mono)" fontWeight="600">{eurAuto(hover.val)}</text>
-        <text x={tx + tw / 2} y={ty + 27} textAnchor="middle" fontSize="9" fill="var(--muted)" fontFamily="var(--mono)">{hover.label}</text>
+        <text x={tx + tw / 2} y={ty + 12} textAnchor="middle" fontSize="9" fill="var(--muted)" fontFamily="var(--mono)">{hover.label}</text>
+        <text x={lx} y={ty + 27} textAnchor="start" fontSize="10" fill="var(--chart-actual)" fontFamily="var(--mono)">Real</text>
+        <text x={ax} y={ty + 27} textAnchor="end" fontSize="10" fill="var(--chart-actual)" fontFamily="var(--mono)">{eurAuto(hover.real)}</text>
+        <text x={lx} y={ty + 41} textAnchor="start" fontSize="10" fill="var(--sage)" fontFamily="var(--mono)">Virtual</text>
+        <text x={ax} y={ty + 41} textAnchor="end" fontSize="10" fill="var(--sage)" fontFamily="var(--mono)">{eurAuto(hover.virtual)}</text>
+        <text x={lx} y={ty + 57} textAnchor="start" fontSize="10" fill="var(--ink)" fontWeight="600" fontFamily="var(--mono)">Total</text>
+        <text x={ax} y={ty + 57} textAnchor="end" fontSize="10" fill="var(--ink)" fontWeight="600" fontFamily="var(--mono)">{eurAuto(hover.val)}</text>
       </>
     );
   }
@@ -144,8 +176,9 @@
     const barLeft = (m) => padL + m * slot + (slot - bw) / 2;
     const barCenter = (m) => padL + m * slot + slot / 2;
 
+    const [showRaw, setShowRaw] = React.useState(false);
     const rows = am.byMonth.map((mo) => ({ ...mo, total: mo.real + mo.virtual }));
-    const maxY = Math.max(1, ...rows.map((r) => r.total), ...rows.map((r) => r.rawPurchased)) * 1.15;
+    const maxY = Math.max(1, ...rows.map((r) => r.total), ...(showRaw ? rows.map((r) => r.rawPurchased) : [])) * 1.15;
     const sy = (v) => padT + (1 - v / maxY) * (H - padT - padB);
     const baseline = sy(0);
 
@@ -159,12 +192,15 @@
       const rawX = (e.clientX - rect.left) * scaleX;
       const m = Math.max(0, Math.min(11, Math.floor((rawX - padL) / slot)));
       const r = rows[m];
-      setHover({ x: barCenter(m), y: sy(r.total), val: r.total, label: MONTHS[m], month: m });
+      setHover({ x: barCenter(m), y: sy(r.total), val: r.total, real: r.real, virtual: r.virtual, label: MONTHS[m], month: m });
     };
     const handleEnd = () => setHover(null);
 
     return (
       <div>
+        <div style={{ display: "flex", gap: 6, flexWrap: "wrap", marginBottom: 8 }}>
+          <AmToggleChip label="As purchased (raw)" active={showRaw} color="var(--chart-target)" onClick={() => setShowRaw((s) => !s)} />
+        </div>
         <svg ref={svgRef} viewBox={`0 0 ${W} ${H}`} width="100%"
           style={{ display: "block", touchAction: "none", cursor: "crosshair" }}
           onPointerMove={handlePointer} onPointerDown={handlePointer}
@@ -172,12 +208,16 @@
 
           <line x1={padL} y1={baseline} x2={W - padR} y2={baseline} stroke="var(--chart-grid)" strokeWidth="0.8" />
 
-          <polyline
-            points={rows.map((r, m) => `${barCenter(m)},${sy(r.rawPurchased)}`).join(" ")}
-            fill="none" stroke="var(--chart-target)" strokeWidth="1.2" strokeDasharray="3 3" opacity="0.55" />
-          {rows.map((r, m) => r.rawPurchased > 0 && (
-            <circle key={"raw" + m} cx={barCenter(m)} cy={sy(r.rawPurchased)} r="2" fill="var(--chart-target)" opacity="0.55" />
-          ))}
+          {showRaw && (
+            <>
+              <polyline
+                points={rows.map((r, m) => `${barCenter(m)},${sy(r.rawPurchased)}`).join(" ")}
+                fill="none" stroke="var(--chart-target)" strokeWidth="1.2" strokeDasharray="3 3" opacity="0.55" />
+              {rows.map((r, m) => r.rawPurchased > 0 && (
+                <circle key={"raw" + m} cx={barCenter(m)} cy={sy(r.rawPurchased)} r="2" fill="var(--chart-target)" opacity="0.55" />
+              ))}
+            </>
+          )}
 
           {rows.map((r, m) => {
             const isHov = hover && hover.month === m;
@@ -194,7 +234,7 @@
 
           {rows.map((r, m) => (
             <text key={"lbl" + m} x={barCenter(m)} y={H - 4} textAnchor="middle" fontSize="9"
-              fill={hover && hover.month === m ? "var(--ink)" : "var(--chart-axis)"} fontFamily="var(--mono)">{MONTHS[m][0]}</text>
+              fill={hover && hover.month === m ? "var(--ink)" : "var(--chart-axis)"} fontFamily="var(--mono)">{m + 1}</text>
           ))}
 
           {hover && (
@@ -207,7 +247,6 @@
         <div style={{ display: "flex", gap: 12, flexWrap: "wrap", marginTop: 8, justifyContent: "center" }}>
           <AmLegendItem c="var(--chart-actual)" rect label="Real (cash)" />
           <AmLegendItem c="var(--sage)" rect label="Virtual (no-cash)" />
-          <AmLegendItem c="var(--chart-target)" dash="3 3" label="As purchased (raw)" />
         </div>
       </div>
     );
@@ -242,7 +281,7 @@
       const i = Math.max(0, Math.min(n - 1, Math.floor((rawX - padL) / slot)));
       const r = rows[i];
       if (!r) return;
-      setHover({ x: barCenter(i), y: sy(r.total), val: r.total, label: String(r.year), i });
+      setHover({ x: barCenter(i), y: sy(r.total), val: r.total, real: r.real, virtual: r.virtual, label: String(r.year), i });
     };
     const handleEnd = () => setHover(null);
 
@@ -714,7 +753,7 @@
             <span className="catbar-amt num">{eurAuto(p.amount_eur)}</span>
           </span>
           <span className="catbar-track"><span className="catbar-fill" style={{ width: width + "%", background: fillColor }} /></span>
-          <span className="catbar-sub">
+          <span className="catbar-sub" style={{ flexDirection: "column", alignItems: "flex-start", gap: 2 }}>
             <span>{eur0(p.monthly)}/mo · {p.startYm}→{p.endYm}</span>
             <span>{eur0(p.remainingAmt)} remaining · {p.remaining} mo left</span>
           </span>

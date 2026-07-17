@@ -285,16 +285,21 @@ month** (`am.month.total`, sub = % of `stats.byMonth[curMonth].amount`, current 
 Below the cards, `AmortizationChart` — a local `SegmentedControl` (`Composition` / `By month` / `By
 year`, default Composition) swapping between three small inline-SVG charts, all sharing the
 `MonthlyBarsChart` pointer-hover idiom (crosshair line + a `--paper`/`--hair-strong` tooltip box
-showing the label + `eurAuto` amount; the tooltip x is clamped inside the SVG viewport via a shared
-`AmTooltip` helper so it never clips at the edges). Color encoding is consistent across all three:
-non-amortized/neutral = `--muted`, real = `--chart-actual` (terracotta), virtual = `--sage`;
-not-yet-elapsed months/years are faded (lower opacity).
+via a shared `AmTooltip` helper so it never clips at the edges). Color encoding is consistent across
+all three: non-amortized/neutral = `--muted`, real = `--chart-actual` (terracotta), virtual =
+`--sage`; not-yet-elapsed months/years are faded (lower opacity). `AmTooltip` has two modes: a
+compact single-value box (`AmComposition`'s per-segment hover) and, when `hover.real` is present
+(`AmByMonth`/`AmByYear`), a taller box breaking out **Real** / **Virtual** / **Total** (bold,
+`--ink`) each colored to match, plus the period label on top.
 - **`AmComposition`** — one horizontal stacked bar of YTD spend: non-amortized (`stats.spent −
   am.ytd.total`) · real · virtual. Hovering a segment highlights it and shows its label + €.
 - **`AmByMonth`** — 12 bars (`am.byMonth[m].real + .virtual` stacked, elapsed solid / future
-  faded), plus a faint dashed **"as purchased (raw)"** overlay (`--chart-target`, low opacity, its
-  own legend entry) tracing `am.byMonth[m].rawPurchased` — the un-smoothed spend as it was actually
-  purchased that month, drawn behind the smoothed bars so the smoothing effect is visible.
+  faded); x-axis shows month numbers (`1`..`12`). A default-off `AmToggleChip` ("As purchased
+  (raw)", mirrors `home.jsx`'s `ToggleChip` pill idiom) reveals a faint dashed overlay tracing
+  `am.byMonth[m].rawPurchased` — the un-smoothed spend as it actually posted that month. The y-axis
+  max excludes `rawPurchased` while the toggle is off, so the (often much larger, e.g. a lump-sum
+  purchase) raw spike doesn't squash the monthly bars; toggling on re-includes it in the axis scale
+  and draws the overlay.
 - **`AmByYear`** — one stacked bar per `am.byYear` entry (all years any amortized slice touches,
   not just `stats.year`); the current year is bold/full-opacity, future years faded. This is the
   per-year future-allocation view (e.g. a multi-year amortization spilling well past the viewed
@@ -330,7 +335,9 @@ Below it, two `.eyebrow`-labeled sections — **Real (cash)** and **Virtual (no-
   no-cash parents).
 - A schedule progress bar (`.catbar-track`/`.catbar-fill`, width = `elapsedMonths / amortize_months`
   ×100%, fill `--chart-actual` for real / `--sage` for virtual).
-- A mono muted sub line: `€X/mo · startYm→endYm` and `€Y remaining · Z mo left`.
+- A mono muted sub line: `€X/mo · startYm→endYm` and `€Y remaining · Z mo left`, stacked as two
+  full-width lines (inline `flexDirection: column` override on the shared `.catbar-sub` class, which
+  is otherwise a single flex row shared with the Categories/Fun/Travel tabs — kept unchanged there).
 - The whole row is a button — tapping it looks the parent back up in `store.transactions` by `id`
   and calls `onEditTx`, reusing the existing edit sheet (the parent is a real, editable store tx).
 
