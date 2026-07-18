@@ -26,6 +26,7 @@ whole thing hackable from any text editor.
 - [How the numbers work](#how-the-numbers-work) — projection, buffer, uncertainty band, status
 - [The fun budget](#the-fun-budget)
 - [The travel budget](#the-travel-budget)
+- [Plan](#plan) — scenario/decision-record view, outside all ceiling and callout math
 - [The callout engine](#the-callout-engine) — the 10 detectors + value model + threshold table
 - [Categories](#categories)
 - [Screens](#screens)
@@ -339,6 +340,32 @@ is set. `drawZone(rate)` buckets the result against the classic 4%-rule envelope
 Precision doesn't matter — the threshold crossings do. It surfaces as one colored monospace line
 directly under the hero ("implies a 3.2% draw · sustainable") on the Overview. Like travel, it is a
 **pure read-only display**: it does not feed any projection, callout, or the ceiling math.
+
+---
+
+## Plan
+
+A reference/decision view — a fifth Analysis pill (`Projection | Activity | Fun | Travel | Plan`) —
+for weighing named lifestyle scenarios (packages of annual-cost "levers": a move, a school choice, a
+travel budget bump) against the household's portfolio. It sits entirely **outside** all ceiling and
+callout math: nothing in `store.plan` feeds `computeStats`, `buildCallouts`, `computeFun`, or
+`computeTravel`, and the only number Plan borrows from the live app is this year's actual `stats.projection`,
+shown read-only as "this year implies" a draw rate. Everything else is plain arithmetic — spend minus
+income is the deficit, and deficit divided by portfolio is the draw:
+
+```
+spend   = baseline (the ceiling, or an override) + Σ enabled lever amounts
+deficit = max(0, spend − income)
+draw    = deficit / portfolio
+```
+
+Scenarios sort on a draw-rate ladder (pinned first, then lowest draw), each with a lever checklist,
+baseline/income overrides, a sensitivity line (portfolio level at which the draw crosses 3.5%/4.5%),
+notes, and a dated decision log. A shared lever library and a set of pre-agreed portfolio-floor
+"triggers" (retreat rules) round it out; both support inline add/edit, and a lever can't be deleted
+while any scenario still references it. Like `trips`, `store.plan` is settings-blob synced — no D1
+schema, no endpoints. Detail: [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md#plan--computescenariocomputescenarioschecktriggers),
+[docs/UI.md](docs/UI.md#yplanjsx-windowyplan--the-plan-tab).
 
 ---
 

@@ -132,6 +132,10 @@ The essentials every session needs:
   settings-blob fields, edited in Settings → "Portfolio & draw rate", updated manually each quarter.
   Surfaced as one colored line under the hero (`StatusHero`). Purely a read-only display — it does
   **not** feed any callout, projection, or the ceiling math.
+- **Plan** — a fifth Analysis pill, a scenario/decision-record notebook (`store.plan`: levers,
+  scenarios, triggers; settings-blob synced; UI in `y/plan.jsx`/`window.YPlan`). Entirely outside
+  ceiling/callout math — its only live-data contact is a read-only "this year implies" draw derived
+  from `stats.projection`. Detail: `docs/ARCHITECTURE.md`, `docs/UI.md`, README "Plan" section.
 - `staleDays` — whole days since the Revolut pipeline last ran; `0` when unknown. Extends the
   projection horizon: `projDays = daysRemaining + staleDays`. Passed as 4th arg to `computeStats`
   (default 0); only applied when `isCurrent`. Also widens the uncertainty band (`weeksRemaining =

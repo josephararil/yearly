@@ -116,6 +116,46 @@ The former "future trip goals" wishlist (`TripAddSheet`, `nearestTrip`, `bookIt`
 `store.travelWishlist`) has been removed — travel spend is now organized by these discrete trips
 instead. Trip *selection* when logging an expense lives in `y/addflow.jsx` (`TripField`, see below).
 
+## `y/plan.jsx` (`window.YPlan`) — the Plan tab
+
+`PlanTab({ store, setStore, stats })`, rendered on Analysis's fifth top pill (`Projection | Activity
+| Fun | Travel | Plan`). A contained decision notebook — named lifestyle scenarios (packages of
+annual-cost "levers") resolving to a deficit and an implied portfolio draw rate, plus the recorded
+reasoning behind them. `store.plan` is settings-blob synced (like `trips`) — see
+[ARCHITECTURE.md](ARCHITECTURE.md#plan--computescenariocomputescenarioschecktriggers) for the data
+shape and the three `YCalc` functions it's built on. Five regions, top to bottom:
+
+1. **Header strip** — three inline figures: Portfolio and Income (`InlineEditNum`, tap-to-edit,
+   commit on blur/Enter), and a read-only **This year implies** draw rate derived from the live
+   `stats` prop — the tab's only contact point with live data.
+2. **Draw ladder** — one row per scenario (`ScenarioRow`), from `YCalc.computeScenarios`
+   (pinned-first, then draw ascending): name (+ `PINNED` tag), deficit, draw %, and a `DrawAxis` —
+   a hairline 0–5% axis with faint rules at 2.0/3.5/4.5 and a dot at the scenario's draw (terracotta
+   only in band "d"). Tapping a row expands it in place (`opts-body` grid-collapse, same idiom as
+   `TripRow`). An "Add scenario" control (name-only inline form) appends a blank scenario and opens it.
+3. **Expanded scenario** (`ExpandedScenario`) — the lever checklist (enable/disable toggle +
+   `amountOverride`, `NullableNumInput`, live recompute), an `AddLeverPicker` (a `<select>` of
+   library levers not yet referenced + "Add lever") to attach any lever to the scenario, baseline/
+   income override fields, the sensitivity line ("crosses 3.5% below €X · 4.5% below €Y · headroom
+   €Z"), notes, the **decision log** (`DecisionLog`: dated entries newest-first, an add-entry input
+   that mints `{id, date: localISO(now), text}` and prepends), and the pin/duplicate/delete row.
+   Duplicate deep-clones the scenario with a fresh id, `" (copy)"` suffix, and a single "Duplicated
+   from …" log entry; delete uses the two-step inline `ConfirmDelete` ("Delete" → "Confirm
+   delete"/"Cancel").
+4. **Lever library** (`LeverLibrary`) — collapsed by default, header "Levers · N". Expanded: each
+   lever (`LeverRow`) shows label, amount, a muted tag row (reversibility · horizon · beneficiary ·
+   durability), and notes, with inline Edit (`LeverEditForm`) and delete. Editing a lever's amount
+   here updates every scenario that references it without an `amountOverride`, automatically —
+   the ladder recomputes from `plan.levers` on every render. **Delete is blocked** (quiet muted
+   explanation, no control) while any scenario's `leverRefs` references the lever — same pattern as
+   trip-delete-blocked-while-has-transactions.
+5. **Triggers** (`TriggersBlock`) — collapsed by default, header "Triggers · N". Each row
+   (`TriggerRow`): label, portfolio floor, action text, inline Edit/`ConfirmDelete`, and a status —
+   quiet muted "—" when `plan.portfolio >= floor`, terracotta "breached" otherwise (from
+   `YCalc.checkTriggers`). Purely a checklist; no notifications, no callout integration.
+
+`ConfirmDelete` (module-local) is the shared two-step delete control used throughout the tab.
+
 ## Screens
 
 - `y/home.jsx` (Overview — hero + `VoiceLine` + **one chart with a 4-way switcher** (`MonthCurve` /
