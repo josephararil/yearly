@@ -65,6 +65,11 @@ formula, status thresholds, and each callout detector.
   0 before startMonth).
 - `computeFun(store, asOfDate?)` → per-person fun ledger (see below).
 - `computeTravel(store, asOfDate?)` → family-wide travel ledger (see below).
+- `impliedDraw(store, projection)` → number | null — the implied portfolio draw rate,
+  `(projection − externalIncome) / portfolio`. `null` (dormant) until `store.portfolio > 0`.
+  Read-only display overlay; feeds nothing else.
+- `drawZone(rate)` → `{label, color}` | null — buckets a draw rate against the 4%-rule envelope
+  (≤2% / ≤3.5% → sage, ≤4% → amber, above → terra). Powers the hero draw line's color.
 - `projectionAsOf(stats, daysBack)` → number — the year-end projection as it *would have been* on a
   past date, replaying the exact blended-rate math (§projection) over only the transactions dated on
   or before that date. Powers the trend detector.

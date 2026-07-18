@@ -56,7 +56,7 @@ Full local-dev notes (the no-backend 404 handling, reload-loop fix) are in
    a second server on a random port nobody is looking at. Full SW + preview workflow, including the
    port-conflict and hard-refresh procedures: [docs/PWA-AND-DEV.md](docs/PWA-AND-DEV.md#claude-code-preview--how-to-deploy-locally-for-testing).
 2. **`APP_VERSION` (`settings.jsx` footer) and `CACHE_NAME` (`sw.js`) move together** — currently
-   `v77` / `yearly-v77`. Bump both on every release.
+   `v78` / `yearly-v78`. Bump both on every release.
 3. **`localISO(d)`, never `toISOString()`** for dates in `calc.jsx` — `toISOString()` is UTC and
    silently drops Dec 31 transactions in UTC+ timezones (EET).
 3b. **`updated_at` is milliseconds everywhere** — `Date.now()` in the worker, `Date.now()` for the
@@ -69,7 +69,8 @@ Full local-dev notes (the no-backend 404 handling, reload-loop fix) are in
 4. **Don't rename `ceiling` back to `target`.** `ceiling` is the stored, sacred household number;
    `mainTarget` = `ceiling − funPlanAnnual` is derived. See vocabulary below.
 4b. **The D1 `settings` blob is settings-only** — people/years/templates/wishlist/travel/trips/
-   density, never `transactions` (own table) and never `travelWishlist` (removed). The client strips
+   density/portfolio/externalIncome, never `transactions` (own table) and never `travelWishlist`
+   (removed). The client strips
    `transactions` before every settings PUT (`sync.jsx` `_flush`/`bootstrap`), and `PUT /api/settings`
    strips `transactions`/`travelWishlist` again server-side (authoritative gate). A clean blob is
    ~1.5 KB; if you ever see it balloon, a stale client wrote the full store into it. `_flush` sends
@@ -124,6 +125,13 @@ The essentials every session needs:
   breakdown/tx and trip create/rename; delete is blocked while a trip has transactions) plus the
   Add/Edit expense flow's trip picker (`y/addflow.jsx` `TripField`, required whenever Travel is
   toggled on). The old `store.travelWishlist` future-trip-goals feature has been removed.
+- **Implied draw rate** — the FIRE control-panel overlay. `impliedDraw(store, projection) =
+  (projection − externalIncome) / portfolio`; returns `null` (dormant) until `store.portfolio` is
+  set. `drawZone(rate)` buckets it against the 4%-rule envelope (≤2% conservative, ≤3.5%
+  sustainable, ≤4% at-the-limit → amber, above → terra). `portfolio` and `externalIncome` are
+  settings-blob fields, edited in Settings → "Portfolio & draw rate", updated manually each quarter.
+  Surfaced as one colored line under the hero (`StatusHero`). Purely a read-only display — it does
+  **not** feed any callout, projection, or the ceiling math.
 - `staleDays` — whole days since the Revolut pipeline last ran; `0` when unknown. Extends the
   projection horizon: `projDays = daysRemaining + staleDays`. Passed as 4th arg to `computeStats`
   (default 0); only applied when `isCurrent`. Also widens the uncertainty band (`weeksRemaining =

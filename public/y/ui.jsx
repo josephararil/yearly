@@ -39,10 +39,13 @@
   }
 
   // Status hero — Zone 1 (reality block) + Zone 2 (bullet bar) + Zone 3 placeholder.
-  function StatusHero({ stats }) {
+  function StatusHero({ stats, store }) {
     const [tip, setTip] = React.useState({ open: false, x: 0 });
 
     const headline = stats.isFuture ? stats.ceiling : stats.projection;
+    // Implied portfolio draw rate — the number you actually manage. Dormant until a portfolio is set.
+    const draw = !stats.isFuture && store ? YCalc.impliedDraw(store, stats.projection) : null;
+    const drawZone = draw != null ? YCalc.drawZone(draw) : null;
     const eyebrow = stats.complete
       ? "Final spend · " + stats.year
       : stats.isFuture
@@ -120,6 +123,12 @@
             </>
           )}
         </div>
+        {draw != null && (
+          <div className="hero-draw" style={{ fontFamily: "var(--mono)", fontSize: 12.5, marginTop: 8, color: drawZone.color }}>
+            implies a <span className="num" style={{ fontWeight: 700 }}>{(draw * 100).toFixed(1)}%</span> draw
+            <span style={{ color: "var(--muted)" }}> · {drawZone.label}</span>
+          </div>
+        )}
         {!stats.isFuture && (
           <>
             <div className="hero-hr" />

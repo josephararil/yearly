@@ -1103,7 +1103,7 @@
       <div className="screen stagger">
         {stats.isCurrent && stats.staleDays >= 7 && <StaleBanner staleDays={stats.staleDays} />}
         <div>
-          <StatusHero stats={stats} />
+          <StatusHero stats={stats} store={store} />
           {voice && <VoiceLine callout={voice} onClick={() => onCallout && onCallout(voice)} />}
         </div>
 

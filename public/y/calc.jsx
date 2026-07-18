@@ -557,6 +557,28 @@ function computeStats(store, year, asOfDate, staleDays = 0) {
     return Math.max(0, (stats.ceiling - stats.spent) / daysLeft);
   }
 
+  // Implied portfolio draw rate — the FIRE control-panel number. Projected annual household spend
+  // net of external income, expressed as a fraction of the portfolio. Returns null when no
+  // portfolio is set (the feature stays dormant until configured in Settings). portfolio and
+  // externalIncome are settings-blob fields; update the portfolio manually each quarter — the
+  // threshold crossings matter, not precision.
+  function impliedDraw(store, projection) {
+    const portfolio = store.portfolio;
+    if (!(portfolio > 0)) return null;
+    const externalIncome = store.externalIncome || 0;
+    return (projection - externalIncome) / portfolio;
+  }
+
+  // Draw-rate envelope: ≤2% conservative, ≤3.5% sustainable, ≤4% at the 4%-rule limit, above it
+  // high. Maps each band to a theme status color. Returns null for a null rate.
+  function drawZone(rate) {
+    if (rate == null) return null;
+    if (rate <= 0.02) return { label: "conservative", color: "var(--sage)" };
+    if (rate <= 0.035) return { label: "sustainable", color: "var(--sage)" };
+    if (rate <= 0.04) return { label: "at the 4% limit", color: "var(--amber)" };
+    return { label: "above the 4% rule", color: "var(--terra)" };
+  }
+
   // computeFun — rich per-person fun ledger for the UI (uses store.currentYear for YTD figures).
   // asOfDate defaults to new Date(). Balance is all-time (from each person's startMonth to asOf).
   function computeFun(store, asOfDate) {
@@ -1021,7 +1043,7 @@ function computeStats(store, year, asOfDate, staleDays = 0) {
     MONTHS, MONTHS_LONG, eur0, eur2, eurAuto, signedEur, pct, signedPct,
     dayOfYear, daysInYear, parseDate, localISO, fmtDateShort, fmtDateLong, yearTxns,
     cumulativeByDay, priorYearCumulative, burnDownSeries, aggregateByCategory, expandAmortized, amortizationBreakdown,
-    rateForMonth, computeStats, computeFun, computeTravel, projectionAsOf, projectionHistory, buildCallouts,
+    rateForMonth, computeStats, computeFun, computeTravel, impliedDraw, drawZone, projectionAsOf, projectionHistory, buildCallouts,
     requiredDailyToHit, dailyHeadroom, neededMonthlyCap, projectedMonthEnd, monthEndBand,
     medianDailySpendYTD, historicalMonthRange,
   };
