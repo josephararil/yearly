@@ -24,6 +24,9 @@ Zone 1 only).
 **Zone 1 — Reality block**: eyebrow label (serif mood: "Projected year-end" / "Final spend · Y" /
 "Household ceiling · Y"); serif hero number (`stats.projection` or `ceiling`); sans sub-line
 (over/under ceiling by €N in terra/sage mono 700, `±€X` band suffix when `bandAmt != null`);
+optional `.hero-draw` line ("implies a 3.2% draw · sustainable", mono 12.5px, colored by
+`YCalc.drawZone`) — rendered only when `YCalc.impliedDraw(store, stats.projection)` is non-null
+(i.e. a portfolio is configured); `StatusHero` takes `store` as a second prop for this;
 hairline rule; `.hero-spent` row — serif 38px `totalSpent` (= `stats.spent`, all tx) left-aligned
 + mono 11px day/year right-aligned.
 
@@ -121,7 +124,7 @@ instead. Trip *selection* when logging an expense lives in `y/addflow.jsx` (`Tri
   sub-tabs; charts are hand-built SVG that double as the Recharts spec. **The Projection tab's own
   "This year" line and "Monthly breakdown" bar charts were moved to the Overview switcher; the tab
   now holds only "What's happening" callouts + "In numbers" stats.**)
-- `y/settings.jsx` (Budget settings: combined ceiling+buffer / years / fun-budget / travel · Data
+- `y/settings.jsx` (Budget settings: combined ceiling+buffer / years / fun-budget / travel / portfolio · Data
   settings: templates / Import & Export submenus (CSV · Revolut mobile import · JSON
   backup-restore) / force-resync / clear)
 - `y/addflow.jsx` (unified "Log an expense" sheet: amount hero, template accelerator strip, category
@@ -462,7 +465,7 @@ The screen is two sections — **Budget settings** and **Data settings** — eac
 Footer shows `APP_VERSION` constant (defined at top of IIFE — **update it with every release**,
 moves with `CACHE_NAME` in `sw.js`).
 
-**Budget settings** — four rows:
+**Budget settings** — five rows:
 - **Household ceiling** → `CeilingBufferSheet`, a *combined* sheet for the current year that edits
   both `years[y].ceiling` (numeric input) and the missed-entry buffer (0–15% slider with a live
   `projNoBuffer → projection` preview). Saving writes `ceiling` + `buffer` together and drops any
@@ -482,6 +485,10 @@ moves with `CACHE_NAME` in `sw.js`).
 - **Travel budget** → `TravelConfigSheet` (unchanged internally): family-wide single allowance on
   `store.travel`; forward-only rate append/update + "Correct balance…" → `travel.balanceAdjustment`.
   Row value shows the aggregate `€X/yr` (latest monthly rate × 12); sub shows the available balance.
+- **Portfolio & draw rate** → `PortfolioSheet`: two numeric fields (`store.portfolio`,
+  `store.externalIncome`) with a live draw-rate preview (`YCalc.drawZone`-colored). Save writes
+  `undefined` when a field is blank/zero (so the settings blob stays clean and the feature goes
+  dormant). Row value shows the current implied draw as `X.X%` (omitted when no portfolio is set).
 
 **Data settings** — five rows:
 - **Quick templates** → `TemplatesSheet` (unchanged).

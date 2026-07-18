@@ -1,6 +1,6 @@
 // settings.jsx — target, buffer, years, templates, CSV import/export, clear.
 (function () {
-  const APP_VERSION = 'v77';
+  const APP_VERSION = 'v78';
   const { YData, YCalc, YUI } = window;
   const { eur0, eur2, signedPct, computeStats, localISO } = YCalc;
   const { Sheet, DeltaChip } = YUI;
@@ -729,6 +729,62 @@
     );
   }
 
+  // ---------- Portfolio & implied draw rate ----------
+  function PortfolioSheet({ open, onClose, store, setStore, stats }) {
+    const [pf, setPf] = React.useState("");
+    const [inc, setInc] = React.useState("");
+    React.useEffect(() => {
+      if (open) {
+        setPf(store.portfolio != null ? String(store.portfolio) : "");
+        setInc(store.externalIncome != null ? String(store.externalIncome) : "");
+      }
+    }, [open]);
+
+    const portfolio = parseInt(pf) || 0;
+    const externalIncome = parseInt(inc) || 0;
+    const previewDraw = portfolio > 0 && stats
+      ? (stats.projection - externalIncome) / portfolio : null;
+    const zone = previewDraw != null ? YCalc.drawZone(previewDraw) : null;
+
+    const save = () => {
+      setStore((s) => ({
+        ...s,
+        portfolio: portfolio > 0 ? portfolio : undefined,
+        externalIncome: externalIncome > 0 ? externalIncome : undefined,
+      }));
+      onClose();
+    };
+
+    return (
+      <Sheet open={open} onClose={onClose} title="Portfolio & draw rate">
+        <p className="muted" style={{ fontSize: 13, marginTop: 0, lineHeight: 1.5 }}>
+          The number you actually manage: projected annual spend, net of external income, as a
+          fraction of your portfolio. Update the portfolio manually each quarter — precision doesn't
+          matter, the threshold crossings do.
+        </p>
+        <div className="field">
+          <label>Portfolio value (€)</label>
+          <input className="inp inp-num" inputMode="numeric" value={pf}
+            onChange={(e) => setPf(e.target.value.replace(/[^\d]/g, ""))}
+            placeholder="e.g. 850000" style={{ textAlign: "center", fontSize: 18 }} />
+        </div>
+        <div className="field">
+          <label>External income / year (€, optional)</label>
+          <input className="inp inp-num" inputMode="numeric" value={inc}
+            onChange={(e) => setInc(e.target.value.replace(/[^\d]/g, ""))}
+            placeholder="salary, rent, etc. — leave blank if none" style={{ textAlign: "center", fontSize: 18 }} />
+        </div>
+        {previewDraw != null && (
+          <div style={{ textAlign: "center", margin: "16px 0", fontFamily: "var(--mono)", fontSize: 14, color: zone.color }}>
+            Implies a <b>{(previewDraw * 100).toFixed(1)}%</b> draw
+            <span style={{ color: "var(--muted)" }}> · {zone.label}</span>
+          </div>
+        )}
+        <Button variant="primary" block onClick={save}>Save</Button>
+      </Sheet>
+    );
+  }
+
   function ClearSheet({ open, onClose }) {
     const [v, setV] = React.useState("");
     React.useEffect(() => { if (open) setV(""); }, [open]);
@@ -882,6 +938,10 @@
     const travelBal = YCalc.computeTravel(store).balance;
     const travelBalStr = travelBal < 0 ? "−" + eur0(Math.abs(travelBal)) + " owed" : eur0(travelBal) + " available";
 
+    // Implied draw rate for the settings row value (only when a portfolio is configured).
+    const draw = stats ? YCalc.impliedDraw(store, stats.projection) : null;
+    const drawStr = draw != null ? (draw * 100).toFixed(1) + "%" : undefined;
+
     return (
       <div className="screen">
         <div className="section-h" style={{ marginTop: 0 }}><h2>Budget settings</h2></div>
@@ -890,6 +950,8 @@
           <Row icon="clock" title="Past years" sub="target vs actual history" onClick={() => setSub("years")} />
           <Row icon="activity" title="Fun budget" sub="per-person allowances & balances" value={stats ? eur0(stats.funPlanAnnual) + "/yr" : undefined} onClick={() => setFunOpen(true)} />
           <Row icon="travel" title="Travel budget" sub={travelBalStr} value={eur0(travelRate * 12) + "/yr"} onClick={() => setTravelOpen(true)} />
+          <Row icon="trendingUp" title="Portfolio & draw rate" sub="implied draw vs your portfolio"
+            value={drawStr} onClick={() => setSub("portfolio")} />
         </div>
 
         <div className="section-h"><h2>Data settings</h2></div>
@@ -955,6 +1017,7 @@
         <ClearSheet open={sub === "clear"} onClose={() => setSub(null)} />
         <FunBudgetSheet open={funOpen} onClose={() => setFunOpen(false)} store={store} setStore={setStore} stats={stats} />
         <TravelConfigSheet open={travelOpen} onClose={() => setTravelOpen(false)} store={store} setStore={setStore} />
+        <PortfolioSheet open={sub === "portfolio"} onClose={() => setSub(null)} store={store} setStore={setStore} stats={stats} />
       </div>
     );
   }

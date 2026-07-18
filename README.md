@@ -315,6 +315,33 @@ Travel is a pure overlay: it does **not** feed `funPlanAnnual`, `mainTarget`, or
 
 ---
 
+## The draw rate
+
+A second psychological overlay that connects spend to the portfolio behind it — the number a FIRE
+household actually manages. Two settings-blob fields, `portfolio` and `externalIncome` (both EUR,
+edited in Settings → "Portfolio & draw rate", updated manually each quarter), drive one pure
+function:
+
+```
+impliedDraw(store, projection) = (projection − externalIncome) / portfolio
+```
+
+It returns `null` — and the feature stays completely dormant, showing nothing — until `portfolio`
+is set. `drawZone(rate)` buckets the result against the classic 4%-rule envelope:
+
+| Draw rate | Zone | Color |
+|-----------|------|-------|
+| ≤ 2%   | conservative | sage |
+| ≤ 3.5% | sustainable | sage |
+| ≤ 4%   | at the 4% limit | amber |
+| > 4%   | above the 4% rule | terra |
+
+Precision doesn't matter — the threshold crossings do. It surfaces as one colored monospace line
+directly under the hero ("implies a 3.2% draw · sustainable") on the Overview. Like travel, it is a
+**pure read-only display**: it does not feed any projection, callout, or the ceiling math.
+
+---
+
 ## The callout engine
 
 `buildCallouts(store, stats)` is a pure `(store, stats) → Callout[]` function — the heart of the
@@ -495,7 +522,8 @@ excluding the tx from the trend forecast). Editing a transaction opens the same 
 
 Grouped rows: **This year** (household ceiling, missed-entry buffer slider, past-years detail) ·
 **Fun budget** (per-person rate config, forward-only) · **Travel budget** (one household monthly
-allowance + balance correction) · **Display** (Overview density) · **Data**
+allowance + balance correction) · **Portfolio & draw rate** (portfolio value + external income, with
+a live draw-rate preview) · **Display** (Overview density) · **Data**
 (template manager, CSV import with duplicate detection, CSV export, JSON backup/restore, "Sync now")
 · **Danger zone** (clear all data, type-to-confirm). Footer shows the app version.
 
@@ -565,6 +593,8 @@ Persisted to `localStorage` under `yearly:store:v1` (and mirrored to D1 via sync
   "travel":   { "rates": [ { "from": "2026-01", "amount": 150 } ], "startMonth": "2026-01", "balanceAdjustment": 0 },
   "trips":    [ /* Trip[] */ ],
   "templates":[ /* Template[] */ ],
+  "portfolio": 1000000,                        // optional — enables the implied draw rate
+  "externalIncome": 0,                         // optional — annual income netted off the draw
   "transactions": [ /* Transaction[] */ ]
 }
 ```
