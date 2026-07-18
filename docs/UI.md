@@ -116,6 +116,79 @@ The former "future trip goals" wishlist (`TripAddSheet`, `nearestTrip`, `bookIt`
 `store.travelWishlist`) has been removed — travel spend is now organized by these discrete trips
 instead. Trip *selection* when logging an expense lives in `y/addflow.jsx` (`TripField`, see below).
 
+## `y/plan.jsx` (`window.YPlan`) — the Plan tab
+
+`PlanTab({ store, setStore, stats })`, rendered on Analysis's fifth top pill (`Projection | Activity
+| Fun | Travel | Plan`). A contained decision notebook — named lifestyle scenarios (packages of
+annual-cost "levers") resolving to a deficit and an implied portfolio draw rate, plus the recorded
+reasoning behind them. `store.plan` is settings-blob synced (like `trips`) — see
+[ARCHITECTURE.md](ARCHITECTURE.md#plan--computescenariocomputescenarioschecktriggers) for the data
+shape and the three `YCalc` functions it's built on. **Builder-first layout** (Phase 4): a shared
+comparison axis plus an always-visible builder, so the payoff — levers, big numbers, verdict — is on
+screen with zero clicks. Regions, top to bottom:
+
+1. **Header strip** — three inline figures: Portfolio and Income (`InlineEditNum`, tap-to-edit,
+   commit on blur/Enter), and a read-only **This year implies** draw rate derived from the live
+   `stats` prop — the tab's only contact point with live data.
+2. **Comparison strip** (`ComparisonStrip`) — one shared 0–5% axis (~72px), faint band tints at
+   0–2.0/2.0–3.5/3.5–4.5/4.5–5.0 (terracotta wash only on the last), hairline rules + tick labels at
+   2.0/3.5/4.5. Every scenario from `YCalc.computeScenarios` plots as an 8px dot with its name in
+   10.5px mono, alternating above/below the axis by sorted-draw index to reduce label collisions;
+   draws > 5% clamp to the right edge with a "+" suffix. The **selected** scenario's dot is 12px,
+   filled terracotta, full name (no truncation) — and plots the **live sandbox value**, not the
+   saved one, so it slides in real time as the builder is edited. While the sandbox is dirty, a
+   small hollow ring marks the scenario's last-saved position. Tapping any dot (or its label)
+   selects that scenario into the builder below.
+3. **The builder** (`ScenarioBuilder`) — always visible, no expansion step, showing the selected
+   scenario (default: first pinned, else first row). All lever/override edits are **local sandbox
+   state** (`{ leverRefs, baselineOverride, incomeOverride }`, seeded from the saved scenario) —
+   they never touch the store until Save.
+   - Header row: `InlineEditText` name (applies immediately, not sandboxed) + `PINNED` tag + a
+     `<select>` mirroring the axis selection; Pin/Duplicate/`ConfirmDelete` on the row below.
+   - **Lever rows**: the whole row (min-height 44px, checkbox + label + mono amount) toggles
+     `enabled` on click; disabled rows sit at 45% opacity rather than disappearing. An
+     `NullableNumInput` override (84px) appears only on enabled rows. A lever with an optional
+     `scale: {min, max, step}` (added via `LeverEditForm`'s three scale fields — additive; the seed
+     migration backfills it onto "Extra travel & fun" for existing stores) renders a `<input
+     type="range" className="rng">` under the row when enabled, driving `amountOverride` live.
+     `AddLeverPicker` (levers not yet in the sandbox) sits at the bottom of the list.
+   - **Baseline/income**: one muted mono line — "baseline €X (live ceiling) · income €Y" — each
+     figure an inline tap-to-edit `InlineTapNum` (no labeled form boxes).
+   - **Result block**: Spend / Deficit (18px mono) and Draw (29px mono, terracotta in band "d") in
+     one row, computed via `YCalc.computeScenario(plan, { ...scenario, ...sandbox }, currentCeiling)`
+     — no new engine function; the sandbox is merged into a transient scenario object and the
+     existing pure function is reused. Underneath, a full-width verdict line (background wash +
+     text color keyed by band) in Broadsheet voice: band a "survives any recorded market history",
+     b "headroom €X", c "crosses 3.5% below €X", d "not sustainable without income".
+   - **Sandbox semantics**: when the sandbox differs from the saved scenario, a quiet dirty row
+     appears — "edited · Save · Save as new · Revert". Save writes the sandbox through
+     (`updatedAt: Date.now()`); Save as new duplicates the scenario with the sandbox applied plus a
+     single "Saved from builder" log entry and selects the copy; Revert reseeds the sandbox from the
+     saved scenario. Switching scenarios (axis tap, the header `<select>`, Duplicate) while dirty
+     defers via `pendingTarget` state and shows the same three actions plus Cancel; whichever action
+     runs, the switch to the target completes afterward (Revert not-writing anything, sandbox
+     reseeds naturally once `selectedId` changes).
+   - **Notes & log** (`NotesAndLog`) — one collapsed disclosure (`opts-summary`/`opts-body`, closed
+     by default) holding the scenario notes (a plain textarea, commits `onBlur`, not sandboxed) and
+     the existing `DecisionLog` (dated entries newest-first, add-entry input mints
+     `{id, date: localISO(now), text}` and prepends).
+4. **"Add scenario"** — a small linklike under the builder; creates a scenario named "New scenario"
+   (renamed inline via the builder heading) and selects it in, going through the same dirty-switch
+   guard as any other selection change.
+5. **Lever library** (`LeverLibrary`) — collapsed by default, header "Levers · N". Expanded: each
+   lever (`LeverRow`) shows label, amount, a muted tag row (reversibility · horizon · beneficiary ·
+   durability), and notes, with inline Edit (`LeverEditForm`) and delete. Editing a lever's amount
+   here updates every scenario that references it without an `amountOverride`, automatically —
+   the comparison strip and builder recompute from `plan.levers` on every render. **Delete is
+   blocked** (quiet muted explanation, no control) while any scenario's `leverRefs` references the
+   lever — same pattern as trip-delete-blocked-while-has-transactions.
+6. **Triggers** (`TriggersBlock`) — collapsed by default, header "Triggers · N". Each row
+   (`TriggerRow`): label, portfolio floor, action text, inline Edit/`ConfirmDelete`, and a status —
+   quiet muted "—" when `plan.portfolio >= floor`, terracotta "breached" otherwise (from
+   `YCalc.checkTriggers`). Purely a checklist; no notifications, no callout integration.
+
+`ConfirmDelete` (module-local) is the shared two-step delete control used throughout the tab.
+
 ## Screens
 
 - `y/home.jsx` (Overview — hero + `VoiceLine` + **one chart with a 4-way switcher** (`MonthCurve` /

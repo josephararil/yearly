@@ -1,6 +1,6 @@
 // analysis.jsx — the deep surface: projection chart, activity (categories + transactions), fun.
 (function () {
-  const { YData, YCalc, YUI, YFun, YTravel } = window;
+  const { YData, YCalc, YUI, YFun, YTravel, YPlan } = window;
   const { eur0, eurAuto, signedEur, signedPct, pct, MONTHS, fmtDateShort } = YCalc;
   const { TxRow, CatIcon, CalloutCard, SectionH, TxTag } = YUI;
   const DS = window.ApertureDesignSystem_72a4cd || {};
@@ -823,7 +823,7 @@
     return (
       <div className="screen">
         <div style={{ position: "sticky", top: 0, zIndex: 5, paddingBottom: 4 }}>
-          <SegmentedControl options={["Projection", "Activity", "Fun", "Travel"]} value={tab} fill onChange={setTab} />
+          <SegmentedControl options={["Projection", "Activity", "Fun", "Travel", "Plan"]} value={tab} fill onChange={setTab} />
         </div>
         {tab === "Projection" && <ProjectionTab stats={stats} fun={fun} store={store} callouts={callouts} onCallout={onCallout} />}
         {tab === "Activity" && (
@@ -839,6 +839,7 @@
         )}
         {tab === "Fun" && <YFun.FunTab fun={fun} store={store} setStore={setStore} addTx={addTx} />}
         {tab === "Travel" && <YTravel.TravelTab travel={travel} store={store} setStore={setStore} />}
+        {tab === "Plan" && <YPlan.PlanTab store={store} setStore={setStore} stats={stats} />}
       </div>
     );
   }

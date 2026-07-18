@@ -1199,6 +1199,114 @@
     assert('cross-year: parent is real (not virtual) → byYear virtual totals are all 0',
       cyAb.byYear.every(y => y.virtual === 0));
 
+    // ---- Plan (scenario & decision-record) — computeScenario band boundaries ----
+    section('Plan — computeScenario band boundaries (exact .020/.035/.045 draw)');
+    // portfolio=1,000,000; income=0; baselineOverride carries the whole deficit so
+    // draw = deficit / portfolio lands exactly on each boundary.
+    const bandPlan = { portfolio: 1000000, externalIncome: 0, levers: [], scenarios: [], triggers: [] };
+    function bandScenario(baseline) {
+      return { id: 's', name: 's', leverRefs: [], baselineOverride: baseline, incomeOverride: 0, notes: '', log: [], pinned: false, updatedAt: 0 };
+    }
+    const bandA = YCalc.computeScenario(bandPlan, bandScenario(20000), 0);   // draw = 0.020
+    const bandB = YCalc.computeScenario(bandPlan, bandScenario(35000), 0);   // draw = 0.035
+    const bandC = YCalc.computeScenario(bandPlan, bandScenario(45000), 0);   // draw = 0.045
+    const bandD = YCalc.computeScenario(bandPlan, bandScenario(50000), 0);   // draw = 0.050
+    assert('draw === 0.020 exactly', Math.abs(bandA.draw - 0.020) < 1e-9, 'got ' + bandA.draw);
+    assert('band "a" at draw === 0.020 (≤2.0% inclusive)', bandA.band === 'a', 'got ' + bandA.band);
+    assert('draw === 0.035 exactly', Math.abs(bandB.draw - 0.035) < 1e-9, 'got ' + bandB.draw);
+    assert('band "b" at draw === 0.035 (≤3.5% inclusive)', bandB.band === 'b', 'got ' + bandB.band);
+    assert('draw === 0.045 exactly', Math.abs(bandC.draw - 0.045) < 1e-9, 'got ' + bandC.draw);
+    assert('band "c" at draw === 0.045 (≤4.5% inclusive)', bandC.band === 'c', 'got ' + bandC.band);
+    assert('draw === 0.050 exactly', Math.abs(bandD.draw - 0.050) < 1e-9, 'got ' + bandD.draw);
+    assert('band "d" above 4.5%', bandD.band === 'd', 'got ' + bandD.band);
+
+    // floor35 / floor45 / headroom math (using bandA: deficit = 20000)
+    assert('floor35 = deficit / 0.035', Math.abs(bandA.floor35 - 20000 / 0.035) < 0.01, 'got ' + bandA.floor35.toFixed(2));
+    assert('floor45 = deficit / 0.045', Math.abs(bandA.floor45 - 20000 / 0.045) < 0.01, 'got ' + bandA.floor45.toFixed(2));
+    assert('headroom = portfolio − floor35', Math.abs(bandA.headroom - (1000000 - 20000 / 0.035)) < 0.01, 'got ' + bandA.headroom.toFixed(2));
+
+    // ---- Plan — baselineOverride / incomeOverride ----
+    section('Plan — computeScenario baseline/income overrides');
+    const ovPlan = { portfolio: 100000, externalIncome: 8000, levers: [], scenarios: [], triggers: [] };
+    const ovScenario = { id: 'ov', name: 'ov', leverRefs: [], baselineOverride: 15000, incomeOverride: 5000, notes: '', log: [], pinned: false, updatedAt: 0 };
+    const ovResult = YCalc.computeScenario(ovPlan, ovScenario, 20000); // currentCeiling=20000, ignored due to override
+    assert('baselineOverride wins over currentCeiling', ovResult.baseline === 15000, 'got ' + ovResult.baseline);
+    assert('incomeOverride wins over plan.externalIncome', ovResult.income === 5000, 'got ' + ovResult.income);
+    assert('deficit = baselineOverride − incomeOverride (10000)', Math.abs(ovResult.deficit - 10000) < 0.01, 'got ' + ovResult.deficit);
+
+    const noOvScenario = { id: 'noov', name: 'noov', leverRefs: [], baselineOverride: null, incomeOverride: null, notes: '', log: [], pinned: false, updatedAt: 0 };
+    const noOvResult = YCalc.computeScenario(ovPlan, noOvScenario, 20000);
+    assert('null baselineOverride falls back to currentCeiling', noOvResult.baseline === 20000, 'got ' + noOvResult.baseline);
+    assert('null incomeOverride falls back to plan.externalIncome', noOvResult.income === 8000, 'got ' + noOvResult.income);
+
+    // ---- Plan — enabled/disabled/negative levers ----
+    section('Plan — computeScenario lever levSum (disabled + negative + missing)');
+    const leverPlan = {
+      portfolio: 100000, externalIncome: 0,
+      levers: [
+        { id: 'lv1', label: 'Pos', amount: 1000, reversibility: 'instant', horizon: '', beneficiary: '', durability: 'high', notes: '', updatedAt: 0 },
+        { id: 'lv2', label: 'Neg', amount: -300, reversibility: 'instant', horizon: '', beneficiary: '', durability: 'high', notes: '', updatedAt: 0 },
+        { id: 'lv3', label: 'Excluded', amount: 5000, reversibility: 'instant', horizon: '', beneficiary: '', durability: 'high', notes: '', updatedAt: 0 },
+      ],
+      scenarios: [], triggers: [],
+    };
+    const leverScenario = {
+      id: 'lev', name: 'lev',
+      leverRefs: [
+        { leverId: 'lv1', enabled: true, amountOverride: null },   // +1000
+        { leverId: 'lv2', enabled: true, amountOverride: null },   // -300
+        { leverId: 'lv3', enabled: false, amountOverride: null },  // disabled → excluded
+        { leverId: 'lv_missing', enabled: true, amountOverride: null }, // lever no longer exists → skipped
+      ],
+      baselineOverride: 0, incomeOverride: 0, notes: '', log: [], pinned: false, updatedAt: 0,
+    };
+    const leverResult = YCalc.computeScenario(leverPlan, leverScenario, 0);
+    assert('levSum = 1000 − 300 = 700 (disabled + missing lever excluded)', Math.abs(leverResult.levSum - 700) < 0.01, 'got ' + leverResult.levSum);
+    assert('spend = baseline + levSum = 700', Math.abs(leverResult.spend - 700) < 0.01, 'got ' + leverResult.spend);
+    assert('deficit = max(0, spend − income) = 700', Math.abs(leverResult.deficit - 700) < 0.01, 'got ' + leverResult.deficit);
+
+    // amountOverride on a lever ref overrides the lever's own amount
+    const overrideRefScenario = {
+      id: 'ovref', name: 'ovref',
+      leverRefs: [{ leverId: 'lv1', enabled: true, amountOverride: 2500 }],
+      baselineOverride: 0, incomeOverride: 0, notes: '', log: [], pinned: false, updatedAt: 0,
+    };
+    const overrideRefResult = YCalc.computeScenario(leverPlan, overrideRefScenario, 0);
+    assert('leverRef.amountOverride wins over lever.amount', Math.abs(overrideRefResult.levSum - 2500) < 0.01, 'got ' + overrideRefResult.levSum);
+
+    // ---- Plan — zero portfolio (draw dormant) ----
+    section('Plan — computeScenario zero portfolio → draw null');
+    const zeroPortfolioPlan = { portfolio: 0, externalIncome: 0, levers: [], scenarios: [], triggers: [] };
+    const zeroPortfolioResult = YCalc.computeScenario(zeroPortfolioPlan, bandScenario(20000), 0);
+    assert('draw === null when portfolio is 0', zeroPortfolioResult.draw === null, 'got ' + zeroPortfolioResult.draw);
+    assert('band === null when draw is null', zeroPortfolioResult.band === null, 'got ' + zeroPortfolioResult.band);
+
+    // ---- Plan — computeScenarios sort (pinned-first, then draw ascending) ----
+    section('Plan — computeScenarios sort order (seeded plan)');
+    const seededPlan = YData.buildSeed().plan;
+    const seededResults = YCalc.computeScenarios(seededPlan, 25000);
+    assert('computeScenarios returns 5 scenarios', seededResults.length === 5, 'got ' + seededResults.length);
+    assert('pinned scenario ("Fortress") sorts first', seededResults[0].scenario.id === 'sc_fortress', 'got ' + seededResults[0].scenario.id);
+    const unpinnedDraws = seededResults.slice(1).map(r => r.draw);
+    const sortedUnpinned = unpinnedDraws.slice().sort((a, b) => a - b);
+    assert('unpinned scenarios sorted by draw ascending', JSON.stringify(unpinnedDraws) === JSON.stringify(sortedUnpinned),
+      'got [' + unpinnedDraws.join(', ') + ']');
+
+    // ---- Plan — checkTriggers ----
+    section('Plan — checkTriggers breach detection');
+    const triggerPlan = {
+      portfolio: 350000,
+      triggers: [
+        { id: 't1', label: 'A', portfolioFloor: 400000, action: 'x', updatedAt: 0 },
+        { id: 't2', label: 'B', portfolioFloor: 330000, action: 'y', updatedAt: 0 },
+        { id: 't3', label: 'C', portfolioFloor: 270000, action: 'z', updatedAt: 0 },
+      ],
+    };
+    const triggerResults = YCalc.checkTriggers(triggerPlan);
+    assert('trigger breached when portfolio < floor (400000)', triggerResults[0].breached === true, 'got ' + triggerResults[0].breached);
+    assert('trigger not breached when portfolio ≥ floor (330000)', triggerResults[1].breached === false, 'got ' + triggerResults[1].breached);
+    assert('trigger not breached when portfolio ≥ floor (270000)', triggerResults[2].breached === false, 'got ' + triggerResults[2].breached);
+
     // ---- Summary ----
     const total = passed + failed;
     const summary = document.getElementById('summary');

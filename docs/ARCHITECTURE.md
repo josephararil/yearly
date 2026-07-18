@@ -279,6 +279,62 @@ Date(trip.createdAt || 0))`, string-compared descending. This is purely additive
 on top of the family-wide ledger above — it does not affect `balance`/`accrued`/`travelProjection`
 or any other existing field.
 
+### Plan — `computeScenario`/`computeScenarios`/`checkTriggers`
+
+Pure arithmetic backing the Plan tab (`y/plan.jsx`, `window.YPlan`), a contained decision notebook:
+named lifestyle scenarios resolve to a deficit and an implied portfolio draw rate, plus the recorded
+reasoning behind them. It informs the ceiling decision but never participates in it — nothing here
+feeds `computeStats`/`buildCallouts`/`computeFun`/`computeTravel`, and none of those read `store.plan`.
+
+`computeScenario(plan, scenario, currentCeiling)` resolves one scenario against the shared lever
+library and the portfolio:
+```
+baseline = scenario.baselineOverride ?? currentCeiling ?? 0
+income   = scenario.incomeOverride ?? plan.externalIncome
+levSum   = Σ enabled leverRefs → (amountOverride ?? lever.amount)   // a referenced lever that no
+                                                                     // longer exists is skipped
+spend    = baseline + levSum
+deficit  = max(0, spend − income)
+draw     = plan.portfolio > 0 ? deficit / plan.portfolio : null    // null (dormant) until configured
+band     = draw ≤ .020 "a" | ≤ .035 "b" | ≤ .045 "c" | else "d"    // null band when draw is null
+floor35  = deficit / 0.035        // portfolio at which draw crosses 3.5%
+floor45  = deficit / 0.045
+headroom = plan.portfolio − floor35   // may be negative
+```
+Returns all of the above alongside the inputs (`baseline`, `income`, `levSum`, `spend`).
+`computeScenarios(plan, currentCeiling)` maps every `plan.scenarios` entry through
+`computeScenario` and sorts pinned-first, then by `draw` ascending within each pin group (a null
+draw sorts last). `checkTriggers(plan)` maps `plan.triggers` to `{...trigger, breached: plan.portfolio
+< trigger.portfolioFloor}` — a read-only checklist, no notifications or callout integration.
+
+The one live-data contact point: `analysis.jsx` passes the current `stats` object as a prop into
+`PlanTab`, which derives a read-only "this year implies" figure in the header strip —
+`max(0, stats.projection − plan.externalIncome) / plan.portfolio` — showing what the *actual*
+current-year projection would imply as a draw rate. Nothing else in Plan touches live stats; every
+other number is scenario arithmetic against manually-entered `plan.portfolio`/`plan.externalIncome`.
+
+`store.plan` (settings-blob synced, like `trips`/`travel` — no D1 schema, no endpoints):
+```
+store.plan = {
+  portfolio: number,          // EUR, manually updated
+  portfolioAsOf: "YYYY-MM-DD",// localISO date of last update
+  externalIncome: number,     // EUR/yr net non-portfolio income
+  levers:    [{ id: "lv_…", label, amount, reversibility: "instant"|"medium"|"low",
+                horizon: string, beneficiary: string, durability: "high"|"medium"|"low",
+                notes, updatedAt }],
+  scenarios: [{ id: "sc_…", name,
+                leverRefs: [{ leverId, enabled, amountOverride }],
+                baselineOverride, incomeOverride, notes,
+                log: [{ id, date, text }],   // decision log, newest-first
+                pinned, updatedAt }],
+  triggers:  [{ id: "tr_…", label, portfolioFloor, action, updatedAt }],
+}
+```
+Deleting a lever referenced by any scenario's `leverRefs` is blocked in the UI (same pattern as
+trip-delete-blocked-while-has-transactions). All timestamps are ms; all dates via `localISO`.
+`data.jsx`'s `buildSeedPlan()` seeds a one-time default (never overwrites an existing `store.plan`)
+with fixed ids/timestamps so independent devices migrate to a byte-identical seed.
+
 ## Store shape — `y/data.jsx` (`window.YData`)
 
 The persisted store shape, the fixed 18-category list (`CATEGORIES`, id→icon→color), default

@@ -1039,6 +1039,60 @@ function computeStats(store, year, asOfDate, staleDays = 0) {
     return { low, high, bandAmt, mid, histN, histMean, histMin, histMax };
   }
 
+  // ---- Plan (scenario & decision-record view) — pure arithmetic, no UI deps ----
+  // Contained decision notebook: named lifestyle scenarios resolve to a deficit and an implied
+  // portfolio draw rate. Informs the ceiling decision; never feeds computeStats/buildCallouts.
+
+  // computeScenario — resolve one scenario against the shared lever library and portfolio.
+  function computeScenario(plan, scenario, currentCeiling) {
+    const baseline = scenario.baselineOverride ?? currentCeiling ?? 0;
+    const income = scenario.incomeOverride ?? plan.externalIncome;
+    const leverById = Object.fromEntries((plan.levers || []).map((l) => [l.id, l]));
+    const levSum = (scenario.leverRefs || []).reduce((sum, ref) => {
+      if (!ref.enabled) return sum;
+      const lever = leverById[ref.leverId];
+      if (!lever) return sum; // referenced lever no longer exists — skip
+      return sum + (ref.amountOverride ?? lever.amount);
+    }, 0);
+    const spend = baseline + levSum;
+    const deficit = Math.max(0, spend - income);
+    const draw = plan.portfolio > 0 ? deficit / plan.portfolio : null;
+    // band is null (sentinel) when draw itself is null — portfolio ≤ 0, i.e. undefined until
+    // Settings configures a portfolio value. Mirrors drawZone()'s "dormant until configured" rule.
+    let band = null;
+    if (draw !== null) {
+      band = draw <= 0.020 ? "a" : draw <= 0.035 ? "b" : draw <= 0.045 ? "c" : "d";
+    }
+    const floor35 = deficit / 0.035;
+    const floor45 = deficit / 0.045;
+    const headroom = plan.portfolio - floor35;
+    return { baseline, income, levSum, spend, deficit, draw, band, floor35, floor45, headroom };
+  }
+
+  // computeScenarios — every plan.scenarios resolved and sorted pinned-first, then draw ascending.
+  // A null draw (no portfolio configured) sorts after every numeric draw within its pin group.
+  function computeScenarios(plan, currentCeiling) {
+    const rows = (plan.scenarios || []).map((scenario) => ({
+      scenario,
+      ...computeScenario(plan, scenario, currentCeiling),
+    }));
+    return rows.sort((a, b) => {
+      if (a.scenario.pinned !== b.scenario.pinned) return a.scenario.pinned ? -1 : 1;
+      if (a.draw === null && b.draw === null) return 0;
+      if (a.draw === null) return 1;
+      if (b.draw === null) return -1;
+      return a.draw - b.draw;
+    });
+  }
+
+  // checkTriggers — pre-agreed retreat rules, breached when the portfolio has fallen below floor.
+  function checkTriggers(plan) {
+    return (plan.triggers || []).map((trigger) => ({
+      ...trigger,
+      breached: plan.portfolio < trigger.portfolioFloor,
+    }));
+  }
+
   window.YCalc = {
     MONTHS, MONTHS_LONG, eur0, eur2, eurAuto, signedEur, pct, signedPct,
     dayOfYear, daysInYear, parseDate, localISO, fmtDateShort, fmtDateLong, yearTxns,
@@ -1046,5 +1100,6 @@ function computeStats(store, year, asOfDate, staleDays = 0) {
     rateForMonth, computeStats, computeFun, computeTravel, impliedDraw, drawZone, projectionAsOf, projectionHistory, buildCallouts,
     requiredDailyToHit, dailyHeadroom, neededMonthlyCap, projectedMonthEnd, monthEndBand,
     medianDailySpendYTD, historicalMonthRange,
+    computeScenario, computeScenarios, checkTriggers,
   };
 })();
