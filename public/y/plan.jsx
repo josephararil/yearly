@@ -7,6 +7,10 @@
 // and the expanded scenario (read + lever toggle/override + baseline/income override).
 // Phase 3: decision log, pin/duplicate/delete, the lever library (add/edit/delete-blocked-while-
 // referenced) and the triggers block (add/edit/delete) — the full editing surface.
+// Phase 4: builder-first redesign — a shared comparison axis (all scenarios as dots on one draw
+// scale) plus an always-visible builder (the selected scenario's levers/overrides/result, edited in
+// local sandbox state that never touches the store until Save). Lever library and triggers stay as
+// collapsed sections underneath, unchanged.
 (function () {
   const { YData, YCalc, YUI } = window;
   const { eur0, localISO } = YCalc;
@@ -124,30 +128,7 @@
     );
   }
 
-  // ---------- Draw ladder ----------
-
-  // Full-width hairline axis, 0–5%, faint vertical rules at 2.0 / 3.5 / 4.5, a dot at the
-  // scenario's draw (terracotta only for band "d"; ink otherwise). No dot for a null draw
-  // (portfolio not configured).
-  function DrawAxis({ draw, band }) {
-    const clampPct = (v) => Math.max(0, Math.min(100, (v * 100 / 5) * 100));
-    const dotLeft = draw != null ? clampPct(draw) : null;
-    const dotColor = band === "d" ? "var(--terra)" : "var(--ink)";
-    return (
-      <div style={{ position: "relative", height: 14, marginTop: 8 }}>
-        <div style={{ position: "absolute", left: 0, right: 0, top: 6, height: 1, background: "var(--hair)" }} />
-        {[2.0, 3.5, 4.5].map((v) => (
-          <div key={v} style={{ position: "absolute", left: (v / 5 * 100) + "%", top: 2, width: 1, height: 10, background: "var(--hair-strong)" }} />
-        ))}
-        {dotLeft != null && (
-          <div style={{
-            position: "absolute", left: `calc(${dotLeft}% - 4px)`, top: 2, width: 8, height: 8,
-            borderRadius: "50%", background: dotColor,
-          }} />
-        )}
-      </div>
-    );
-  }
+  // ---------- Small shared inline-edit inputs ----------
 
   function NullableNumInput({ value, onCommit, placeholder, width }) {
     const [val, setVal] = React.useState(value == null ? "" : String(value));
@@ -167,6 +148,70 @@
         onBlur={commit}
         onKeyDown={(e) => { if (e.key === "Enter") e.target.blur(); }}
       />
+    );
+  }
+
+  // Inline-editable heading text (scenario name). Click to edit, blur/Enter commits, Escape cancels;
+  // an empty commit is discarded (reverts to the previous value).
+  function InlineEditText({ value, onCommit }) {
+    const [editing, setEditing] = React.useState(false);
+    const [val, setVal] = React.useState(value);
+    React.useEffect(() => { if (!editing) setVal(value); }, [value, editing]);
+    const commit = () => {
+      setEditing(false);
+      const trimmed = val.trim();
+      if (trimmed && trimmed !== value) onCommit(trimmed); else setVal(value);
+    };
+    if (editing) {
+      return (
+        <input
+          className="inp" autoFocus value={val}
+          style={{ height: 36, padding: "0 8px", fontSize: 19, fontWeight: 600, fontFamily: "var(--serif)", width: "auto", minWidth: 140 }}
+          onChange={(e) => setVal(e.target.value)}
+          onBlur={commit}
+          onKeyDown={(e) => { if (e.key === "Enter") commit(); if (e.key === "Escape") { setVal(value); setEditing(false); } }}
+        />
+      );
+    }
+    return (
+      <button
+        onClick={() => setEditing(true)}
+        style={{ background: "none", border: 0, padding: 0, cursor: "pointer", textAlign: "left", fontFamily: "var(--serif)", fontSize: 19, fontWeight: 600, color: "var(--ink)" }}
+      >
+        {value}
+      </button>
+    );
+  }
+
+  // Small muted tap-to-edit figure for the baseline/income line — a compact sibling of
+  // InlineEditNum, sized for inline mono text rather than a labeled stat block.
+  function InlineTapNum({ value, placeholder, onCommit }) {
+    const [editing, setEditing] = React.useState(false);
+    const [val, setVal] = React.useState(value == null ? "" : String(value));
+    React.useEffect(() => { if (!editing) setVal(value == null ? "" : String(value)); }, [value, editing]);
+    const commit = () => {
+      setEditing(false);
+      const raw = val.trim();
+      onCommit(raw === "" ? null : (Number.isFinite(parseFloat(raw)) ? parseFloat(raw) : null));
+    };
+    if (editing) {
+      return (
+        <input
+          className="inp inp-num" type="number" autoFocus value={val}
+          style={{ height: 24, padding: "0 6px", fontSize: 11.5, width: 84, fontFamily: "var(--mono)" }}
+          onChange={(e) => setVal(e.target.value)}
+          onBlur={commit}
+          onKeyDown={(e) => { if (e.key === "Enter") commit(); if (e.key === "Escape") setEditing(false); }}
+        />
+      );
+    }
+    return (
+      <button
+        onClick={() => setEditing(true)}
+        style={{ background: "none", border: 0, padding: 0, cursor: "pointer", fontFamily: "var(--mono)", fontSize: 11.5, color: "var(--muted)", textDecoration: "underline dotted", textUnderlineOffset: 2 }}
+      >
+        {value == null ? placeholder : eur0(value)}
+      </button>
     );
   }
 
@@ -225,159 +270,229 @@
     );
   }
 
-  // Expanded scenario — lever checklist (toggle enabled + amountOverride, live recompute),
-  // baseline/income override fields, the sensitivity line, notes, the decision log, and the
-  // pin/duplicate/delete controls.
-  function ExpandedScenario({ row, plan, setStore, onDuplicated, onDeleted }) {
-    const { scenario } = row;
-    const leverById = Object.fromEntries((plan.levers || []).map((l) => [l.id, l]));
+  // ---------- Comparison strip — one shared 0–5% axis, every scenario plotted as a dot ----------
 
-    const updateScenario = (updater) => setStore((s) => ({
-      ...s,
-      plan: {
-        ...s.plan,
-        scenarios: s.plan.scenarios.map((sc) => (sc.id === scenario.id ? { ...updater(sc), updatedAt: Date.now() } : sc)),
-      },
-    }));
+  const BAND_WASH = { a: "var(--good-dim)", b: "var(--good-dim)", c: "var(--watch-dim)", d: "var(--alert-dim)" };
+  const bandDotColor = (band) => (band === "d" ? "var(--terra)" : "var(--ink)");
+  const leftPct = (draw) => (draw == null ? null : Math.min(100, (draw / 0.05) * 100));
 
-    const toggleLever = (leverId) => updateScenario((sc) => ({
-      ...sc,
-      leverRefs: sc.leverRefs.map((ref) => (ref.leverId === leverId ? { ...ref, enabled: !ref.enabled } : ref)),
-    }));
-
-    const setLeverOverride = (leverId, val) => updateScenario((sc) => ({
-      ...sc,
-      leverRefs: sc.leverRefs.map((ref) => (ref.leverId === leverId ? { ...ref, amountOverride: val } : ref)),
-    }));
-
-    const setBaselineOverride = (val) => updateScenario((sc) => ({ ...sc, baselineOverride: val }));
-    const setIncomeOverride = (val) => updateScenario((sc) => ({ ...sc, incomeOverride: val }));
-    const togglePinned = () => updateScenario((sc) => ({ ...sc, pinned: !sc.pinned }));
-
-    const addLeverRef = (leverId) => updateScenario((sc) => ({
-      ...sc,
-      leverRefs: [...sc.leverRefs, { leverId, enabled: true, amountOverride: null }],
-    }));
-
-    const availableLevers = (plan.levers || []).filter(
-      (l) => !scenario.leverRefs.some((ref) => ref.leverId === l.id)
-    );
-
-    const duplicateScenario = () => {
-      const newId = "sc_" + YData.uid();
-      const copy = {
-        ...scenario,
-        id: newId,
-        name: scenario.name + " (copy)",
-        leverRefs: scenario.leverRefs.map((ref) => ({ ...ref })),
-        log: [{ id: YData.uid(), date: localISO(new Date()), text: `Duplicated from "${scenario.name}".` }],
-        pinned: false,
-        updatedAt: Date.now(),
-      };
-      setStore((s) => ({ ...s, plan: { ...s.plan, scenarios: [...s.plan.scenarios, copy] } }));
-      onDuplicated(newId);
-    };
-
-    const deleteScenario = () => {
-      setStore((s) => ({ ...s, plan: { ...s.plan, scenarios: s.plan.scenarios.filter((sc) => sc.id !== scenario.id) } }));
-      onDeleted();
-    };
+  // Only the SELECTED scenario ever renders a name label — every other scenario is an unlabeled
+  // dot. This is a deliberate simplification: with 5+ scenarios, several can land at nearly
+  // identical draws (two seed scenarios tie exactly), and no fixed above/below alternation avoids
+  // every collision at small mobile widths. One label at a time never collides with anything, and
+  // tapping any dot both selects it (revealing its name) and drives the builder — the label IS the
+  // selection state, not a separate always-on annotation.
+  function ComparisonStrip({ rows, selectedId, liveRow, dirty, onSelect }) {
+    const plotRows = rows.map((r) => (r.scenario.id === selectedId && liveRow ? { ...r, draw: liveRow.draw, band: liveRow.band } : r));
+    const savedSelected = dirty ? rows.find((r) => r.scenario.id === selectedId) : null;
 
     return (
-      <div style={{ padding: "2px 2px 14px" }}>
-        <div style={{ marginBottom: 14 }}>
-          {scenario.leverRefs.length > 0 && <div className="stat-label" style={{ marginBottom: 4 }}>Levers</div>}
-          {scenario.leverRefs.map((ref) => {
-            const lever = leverById[ref.leverId];
-            if (!lever) return null;
+      <div style={{ paddingTop: 18, marginBottom: 10 }}>
+        <div style={{ position: "relative", height: 36 }}>
+          <div style={{ position: "absolute", left: 0, width: "40%", top: 0, height: 10, background: "color-mix(in srgb, var(--sage) 5%, transparent)" }} />
+          <div style={{ position: "absolute", left: "40%", width: "30%", top: 0, height: 10, background: "color-mix(in srgb, var(--sage) 8%, transparent)" }} />
+          <div style={{ position: "absolute", left: "70%", width: "20%", top: 0, height: 10, background: "color-mix(in srgb, var(--amber) 9%, transparent)" }} />
+          <div style={{ position: "absolute", left: "90%", width: "10%", top: 0, height: 10, background: "color-mix(in srgb, var(--terra) 11%, transparent)" }} />
+          {[2.0, 3.5, 4.5].map((v) => (
+            <React.Fragment key={v}>
+              <div style={{ position: "absolute", left: (v / 5 * 100) + "%", top: -4, width: 1, height: 18, background: "var(--hair-strong)" }} />
+              <div style={{ position: "absolute", left: (v / 5 * 100) + "%", top: 16, transform: "translateX(-50%)", fontFamily: "var(--mono)", fontSize: 8.5, color: "var(--muted)" }}>{v.toFixed(1)}</div>
+            </React.Fragment>
+          ))}
+          {savedSelected && leftPct(savedSelected.draw) != null && (
+            <div style={{
+              position: "absolute", left: `calc(${leftPct(savedSelected.draw)}% - 5px)`, top: -4, width: 10, height: 10,
+              borderRadius: "50%", border: "1.5px solid var(--muted)", background: "var(--paper)",
+            }} />
+          )}
+          {plotRows.map((r) => {
+            const selected = r.scenario.id === selectedId;
+            const pct = leftPct(r.draw);
+            const clamped = r.draw != null && r.draw > 0.05;
+            const label = r.scenario.name + (clamped ? " +" : "");
+            const size = selected ? 12 : 8;
             return (
-              <div key={ref.leverId} style={{ display: "flex", alignItems: "center", gap: 10, padding: "7px 0", borderBottom: "1px solid var(--hair)" }}>
-                <button
-                  onClick={() => toggleLever(ref.leverId)}
-                  aria-label={ref.enabled ? "Disable lever" : "Enable lever"}
-                  style={{
-                    width: 18, height: 18, borderRadius: 4, flexShrink: 0, padding: 0,
-                    border: "1px solid " + (ref.enabled ? "var(--terra)" : "var(--hair-strong)"),
-                    background: ref.enabled ? "var(--terra)" : "transparent",
-                    display: "flex", alignItems: "center", justifyContent: "center", cursor: "pointer",
-                  }}
-                >
-                  {ref.enabled && <window.Icon name="check" size={12} style={{ color: "var(--paper)" }} />}
-                </button>
-                <span style={{ flex: 1, minWidth: 0, fontFamily: "var(--sans)", fontSize: 13, color: ref.enabled ? "var(--ink)" : "var(--muted)", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
-                  {lever.label}
-                  <span style={{ fontFamily: "var(--mono)", fontSize: 10.5, color: "var(--muted)", marginLeft: 6 }}>
-                    ({eur0(lever.amount)})
-                  </span>
-                </span>
-                <NullableNumInput value={ref.amountOverride} onCommit={(v) => setLeverOverride(ref.leverId, v)} placeholder={String(lever.amount)} width={84} />
-              </div>
+              <button
+                key={r.scenario.id}
+                onClick={() => onSelect(r.scenario.id)}
+                style={{
+                  position: "absolute", left: pct == null ? "auto" : `${pct}%`, right: pct == null ? 0 : "auto", top: 5 - size / 2,
+                  transform: pct == null ? "none" : "translateX(-50%)", background: "none", border: 0, padding: 4, margin: -4,
+                  cursor: "pointer", zIndex: selected ? 1 : 0,
+                }}
+              >
+                <span style={{ display: "block", width: size, height: size, borderRadius: "50%", background: selected ? "var(--terra)" : bandDotColor(r.band) }} />
+                {selected && (
+                  <span style={{ position: "absolute", bottom: "100%", left: "50%", transform: "translateX(-50%)", marginBottom: 4, fontFamily: "var(--mono)", fontSize: 10.5, fontWeight: 600, color: "var(--ink)", whiteSpace: "nowrap" }}>{label}</span>
+                )}
+              </button>
             );
           })}
-          <AddLeverPicker availableLevers={availableLevers} onAdd={addLeverRef} />
-        </div>
-
-        <div style={{ display: "flex", gap: 12, marginBottom: 14 }}>
-          <div style={{ flex: 1 }}>
-            <div className="stat-label" style={{ marginBottom: 4 }}>Baseline override</div>
-            <NullableNumInput value={scenario.baselineOverride} onCommit={setBaselineOverride} placeholder="live ceiling" />
-          </div>
-          <div style={{ flex: 1 }}>
-            <div className="stat-label" style={{ marginBottom: 4 }}>Income override</div>
-            <NullableNumInput value={scenario.incomeOverride} onCommit={setIncomeOverride} placeholder={String(plan.externalIncome || 0)} />
-          </div>
-        </div>
-
-        <div style={{ fontFamily: "var(--mono)", fontSize: 11.5, color: "var(--muted)", marginBottom: scenario.notes ? 10 : 0 }}>
-          crosses 3.5% below {eur0(row.floor35)} · 4.5% below {eur0(row.floor45)} · headroom {eur0(row.headroom)}
-        </div>
-
-        {scenario.notes && (
-          <div style={{ fontFamily: "var(--sans)", fontSize: 13, color: "var(--ink-2)", lineHeight: 1.5 }}>
-            {scenario.notes}
-          </div>
-        )}
-
-        <DecisionLog scenario={scenario} updateScenario={updateScenario} />
-
-        <div style={{ display: "flex", gap: 16, alignItems: "center", marginTop: 14, paddingTop: 12, borderTop: "1px solid var(--hair)" }}>
-          <button className="linklike" onClick={togglePinned}>{scenario.pinned ? "Unpin" : "Pin"}</button>
-          <button className="linklike" onClick={duplicateScenario}>Duplicate</button>
-          <span style={{ flex: 1 }} />
-          <ConfirmDelete onConfirm={deleteScenario} />
         </div>
       </div>
     );
   }
 
-  function ScenarioRow({ row, open, onToggle, plan, setStore, onDuplicated, onDeleted }) {
-    const { scenario, deficit, draw, band } = row;
+  // ---------- The builder — the centerpiece; edits are local sandbox state until Save ----------
+
+  const zoneVerdict = (band, liveRow) => {
+    if (band === "a") return "within 2.0% · survives any recorded market history";
+    if (band === "b") return `within the 3.5% envelope · headroom ${eur0(liveRow.headroom)}`;
+    if (band === "c") return `over the envelope · crosses 3.5% below ${eur0(liveRow.floor35)}`;
+    if (band === "d") return "over 4.5% · not sustainable without income";
+    return "set a portfolio in the header above to see the draw-rate verdict";
+  };
+  const zoneTextColor = (band) => (band === "d" ? "var(--terra)" : band === "c" ? "var(--amber)" : band === "a" || band === "b" ? "var(--sage)" : "var(--muted)");
+
+  function ScenarioBuilder({
+    plan, rows, scenario, sandbox, setSandbox, dirty, pendingTarget, liveRow, currentCeiling,
+    requestSwitch, updateScenario, duplicateScenario, deleteScenario, onDirtyAction, onPendingAction, onCancelPending,
+  }) {
+    const leverById = Object.fromEntries((plan.levers || []).map((l) => [l.id, l]));
+    const availableLevers = (plan.levers || []).filter((l) => !sandbox.leverRefs.some((ref) => ref.leverId === l.id));
+
+    const toggleLever = (leverId) => setSandbox((sb) => ({
+      ...sb, leverRefs: sb.leverRefs.map((ref) => (ref.leverId === leverId ? { ...ref, enabled: !ref.enabled } : ref)),
+    }));
+    const setLeverOverride = (leverId, val) => setSandbox((sb) => ({
+      ...sb, leverRefs: sb.leverRefs.map((ref) => (ref.leverId === leverId ? { ...ref, amountOverride: val } : ref)),
+    }));
+    const addLeverRef = (leverId) => setSandbox((sb) => ({ ...sb, leverRefs: [...sb.leverRefs, { leverId, enabled: true, amountOverride: null }] }));
+    const setBaselineOverride = (v) => setSandbox((sb) => ({ ...sb, baselineOverride: v }));
+    const setIncomeOverride = (v) => setSandbox((sb) => ({ ...sb, incomeOverride: v }));
+    const togglePinned = () => updateScenario((sc) => ({ ...sc, pinned: !sc.pinned }));
+    const renameScenario = (name) => updateScenario((sc) => ({ ...sc, name }));
+
     return (
-      <div style={{ borderBottom: "1px solid var(--hair)" }}>
-        <button
-          onClick={onToggle}
-          aria-expanded={open}
-          style={{ width: "100%", background: "none", border: 0, padding: "12px 0", cursor: "pointer", textAlign: "left" }}
-        >
-          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline", gap: 10 }}>
-            <span style={{ display: "flex", alignItems: "center", gap: 6, minWidth: 0, flex: 1 }}>
-              <span style={{ fontFamily: "var(--sans)", fontSize: 14, color: "var(--ink)", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
-                {scenario.name}
-              </span>
-              {scenario.pinned && <TxTag label="PINNED" color="var(--terra)" />}
-            </span>
-            <span style={{ display: "flex", alignItems: "baseline", gap: 10, flexShrink: 0 }}>
-              <span style={{ fontFamily: "var(--mono)", fontSize: 13, fontWeight: 600, color: "var(--ink)" }}>{eur0(deficit)}</span>
-              <span style={{ fontFamily: "var(--mono)", fontSize: 12, color: band === "d" ? "var(--terra)" : "var(--muted)", minWidth: 42, textAlign: "right" }}>
-                {draw != null ? pct1(draw) : "—"}
-              </span>
-            </span>
+      <div>
+        <div style={{ display: "flex", alignItems: "center", gap: 10, flexWrap: "wrap", marginTop: 10, marginBottom: 6 }}>
+          <InlineEditText value={scenario.name} onCommit={renameScenario} />
+          {scenario.pinned && <TxTag label="PINNED" color="var(--terra)" />}
+          <span style={{ flex: 1 }} />
+          <select className="inp" style={{ height: 30, fontSize: 11.5, maxWidth: 160 }} value={scenario.id} onChange={(e) => requestSwitch(e.target.value)}>
+            {rows.map((r) => <option key={r.scenario.id} value={r.scenario.id}>{r.scenario.name}</option>)}
+          </select>
+        </div>
+        <div style={{ display: "flex", gap: 16, alignItems: "center", marginBottom: 14 }}>
+          <button className="linklike" onClick={togglePinned}>{scenario.pinned ? "Unpin" : "Pin"}</button>
+          <button className="linklike" onClick={duplicateScenario}>Duplicate</button>
+          <span style={{ flex: 1 }} />
+          <ConfirmDelete onConfirm={deleteScenario} />
+        </div>
+
+        {sandbox.leverRefs.map((ref) => {
+          const lever = leverById[ref.leverId];
+          if (!lever) return null;
+          const amount = ref.amountOverride ?? lever.amount;
+          return (
+            <div key={ref.leverId} style={{ borderBottom: "1px solid var(--hair)" }}>
+              <div
+                onClick={() => toggleLever(ref.leverId)}
+                style={{ display: "flex", alignItems: "center", gap: 10, minHeight: 44, cursor: "pointer", opacity: ref.enabled ? 1 : 0.45 }}
+              >
+                <span
+                  aria-label={ref.enabled ? "Disable lever" : "Enable lever"}
+                  style={{
+                    width: 18, height: 18, borderRadius: 4, flexShrink: 0,
+                    border: "1px solid " + (ref.enabled ? "var(--terra)" : "var(--hair-strong)"),
+                    background: ref.enabled ? "var(--terra)" : "transparent",
+                    display: "flex", alignItems: "center", justifyContent: "center",
+                  }}
+                >
+                  {ref.enabled && <window.Icon name="check" size={12} style={{ color: "var(--paper)" }} />}
+                </span>
+                <span style={{ flex: 1, minWidth: 0, fontFamily: "var(--sans)", fontSize: 14, color: ref.enabled ? "var(--ink)" : "var(--muted)", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+                  {lever.label}
+                </span>
+                <span style={{ fontFamily: "var(--mono)", fontSize: 14, fontWeight: 600, color: "var(--ink)", flexShrink: 0 }}>{eur0(amount)}</span>
+                {ref.enabled && (
+                  <span onClick={(e) => e.stopPropagation()}>
+                    <NullableNumInput value={ref.amountOverride} onCommit={(v) => setLeverOverride(ref.leverId, v)} placeholder={String(lever.amount)} width={84} />
+                  </span>
+                )}
+              </div>
+              {ref.enabled && lever.scale && (
+                <input
+                  type="range" className="rng"
+                  min={lever.scale.min} max={lever.scale.max} step={lever.scale.step}
+                  value={amount}
+                  onChange={(e) => setLeverOverride(ref.leverId, parseFloat(e.target.value))}
+                  style={{ width: "100%", marginBottom: 8, "--rng-fill": ((amount - lever.scale.min) / (lever.scale.max - lever.scale.min) * 100) + "%" }}
+                />
+              )}
+            </div>
+          );
+        })}
+        <AddLeverPicker availableLevers={availableLevers} onAdd={addLeverRef} />
+
+        <div style={{ marginTop: 12, fontFamily: "var(--mono)", fontSize: 11.5, color: "var(--muted)" }}>
+          baseline <InlineTapNum value={sandbox.baselineOverride} placeholder={`${eur0(currentCeiling)} (live ceiling)`} onCommit={setBaselineOverride} />
+          {" · "}income <InlineTapNum value={sandbox.incomeOverride} placeholder={eur0(plan.externalIncome || 0)} onCommit={setIncomeOverride} />
+        </div>
+
+        <div style={{ display: "flex", gap: 10, marginTop: 18, marginBottom: 8 }}>
+          <div style={{ flex: 1 }}>
+            <div className="stat-label">Spend</div>
+            <div style={{ fontFamily: "var(--mono)", fontSize: 18, fontWeight: 600, color: "var(--ink)" }}>{eur0(liveRow.spend)}</div>
           </div>
-          <DrawAxis draw={draw} band={band} />
+          <div style={{ flex: 1 }}>
+            <div className="stat-label">Deficit</div>
+            <div style={{ fontFamily: "var(--mono)", fontSize: 18, fontWeight: 600, color: "var(--ink)" }}>{eur0(liveRow.deficit)}</div>
+          </div>
+          <div style={{ flex: 1, textAlign: "right" }}>
+            <div className="stat-label">Draw</div>
+            <div style={{ fontFamily: "var(--mono)", fontSize: 29, fontWeight: 700, color: liveRow.band === "d" ? "var(--terra)" : "var(--ink)" }}>
+              {liveRow.draw != null ? pct1(liveRow.draw) : "—"}
+            </div>
+          </div>
+        </div>
+        <div style={{ background: BAND_WASH[liveRow.band] || "var(--paper-tint)", color: zoneTextColor(liveRow.band), fontFamily: "var(--sans)", fontSize: 12.5, padding: "9px 11px", borderRadius: 8 }}>
+          {zoneVerdict(liveRow.band, liveRow)}
+        </div>
+
+        {dirty && !pendingTarget && (
+          <div style={{ display: "flex", gap: 12, alignItems: "center", flexWrap: "wrap", marginTop: 12, fontFamily: "var(--mono)", fontSize: 11, color: "var(--muted)" }}>
+            <span>edited</span>
+            <button className="linklike" onClick={() => onDirtyAction("save")}>Save</button>
+            <button className="linklike" onClick={() => onDirtyAction("saveAsNew")}>Save as new</button>
+            <button className="linklike" onClick={() => onDirtyAction("revert")}>Revert</button>
+          </div>
+        )}
+        {pendingTarget && (
+          <div style={{ display: "flex", gap: 12, alignItems: "center", flexWrap: "wrap", marginTop: 12, fontFamily: "var(--mono)", fontSize: 11, color: "var(--muted)" }}>
+            <span>unsaved edits —</span>
+            <button className="linklike" onClick={() => onPendingAction("save")}>Save</button>
+            <button className="linklike" onClick={() => onPendingAction("saveAsNew")}>Save as new</button>
+            <button className="linklike" onClick={() => onPendingAction("revert")}>Revert</button>
+            <button className="linklike" onClick={onCancelPending}>Cancel</button>
+          </div>
+        )}
+
+        <NotesAndLog scenario={scenario} updateScenario={updateScenario} />
+      </div>
+    );
+  }
+
+  function NotesAndLog({ scenario, updateScenario }) {
+    const [open, setOpen] = React.useState(false);
+    const [notes, setNotes] = React.useState(scenario.notes || "");
+    React.useEffect(() => { setNotes(scenario.notes || ""); }, [scenario.id]);
+    const commitNotes = () => { if (notes !== (scenario.notes || "")) updateScenario((sc) => ({ ...sc, notes })); };
+
+    return (
+      <div style={{ marginTop: 18 }}>
+        <button type="button" className="opts-summary" onClick={() => setOpen(!open)} aria-expanded={open}>
+          <span>Notes & log</span>
+          <window.Icon name="chevronDown" size={16} style={{ color: "var(--muted)", transform: open ? "rotate(180deg)" : "none", transition: "transform var(--dur-fast) var(--ease)" }} />
         </button>
         <div className={"opts-body" + (open ? " open" : "")}>
           <div className="opts-body-inner">
-            <ExpandedScenario row={row} plan={plan} setStore={setStore} onDuplicated={onDuplicated} onDeleted={onDeleted} />
+            <textarea
+              className="inp" value={notes} placeholder="Notes…"
+              onChange={(e) => setNotes(e.target.value)}
+              onBlur={commitNotes}
+            />
+            <DecisionLog scenario={scenario} updateScenario={updateScenario} />
           </div>
         </div>
       </div>
@@ -394,14 +509,20 @@
     const [beneficiary, setBeneficiary] = React.useState(lever ? lever.beneficiary : "");
     const [durability, setDurability] = React.useState(lever ? lever.durability : "medium");
     const [notes, setNotes] = React.useState(lever ? lever.notes : "");
+    const [scaleMin, setScaleMin] = React.useState(lever && lever.scale ? String(lever.scale.min) : "");
+    const [scaleMax, setScaleMax] = React.useState(lever && lever.scale ? String(lever.scale.max) : "");
+    const [scaleStep, setScaleStep] = React.useState(lever && lever.scale ? String(lever.scale.step) : "");
     const valid = label.trim().length > 0;
 
     const save = () => {
       const n = parseFloat(amount);
+      const sMin = parseFloat(scaleMin), sMax = parseFloat(scaleMax), sStep = parseFloat(scaleStep);
+      const scale = (Number.isFinite(sMin) && Number.isFinite(sMax) && Number.isFinite(sStep) && sMax > sMin && sStep > 0)
+        ? { min: sMin, max: sMax, step: sStep } : undefined;
       onSave({
         label: label.trim(), amount: Number.isFinite(n) ? n : 0,
         reversibility, horizon: horizon.trim(), beneficiary: beneficiary.trim(),
-        durability, notes: notes.trim(),
+        durability, notes: notes.trim(), scale,
       });
     };
 
@@ -442,6 +563,14 @@
         <div className="field">
           <label>Notes</label>
           <textarea className="inp" value={notes} onChange={(e) => setNotes(e.target.value)} />
+        </div>
+        <div className="field">
+          <label>Scale (optional — renders a slider in the builder)</label>
+          <div style={{ display: "flex", gap: 10 }}>
+            <input className="inp inp-num" style={{ height: 36 }} type="number" placeholder="min" value={scaleMin} onChange={(e) => setScaleMin(e.target.value)} />
+            <input className="inp inp-num" style={{ height: 36 }} type="number" placeholder="max" value={scaleMax} onChange={(e) => setScaleMax(e.target.value)} />
+            <input className="inp inp-num" style={{ height: 36 }} type="number" placeholder="step" value={scaleStep} onChange={(e) => setScaleStep(e.target.value)} />
+          </div>
         </div>
         <div style={{ display: "flex", gap: 16 }}>
           <button className="linklike" disabled={!valid} onClick={save}>Save</button>
@@ -629,75 +758,154 @@
     );
   }
 
+  // Sandbox shape held for the selected scenario — the builder's local, unsaved edit surface.
+  // Never written to the store except via Save/Save as new.
+  const makeSandbox = (sc) => ({
+    leverRefs: (sc.leverRefs || []).map((ref) => ({ ...ref })),
+    baselineOverride: sc.baselineOverride,
+    incomeOverride: sc.incomeOverride,
+  });
+  const sandboxEqual = (a, b) => JSON.stringify(a) === JSON.stringify(b);
+
   function PlanTab({ store, setStore, stats }) {
     const plan = store.plan || { levers: [], scenarios: [], triggers: [] };
-    const [openId, setOpenId] = React.useState(null);
-    const [addingScenario, setAddingScenario] = React.useState(false);
-    const [newName, setNewName] = React.useState("");
-
     const currentCeiling = (store.years && store.currentYear != null && store.years[store.currentYear] && store.years[store.currentYear].ceiling) || stats.ceiling;
     const rows = YCalc.computeScenarios(plan, currentCeiling);
 
+    const [selectedId, setSelectedId] = React.useState(() => {
+      const pinned = rows.find((r) => r.scenario.pinned);
+      return pinned ? pinned.scenario.id : (rows[0] ? rows[0].scenario.id : null);
+    });
+    const [sandbox, setSandbox] = React.useState(() => {
+      const sel = (plan.scenarios || []).find((sc) => sc.id === selectedId);
+      return sel ? makeSandbox(sel) : null;
+    });
+    const [pendingTarget, setPendingTarget] = React.useState(null);
+
+    const selectedScenario = (plan.scenarios || []).find((sc) => sc.id === selectedId) || null;
+
+    // Reseed the sandbox whenever the selection actually changes (not on every store update).
+    React.useEffect(() => {
+      const sel = (plan.scenarios || []).find((sc) => sc.id === selectedId);
+      setSandbox(sel ? makeSandbox(sel) : null);
+      // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [selectedId]);
+
+    // If the selected scenario vanished (deleted elsewhere), fall back to pinned/first/none.
+    React.useEffect(() => {
+      if (selectedId && !(plan.scenarios || []).some((sc) => sc.id === selectedId)) {
+        const pinned = rows.find((r) => r.scenario.pinned);
+        setSelectedId(pinned ? pinned.scenario.id : (rows[0] ? rows[0].scenario.id : null));
+      }
+      // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [plan.scenarios]);
+
+    const dirty = !!(selectedScenario && sandbox && !sandboxEqual(sandbox, makeSandbox(selectedScenario)));
+
+    const liveRow = selectedScenario && sandbox
+      ? YCalc.computeScenario(plan, { ...selectedScenario, ...sandbox }, currentCeiling)
+      : null;
+
+    const updateScenario = (updater) => setStore((s) => ({
+      ...s,
+      plan: { ...s.plan, scenarios: s.plan.scenarios.map((sc) => (sc.id === selectedScenario.id ? { ...updater(sc), updatedAt: Date.now() } : sc)) },
+    }));
+
+    const saveSandbox = () => updateScenario((sc) => ({ ...sc, ...sandbox }));
+
+    const saveAsNew = () => {
+      const newId = "sc_" + YData.uid();
+      const copy = {
+        ...selectedScenario, ...sandbox, id: newId, name: selectedScenario.name + " (copy)",
+        log: [{ id: YData.uid(), date: localISO(new Date()), text: "Saved from builder" }],
+        pinned: false, updatedAt: Date.now(),
+      };
+      setStore((s) => ({ ...s, plan: { ...s.plan, scenarios: [...s.plan.scenarios, copy] } }));
+      return newId;
+    };
+
+    const requestSwitch = (targetId) => {
+      if (!targetId || targetId === selectedId) return;
+      if (dirty) setPendingTarget(targetId);
+      else setSelectedId(targetId);
+    };
+
+    const handleDirtyAction = (action) => {
+      if (action === "save") saveSandbox();
+      else if (action === "saveAsNew") setSelectedId(saveAsNew());
+      else if (action === "revert") setSandbox(makeSandbox(selectedScenario));
+    };
+
+    const handlePendingAction = (action) => {
+      if (action === "save") saveSandbox();
+      else if (action === "saveAsNew") saveAsNew();
+      const target = pendingTarget;
+      setPendingTarget(null);
+      setSelectedId(target);
+    };
+
+    const duplicateScenario = () => {
+      const newId = "sc_" + YData.uid();
+      const copy = {
+        ...selectedScenario, id: newId, name: selectedScenario.name + " (copy)",
+        leverRefs: selectedScenario.leverRefs.map((ref) => ({ ...ref })),
+        log: [{ id: YData.uid(), date: localISO(new Date()), text: `Duplicated from "${selectedScenario.name}".` }],
+        pinned: false, updatedAt: Date.now(),
+      };
+      setStore((s) => ({ ...s, plan: { ...s.plan, scenarios: [...s.plan.scenarios, copy] } }));
+      requestSwitch(newId);
+    };
+
+    const deleteScenario = () => {
+      setStore((s) => ({ ...s, plan: { ...s.plan, scenarios: s.plan.scenarios.filter((sc) => sc.id !== selectedScenario.id) } }));
+      setPendingTarget(null);
+    };
+
     const addScenario = () => {
-      const name = newName.trim();
-      if (!name) return;
       const newId = "sc_" + YData.uid();
       const scenario = {
-        id: newId, name, leverRefs: [],
+        id: newId, name: "New scenario", leverRefs: [],
         baselineOverride: null, incomeOverride: null, notes: "",
         log: [], pinned: false, updatedAt: Date.now(),
       };
       setStore((s) => ({ ...s, plan: { ...s.plan, scenarios: [...(s.plan.scenarios || []), scenario] } }));
-      setNewName("");
-      setAddingScenario(false);
-      setOpenId(newId);
+      requestSwitch(newId);
     };
 
     return (
       <div className="stagger" style={{ display: "flex", flexDirection: "column", gap: 0 }}>
         <HeaderStrip plan={plan} stats={stats} setStore={setStore} />
-        <div>
-          <div className="section-h" style={{ marginTop: 0, marginBottom: 4 }}>
-            <h2>Draw ladder</h2>
-            <span className="spacer" />
-            <span className="sec-meta">{rows.length} {rows.length === 1 ? "SCENARIO" : "SCENARIOS"}</span>
-          </div>
-          {addingScenario ? (
-            <div style={{ display: "flex", gap: 8, alignItems: "center", padding: "10px 0" }}>
-              <input
-                className="inp"
-                style={{ height: 34, padding: "0 10px", fontSize: 12.5 }}
-                placeholder="Scenario name"
-                autoFocus
-                value={newName}
-                onChange={(e) => setNewName(e.target.value)}
-                onKeyDown={(e) => { if (e.key === "Enter") addScenario(); if (e.key === "Escape") setAddingScenario(false); }}
-              />
-              <button className="linklike" onClick={addScenario}>Add</button>
-              <button className="linklike" onClick={() => { setAddingScenario(false); setNewName(""); }}>Cancel</button>
-            </div>
-          ) : (
-            <button className="linklike" style={{ marginTop: 4, marginBottom: 4 }} onClick={() => setAddingScenario(true)}>
-              <window.Icon name="plus" size={13} />Add scenario
-            </button>
-          )}
-          {rows.length === 0 ? (
-            <div className="empty" style={{ marginTop: 8 }}>No scenarios yet.</div>
-          ) : (
-            rows.map((row) => (
-              <ScenarioRow
-                key={row.scenario.id}
-                row={row}
-                plan={plan}
-                setStore={setStore}
-                open={openId === row.scenario.id}
-                onToggle={() => setOpenId(openId === row.scenario.id ? null : row.scenario.id)}
-                onDuplicated={(newId) => setOpenId(newId)}
-                onDeleted={() => setOpenId((cur) => (cur === row.scenario.id ? null : cur))}
-              />
-            ))
-          )}
-        </div>
+
+        {rows.length === 0 ? (
+          <div className="empty" style={{ marginTop: 8 }}>No scenarios yet.</div>
+        ) : (
+          <ComparisonStrip rows={rows} selectedId={selectedId} liveRow={liveRow} dirty={dirty} onSelect={requestSwitch} />
+        )}
+
+        {selectedScenario && sandbox && (
+          <ScenarioBuilder
+            plan={plan}
+            rows={rows}
+            scenario={selectedScenario}
+            sandbox={sandbox}
+            setSandbox={setSandbox}
+            dirty={dirty}
+            pendingTarget={pendingTarget}
+            liveRow={liveRow}
+            currentCeiling={currentCeiling}
+            requestSwitch={requestSwitch}
+            updateScenario={updateScenario}
+            duplicateScenario={duplicateScenario}
+            deleteScenario={deleteScenario}
+            onDirtyAction={handleDirtyAction}
+            onPendingAction={handlePendingAction}
+            onCancelPending={() => setPendingTarget(null)}
+          />
+        )}
+
+        <button className="linklike" style={{ marginTop: 12, marginBottom: 4 }} onClick={addScenario}>
+          <window.Icon name="plus" size={13} />Add scenario
+        </button>
 
         <LeverLibrary plan={plan} setStore={setStore} />
         <TriggersBlock plan={plan} setStore={setStore} />

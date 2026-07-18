@@ -85,6 +85,7 @@
           reversibility: "instant", horizon: "none",
           beneficiary: "Marti / family memories", durability: "high",
           notes: "Scalable €0–12k; cancel any quarter. Experiences resist hedonic adaptation (anticipation + event + memory). Solves none of the daily frictions.",
+          scale: { min: 0, max: 12000, step: 500 },
           updatedAt: 0,
         },
       ],
@@ -212,6 +213,12 @@
     // plan (scenario/decision-record view) default — one-time seed migration; never overwrites
     // an existing store.plan (mirrors the trips/travel migration pattern above).
     if (!s.plan) s.plan = buildSeedPlan();
+    // scale on "Extra travel & fun" — additive backfill for stores that migrated s.plan before
+    // the scale field existed (the builder renders a slider only when scale is present).
+    if (s.plan && Array.isArray(s.plan.levers)) {
+      const travelLever = s.plan.levers.find((l) => l.id === "lv_travel");
+      if (travelLever && !travelLever.scale) travelLever.scale = { min: 0, max: 12000, step: 500 };
+    }
     // legacy travel tx → trip_legacy (deterministic, idempotent; fixed timestamps keep the
     // settings-blob byte-identical across devices so merges never conflict)
     if (Array.isArray(s.transactions) && s.transactions.some((t) => t.travel && !t.trip_id)) {
