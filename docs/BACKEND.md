@@ -49,10 +49,11 @@ transactions(id TEXT PK, date TEXT NOT NULL, description TEXT,
 -- virtual INTEGER NOT NULL DEFAULT 0  (no-cash entry flag; only meaningful with amortize_months)
 
 -- 0009_tx_ts.sql
--- ts INTEGER  (nullable; ms epoch of the real transaction instant. date stays authoritative for all
---              day/month/year math; ts is additive — intra-day sort order only. Revolut writes
---              startedDate; manual writes logging-time/local-noon. Pipeline-authoritative, so a
---              re-import backfills it onto date-only legacy rows.)
+-- ts INTEGER  (nullable; ms epoch of the transaction instant. date stays authoritative for all
+--              day/month/year math; ts is additive — intra-day sort order only. Revolut writes the
+--              real startedDate; manual/other rows carry a local-noon-of-date anchor.
+--              Pipeline-authoritative, so re-importing a current-year Revolut row refreshes its
+--              real instant.)
 
 -- 0005_meta.sql (pipeline-written key/value store)
 meta(key TEXT PRIMARY KEY, value INTEGER NOT NULL)

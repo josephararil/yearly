@@ -116,8 +116,9 @@ see README §Callout detectors threshold table for the full rationale.
   computation and comparison; never derive those from `ts`. `ts` (nullable ms epoch) is additive:
   the real transaction instant, consumed only to break intra-day ties in sort order (`yearTxns` and
   the Analysis `date-asc/desc` sorts fall back to stable/date-only when `ts` is absent). Revolut
-  writes `startedDate`; manual entries write logging-time (today) or local noon (backdated). Legacy
-  rows have no `ts` until a Revolut re-import backfills it (`ts` is pipeline-authoritative).
+  writes `startedDate` (the true instant); manual entries write logging-time (same-day) or local
+  noon (backdated); rows with no known time carry a noon-of-date anchor. `ts` is
+  pipeline-authoritative, so re-importing a current-year Revolut row refreshes its real instant.
 - **Lump-sum winsorization** — transactions > 2% of `ceiling` are excluded from the blended
   trailing rate calculation (but still included in `spent`). Without this, a single €5k holiday
   inflates the year-end projection by ~4× the purchase price. Winsorized tx appear in

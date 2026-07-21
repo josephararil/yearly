@@ -634,7 +634,7 @@ Persisted to `localStorage` under `yearly:store:v1` (and mirrored to D1 via sync
 {
   id: string;
   date: string;                 // "YYYY-MM-DD" (year is derived from date.slice(0,4)) — authoritative for all day/month/year math
-  ts?: number;                  // ms epoch of the real instant; additive, used only for intra-day sort order. Revolut: startedDate. Manual: logging time (today) or local noon (backdated). Absent on legacy rows until a Revolut re-import backfills it.
+  ts?: number;                  // ms epoch; additive, used only for intra-day sort order. Revolut: startedDate (the true instant). Manual/CSV: logging time when same-day, else local noon. Rows with no known time carry a noon-of-date anchor. Optional at the type level (the sort tolerates absence); present on all rows in practice.
   description: string;
   amount_eur: number;           // positive, rounded to cents
   category: CategoryId;

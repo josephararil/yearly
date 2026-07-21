@@ -169,7 +169,7 @@ or `lastDate < STOP_BEFORE`.
 |---|---|
 | `id` | `id` |
 | `startedDate` (ms) → `YYYY-MM-DD` | `date` | (when the transaction was made, **not** `completedDate`/settlement; falls back to `completedDate` then `updatedDate` if absent) |
-| `startedDate` (ms, raw) | `ts` | (the same instant, kept as ms epoch — `date` is its UTC day. Additive, drives intra-day sort order. Pipeline-authoritative, so a re-import backfills it onto date-only rows.) |
+| `startedDate` (ms, raw) | `ts` | (the same instant, kept as ms epoch — `date` is its UTC day. Additive, drives intra-day sort order. Pipeline-authoritative, so a re-import refreshes it on current-year rows.) |
 | `abs(amount) / 100`, FX-converted | `amount_eur` |
 | `currency` (when non-EUR) | `original_currency` |
 | `abs(amount) / 100` (when non-EUR) | `original_amount` |
