@@ -59,8 +59,8 @@ settings(id INTEGER PK CHECK(id=1), blob TEXT, updated_at INTEGER)
 -- single row; blob is a JSON-serialised **settings-only** object
 -- (people, years, templates, wishlist, travel, trips, density, …).
 -- NEVER transactions (they have their own table) and never travelWishlist (removed feature).
--- A clean blob is ~1.5 KB. A legacy client once wrote the full store here (incl. all transactions),
--- bloating the row to ~180 KB; PUT /api/settings now strips both keys server-side to prevent recurrence.
+-- A clean blob is ~1.5 KB. PUT /api/settings strips both keys server-side, so the row never balloons
+-- to the ~180 KB a full store (incl. all transactions) would produce.
 ```
 
 `amount_eur` is stored as `REAL` (mirrors the JS field directly). `fun`, `deleted`, `e_commerce`,

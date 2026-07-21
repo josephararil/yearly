@@ -48,10 +48,10 @@ populated when the app runs against the real backend.
 
 ### Self-contained (no external dependencies)
 
-The app is fully self-contained — **no `_ds/` directory is needed**. The original Aperture design
-system dependency has been replaced by two local files:
-- **`y/tokens.css`** — defines the complete Broadsheet token set. No legacy remaps remain; all
-  screens use canonical names. Loaded in `index.html` before `y/app.css`.
+The app is fully self-contained — **no `_ds/` directory is needed**. Two local files provide the
+design system:
+- **`y/tokens.css`** — defines the complete Broadsheet token set. All screens use canonical names.
+  Loaded in `index.html` before `y/app.css`.
 - **`y/ds.jsx`** — an IIFE that sets `window.ApertureDesignSystem_72a4cd = { Button,
   SegmentedControl, Input, Chip }`, matching exactly the props the app passes to each. Loaded after
   `y/icons.jsx` and before `y/ui.jsx` / screens.
@@ -73,7 +73,7 @@ system dependency has been replaced by two local files:
   remain network-first.
 
 > **Cache-versioning rule:** bump `CACHE_NAME` in `sw.js` whenever the shell changes (new file in
-> the precache list, CDN URL pinned to a new version, etc.). Current version: `yearly-v42` — keep it
+> the precache list, CDN URL pinned to a new version, etc.). Current version: `yearly-v85` — keep it
 > in lockstep with `APP_VERSION` in `settings.jsx`.
 
 - **`manifest.json`** — includes `id`, `scope`, `start_url`, and an `icons` array with 192×192,

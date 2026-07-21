@@ -20,10 +20,9 @@ warm paper** separated by **hairline rules** — not trapped in grey cards. An e
 label; a clean **grotesk** handles UI and body. One confident **terracotta** accent,
 used sparingly. Whitespace is the design.
 
-The single biggest departure from the old dark version: **the projected number is set
-in ink, not red.** It informs without alarming. Over/under is carried by a tiny
-terracotta figure beside it, and by small severity dots on the callouts. Red never
-floods the screen.
+**The projected number is set in ink, not red.** It informs without alarming. Over/under
+is carried by a tiny terracotta figure beside it, and by small severity dots on the
+callouts. Red never floods the screen.
 
 **Ground truth:** open `reference/broadsheet.html` (it runs as-is — plain `<script>`
 tags, no build step). The component source is `reference/lb-a.jsx` (the Overview screen)
@@ -133,7 +132,7 @@ Over your €24,000 target by €760.    (sans 15px ink-2; "€760" mono 700 ter
 ```
 **Pace rule:** a 3px full-width track in `hair` (rounded). A `terra` fill from 0 to
 `spent/target` width. A 1.5×11px `ink` vertical marker at the `dayOfYear/365` position
-(the "on-pace today" point). This replaces the old gauge/bar entirely.
+(the "on-pace today" point).
 
 > If the year is **under** target, the emphasis number and any "under" wording use
 > `sage`, not `terra`. Keep the hero number itself `ink` in all states.
@@ -180,10 +179,10 @@ Three zones (`grid 1fr 1fr 1fr`, `border-top: 1px solid hair`, no fill):
   `prefers-reduced-motion`.)
 
 ### 3.7 Forms with iconography
-The old version used colored category icon **chips**. Broadsheet prefers **calm color
-dots** + label. Keep your category color values but render them as a small dot, not a
-filled rounded square. (If you decide you miss icons, use thin line icons in `ink` at ~70%
-opacity — never filled multicolor tiles.)
+Category selection uses **calm color dots** + label, not colored icon **chips**. Keep
+your category color values but render them as a small dot, not a filled rounded square.
+(If you decide you miss icons, use thin line icons in `ink` at ~70% opacity — never
+filled multicolor tiles.)
 
 ---
 

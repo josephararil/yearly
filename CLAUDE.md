@@ -124,7 +124,7 @@ The essentials every session needs:
   `TravelTab` — a collapsible list of trips with per-trip category
   breakdown/tx and trip create/rename; delete is blocked while a trip has transactions) plus the
   Add/Edit expense flow's trip picker (`y/addflow.jsx` `TripField`, required whenever Travel is
-  toggled on). The old `store.travelWishlist` future-trip-goals feature has been removed.
+  toggled on).
 - **Implied draw rate** — the FIRE control-panel overlay. `impliedDraw(store, projection) =
   (projection − externalIncome) / portfolio`; returns `null` (dormant) until `store.portfolio` is
   set. `drawZone(rate)` buckets it against the 4%-rule envelope (≤2% conservative, ≤3.5%
@@ -197,3 +197,9 @@ math/store/sync/state → `docs/ARCHITECTURE.md` (and README if behavior changed
 → `docs/UI.md`; backend → `docs/BACKEND.md`; import pipeline → `docs/REVOLUT.md`; SW/dev →
 `docs/PWA-AND-DEV.md`. Keep this hub short — push detail down into the `docs/` files rather than
 growing CLAUDE.md.
+
+When editing any `.md` doc (outside `design/RESTYLE_LOG.md`, which is a deliberate chronological
+log), write only the current state — no "no longer X", "used to be Y, now Z", "previously",
+"replaces the old W", "(new)"/"(removed)" tags, or other before/after narration. A future session
+has no memory of the change that prompted the edit, so framing content as a diff against a past
+state just reads as confusing noise; state what's true now and drop the rest.
