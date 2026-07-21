@@ -407,17 +407,8 @@ textarea.inp { height: auto; padding: 11px 15px; resize: vertical; min-height: 4
   display: flex; align-items: baseline; justify-content: space-between; gap: 10px; padding-bottom: 10px; }
 .innum-cap .meta { letter-spacing: 0.08em; color: var(--muted); font-weight: 400; }
 
-/* — Hero: projected year-end vs ceiling, as a prominent bullet bar — */
-.projhero { padding-top: 2px; }
-.projhero-eyebrow { font-family: var(--mono); font-size: 11px; letter-spacing: 0.2em; text-transform: uppercase; color: var(--muted); }
-.projhero-num { font-family: var(--serif); font-weight: 300; font-size: 58px; line-height: 0.96; margin: 10px 0 6px; letter-spacing: -0.03em; color: var(--ink); }
-.projhero-sub { font-size: 14.5px; color: var(--ink-2); text-wrap: pretty; }
-.projhero-sub .emph { font-family: var(--mono); font-weight: 700; }
-.projhero-sub .emph.over { color: var(--terra); }
-.projhero-sub .emph.under { color: var(--sage); }
-.projhero-sub .band { font-family: var(--mono); color: var(--muted); font-size: 0.72em; margin-left: 3px; }
-
-.projbar { position: relative; margin-top: 22px; }
+/* — Projection bar: the prominent full-width bullet bar (first item of the merged block) — */
+.projbar { position: relative; margin-top: 4px; }
 .projbar-rail { position: relative; height: 12px; border-radius: 7px; background: var(--chart-grid); overflow: visible; }
 .projbar-spent { position: absolute; left: 0; top: 0; bottom: 0; border-radius: 7px; }
 .projbar-proj { position: absolute; top: 0; bottom: 0; opacity: 0.3; border-radius: 0 7px 7px 0; }
@@ -465,6 +456,15 @@ textarea.inp { height: auto; padding: 11px 15px; resize: vertical; min-height: 4
 .trend-head { display: flex; align-items: baseline; justify-content: space-between; gap: 10px; padding-bottom: 12px; }
 .trend-head .lab { font-family: var(--mono); font-size: 10.5px; letter-spacing: 0.18em; text-transform: uppercase; color: var(--muted); }
 .trend-head .val { font-family: var(--mono); font-size: 13px; font-weight: 600; }
+
+/* — "More context" collapse toggle: label + chevron + a hairline rule filling the row — */
+.innum-toggle { display: flex; align-items: center; gap: 8px; width: 100%; padding: 4px 0; background: none; border: 0; cursor: pointer;
+  font-family: var(--mono); font-size: 10.5px; letter-spacing: 0.18em; text-transform: uppercase; color: var(--muted); }
+.innum-toggle:hover { color: var(--ink-2); }
+.innum-toggle:hover .innum-toggle-rule { background: var(--hair-strong); }
+.innum-toggle > span:not(.innum-toggle-rule) { flex-shrink: 0; }
+.innum-toggle-rule { flex: 1; height: 1px; background: var(--hair); }
+.innum-more { display: flex; flex-direction: column; gap: 26px; margin-top: 18px; }
 
 /* settings rows */
 .setrow { display: flex; align-items: center; gap: 13px; padding: 14px 16px; border-bottom: 1px solid var(--hair); cursor: pointer; width: 100%; background: none; border-left: 0; border-right: 0; border-top: 0; text-align: left; color: var(--ink); }

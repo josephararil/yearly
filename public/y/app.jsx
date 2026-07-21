@@ -89,9 +89,15 @@
     const fun = React.useMemo(() => YCalc.computeFun(store), [store]);
     const travel = React.useMemo(() => YCalc.computeTravel(store), [store]);
 
-    const onCallout = (c) => { setAnalysisFocus({ ...c.drill, _n: Date.now() }); setRoute("analysis"); };
-    const onOpenFun = () => { setAnalysisFocus({ section: "fun", _n: Date.now() }); setRoute("analysis"); };
-    const onOpenTravel = () => { setAnalysisFocus({ section: "travel", _n: Date.now() }); setRoute("analysis"); };
+    // Insight-card drill from the Overview. Projection-type callouts have no dedicated screen any
+    // more (their numbers now live on the Overview itself), so those stay put; category/fun/travel
+    // drills still open the matching Analysis tab.
+    const onCallout = (c) => {
+      const drill = (c && c.drill) || {};
+      if (drill.section === "projection") return;
+      setAnalysisFocus({ ...drill, _n: Date.now() });
+      setRoute("analysis");
+    };
 
     const addTx = (tx) => {
       setStore((s) => ({ ...s, transactions: [...s.transactions, tx] }));
@@ -157,12 +163,11 @@
 
         <div className="scroll" ref={scrollRef}>
           {route === "home" && (
-            <YHome.HomeScreen stats={stats} fun={fun} travel={travel} store={store} callouts={callouts} onCallout={onCallout} onOpenFun={onOpenFun} onOpenTravel={onOpenTravel} />
+            <YHome.HomeScreen stats={stats} travel={travel} store={store} callouts={callouts} onCallout={onCallout} />
           )}
           {route === "analysis" && (
             <YAnalysis.AnalysisScreen stats={stats} focus={analysisFocus} onEditTx={openEdit}
-              fun={fun} travel={travel} store={store} setStore={setStore} addTx={addTx}
-              callouts={callouts} onCallout={onCallout} />
+              fun={fun} travel={travel} store={store} setStore={setStore} addTx={addTx} />
           )}
           {route === "settings" && (
             <YSettings.SettingsScreen store={store} setStore={setStore} stats={stats} lastSyncTs={lastSyncTs} />

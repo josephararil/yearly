@@ -84,7 +84,7 @@ formula, status thresholds, and each callout detector.
   currentMonthIndex))` — used by MonthCurve target line and the "needed/mo" stat).
 - `medianDailySpendYTD(stats)` → number|null (median of per-day totals across every elapsed
   calendar day this year, incl. €0 days — a mean-resistant read on "typical day" spend). Used by the
-  Analysis "In numbers" Historical actuals group.
+  Overview "In numbers" block (`YAnalysis.InNumbers`) — Daily spend metric.
 - `historicalMonthRange(store, excludeYm)` → `{min, max, minLabel, maxLabel, n} | null` (all-time
   highest/lowest calendar-month spend total across every year in `store.transactions`; `excludeYm`
   ("YYYY-MM") leaves out one partial month, normally the real current month via `new Date()` so an
@@ -126,7 +126,7 @@ see README §Callout detectors threshold table for the full rationale.
 
 ### Vocabulary (canonical names — never use `target` for the stored ceiling)
 
-- `ceiling` — `years[y].ceiling`, stored, user-set, sacred. Renamed from `target`.
+- `ceiling` — `years[y].ceiling`, stored, user-set, sacred.
 - `funPlanAnnual` — Σ people × 12 months × rateForMonth; derived.
 - `mainTarget` — `ceiling − funPlanAnnual`; derived, never stored. **Explanatory decomposition only — never a target.**
 - `spent` / `projection` in stats — **total household spend (main + fun)**. Measured vs `ceiling`.
@@ -215,8 +215,7 @@ Future-year guard: spent 0, projection 0, status "good"; `isFuture` in returned 
 ### `buildCallouts` — 10 detectors, value-ranked
 
 See README for the authoritative spec. Each callout carries a **`value`** (0–1, interestingness);
-the list is sorted by `value` desc (severity then `mag` break ties) — **not** severity-first as
-before. The taste tiers: T1 actionable (~0.8–1.0), T2 invisible momentum/comparison (~0.5–0.75),
+the list is sorted by `value` desc (severity then `mag` break ties). The taste tiers: T1 actionable (~0.8–1.0), T2 invisible momentum/comparison (~0.5–0.75),
 T3 local facts (~0.35–0.45), T0 redundant-with-Hero (~0.0–0.05). Quick index:
 - #1 trend (doy>28 guard, 4-week change in total `projection`; threshold = 1.2% of `ceiling`) — T2
 - #2 streak (14-day pace vs ceiling-linear baseline) — T2
@@ -224,26 +223,26 @@ T3 local facts (~0.35–0.45), T0 redundant-with-Hero (~0.0–0.05). Quick index
 - #4 share (top category % of total spend) — T3
 - #5 buffer explanation (threshold = 1% of `ceiling`) — T0
 - #6 yoy (total spent vs prior year at same doy; threshold = 8% of `ceiling`) — T2
-- #7 **pace** (bidirectional; replaces old `reqpace`) — `maxDaily = (ceiling − spent)/daysLeft`;
+- #7 **pace** (bidirectional) — `maxDaily = (ceiling − spent)/daysLeft`;
   over → "Spend ≤ €X/day", under → "room for €X/day". Over: T1. Under: value scales with
   bindingness (`trailingDailyRate / maxDaily`), so obvious slack demotes it below momentum.
-- #8 **tohit** (new) — when over and the projected curve crosses `ceiling` before year-end, names
+- #8 **tohit** — when over and the projected curve crosses `ceiling` before year-end, names
   the date + weeks early. Uses `trailingDailyRate × (1 + buffer)`. T1.
-- #9 **peak** (new) — biggest/lightest completed month (≥3 completed months, last full month is the
+- #9 **peak** — biggest/lightest completed month (≥3 completed months, last full month is the
   running extreme). T3.
-- #10 ceiling (verdict vs `stats.projection`) — **demoted** to `value 0.05`, no longer pinned first.
+- #10 ceiling (verdict vs `stats.projection`) — `value 0.05`, not pinned first.
 
 Two helpers back the pace logic: `requiredDailyToHit(stats)` (over case) and the mirror
 `dailyHeadroom(stats)` (under case) — same `(ceiling − spent)/daysLeft`, opposite gate. These drive
-only the Home pace-guidance callout; the Analysis "In numbers" screen computes its own
-buffer-adjusted "Real daily target" locally in `analysis.jsx` rather than reusing these two, so that
+only the Home pace-guidance callout; the "In numbers" block (`YAnalysis.InNumbers`) computes its own
+buffer-adjusted daily target locally in `analysis.jsx` rather than reusing these two, so that
 tile's numbers subtract `bufferAmt` from `spent` before dividing — a deliberately different (more
 conservative) framing from the Home callout's.
 
 Ceiling callout states: `projection > ceiling` → watch/alert — text "trim fun ~€Z/mo" when
 overBy/monthsLeft ≤ funPlanAnnual/12, else "even cutting entire fun budget won't close it; main
 spending needs to drop ~€W/mo too"; between 0.94×–1× → `info` "tight but on course"; < 0.94× →
-good "room to raise fun budget". Now pushed like any other callout (not prepended). Calm fallback
+good "room to raise fun budget". Pushed like any other callout (not prepended). Calm fallback
 fires only when nothing genuine surfaced (ceiling/buffer don't count).
 Complete year: single `{id:"final"}` callout compares `stats.spent` (total) vs `ceiling`.
 Future year: single `{id:"future"}` callout.
@@ -355,7 +354,7 @@ templates, and `loadStore`/`saveStore`/`resetStore`/`migrateStore`.
   are ms epoch. Settings-blob synced like `wishlist`/`people` (no dedicated D1 table). Every
   `t.travel` transaction carries a `trip_id` referencing one of these (nullable D1 column). Legacy
   travel tx predating trips are migrated onto a fixed `trip_legacy` ("Past travel") trip by
-  `migrateStore`. (Replaces the removed `store.travelWishlist` future-trip-goals list.)
+  `migrateStore`.
 - Transaction fields: optional `fun:true` and `person:"joseph"|"marti"` (only on fun tx); optional
   `travel:true` (family-wide travel tag, independent of the `Travel` category and of `fun`).
   Optional `oneoff:true` — excludes the tx from the blended rate used in projection (still
@@ -363,7 +362,7 @@ templates, and `loadStore`/`saveStore`/`resetStore`/`migrateStore`.
   add / edit sheet. Optional `amortize_months` (int ≥ 2) and `virtual:true` — see
   `expandAmortized` above; also absent on Revolut import, user-owned like `oneoff`. Optional
   Revolut-sourced fields: `merchant_logo` (URL string), `merchant_city` (string).
-- `years[y].ceiling` — renamed from `years[y].target` (sacred household ceiling, never derived).
+- `years[y].ceiling` — sacred household ceiling, never derived.
 
 `buildSeed()` — returns a blank store: `transactions: []`, `wishlist: []`, `trips: []`,
 `travel` (€0/mo default), default year ceilings (2024 €21k / 2025 €23k / 2026 €25k), default people
@@ -500,11 +499,12 @@ never enqueued to the sync outbox, and never rendered or counted as individual r
 lists/counts individual transactions reads raw `store.transactions`. Add/edit/delete already operate
 on the raw store.
 
-`onOpenFun`/`onOpenTravel` set
-`analysisFocus = { section:"fun"|"travel" }` and route to the matching Analysis tab. `fun`, `travel`,
-`store`, `setStore`, and `addTx` are passed to `AnalysisScreen` (for `FunTab`/`TravelTab`); `fun`,
-`travel`, `store`, `onOpenFun`, and `onOpenTravel` are passed to `HomeScreen` (for the strips).
-`store` is also passed to `EditSheet` so it can read `store.people` for the fun toggle owner picker.
+`onCallout(c)` routes an insight-card drill: `section:"projection"` drills are a no-op (that content
+lives on the Overview), everything else sets `analysisFocus = { ...c.drill }` and routes to the
+matching Analysis tab. `fun`, `travel`, `store`, `setStore`, and `addTx` are passed to
+`AnalysisScreen` (for `FunTab`/`TravelTab`); `travel`, `store`, `callouts`, and `onCallout` are
+passed to `HomeScreen` (which renders the `YAnalysis.InNumbers` block). `store` is also passed to
+`EditSheet` so it can read `store.people` for the fun toggle owner picker.
 
 **Sync wiring in `app.jsx`:** on mount, `YSync.init({ getStore: () => storeRef.current,
 applyServer: setStore })` + `YSync.start()` + `YSync.bootstrap()`. `storeRef` is kept current via

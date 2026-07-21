@@ -56,7 +56,7 @@ Full local-dev notes (the no-backend 404 handling, reload-loop fix) are in
    a second server on a random port nobody is looking at. Full SW + preview workflow, including the
    port-conflict and hard-refresh procedures: [docs/PWA-AND-DEV.md](docs/PWA-AND-DEV.md#claude-code-preview--how-to-deploy-locally-for-testing).
 2. **`APP_VERSION` (`settings.jsx` footer) and `CACHE_NAME` (`sw.js`) move together** — currently
-   `v84` / `yearly-v84`. Bump both on every release.
+   `v85` / `yearly-v85`. Bump both on every release.
 3. **`localISO(d)`, never `toISOString()`** for dates in `calc.jsx` — `toISOString()` is UTC and
    silently drops Dec 31 transactions in UTC+ timezones (EET).
 3b. **`updated_at` is milliseconds everywhere** — `Date.now()` in the worker, `Date.now()` for the
@@ -120,19 +120,19 @@ The essentials every session needs:
   user-named **trips** (`store.trips[]`: `{id, name, location, startDate, endDate, createdAt,
   updatedAt}`, settings-blob synced, no separate D1 table) — every `t.travel` transaction carries a
   `trip_id` (nullable D1 column) referencing one. Legacy pre-trips travel tx are migrated onto a
-  fixed `trip_legacy` ("Past travel") trip. UI lives in `y/travel.jsx` (`window.YTravel`: home
-  `TravelStrip`, Analysis `TravelTab` — a collapsible list of trips with per-trip category
+  fixed `trip_legacy` ("Past travel") trip. UI lives in `y/travel.jsx` (`window.YTravel`: Analysis
+  `TravelTab` — a collapsible list of trips with per-trip category
   breakdown/tx and trip create/rename; delete is blocked while a trip has transactions) plus the
   Add/Edit expense flow's trip picker (`y/addflow.jsx` `TripField`, required whenever Travel is
-  toggled on). The old `store.travelWishlist` future-trip-goals feature has been removed.
+  toggled on).
 - **Implied draw rate** — the FIRE control-panel overlay. `impliedDraw(store, projection) =
   (projection − externalIncome) / portfolio`; returns `null` (dormant) until `store.portfolio` is
   set. `drawZone(rate)` buckets it against the 4%-rule envelope (≤2% conservative, ≤3.5%
   sustainable, ≤4% at-the-limit → amber, above → terra). `portfolio` and `externalIncome` are
   settings-blob fields, edited in Settings → "Portfolio & draw rate", updated manually each quarter.
-  Surfaced as one colored line under the hero (`StatusHero`). Purely a read-only display — it does
-  **not** feed any callout, projection, or the ceiling math.
-- **Plan** — a fifth Analysis pill, a scenario/decision-record notebook (`store.plan`: levers,
+  Surfaced as one colored line under the hero (`StatusHero`, on the Overview). Purely a read-only
+  display — it does **not** feed any callout, projection, or the ceiling math.
+- **Plan** — the fourth Analysis pill, a scenario/decision-record notebook (`store.plan`: levers,
   scenarios, triggers; settings-blob synced; UI in `y/plan.jsx`/`window.YPlan`). Entirely outside
   ceiling/callout math — its only live-data contact is a read-only "this year implies" draw derived
   from `stats.projection`. Detail: `docs/ARCHITECTURE.md`, `docs/UI.md`, README "Plan" section.
@@ -197,3 +197,9 @@ math/store/sync/state → `docs/ARCHITECTURE.md` (and README if behavior changed
 → `docs/UI.md`; backend → `docs/BACKEND.md`; import pipeline → `docs/REVOLUT.md`; SW/dev →
 `docs/PWA-AND-DEV.md`. Keep this hub short — push detail down into the `docs/` files rather than
 growing CLAUDE.md.
+
+When editing any `.md` doc (outside `design/RESTYLE_LOG.md`, which is a deliberate chronological
+log), write only the current state — no "no longer X", "used to be Y, now Z", "previously",
+"replaces the old W", "(new)"/"(removed)" tags, or other before/after narration. A future session
+has no memory of the change that prompted the edit, so framing content as a diff against a past
+state just reads as confusing noise; state what's true now and drop the rest.

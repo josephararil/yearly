@@ -68,7 +68,7 @@ A second, parallel pull path exists for when a laptop isn't available: a **bookm
 the app's Settings screen (see [docs/UI.md](UI.md)). It produces an **identical D1 end state** to
 `prepare.bat`/`push.bat` for the same input — same wallet, same fields, same field-preserving
 upsert — but needs no Python, no `wrangler` CLI, and no desktop. **The Python pipeline above is
-unchanged and still the primary path**; this is purely additive.
+the primary path**; this is purely additive.
 
 Source: `scripts/bookmarklet.js` (human-readable — it's `CONSOLE_TEMPLATE` from `sync.py:86`
 adapted to render an overlay instead of triggering a file download). To install:
@@ -226,7 +226,7 @@ clean step — add it manually in the app rather than letting `amount_eur` go in
 
 **Browser-side gotcha (`y/revolut_import.jsx`, `window.YRevolutImport.getEurRate`):** the in-app
 importer hits `https://api.frankfurter.dev/v1/{date}?from={CURRENCY}&to=EUR` directly, **not**
-`api.frankfurter.app`. `api.frankfurter.app` now permanently 301-redirects to `api.frankfurter.dev`,
+`api.frankfurter.app`. `api.frankfurter.app` permanently 301-redirects to `api.frankfurter.dev`,
 and that redirect response carries no `Access-Control-Allow-Origin` header — browsers abort the
 whole fetch ("Failed to fetch") on that hop even though the final response allows CORS. Python's
 `requests` library doesn't enforce CORS, so `revolut_clean.py` never saw this. The practical effect
@@ -262,12 +262,12 @@ transaction that was PENDING when first captured and completed later. Do not del
   wrangler login` from `scripts/`.
 - **D1 no transaction support**: SQL uses bare `INSERT OR REPLACE` statements with no `BEGIN
   TRANSACTION` wrapper.
-- **Field-preserving upsert** (resolved): the pipeline writes `INSERT … ON CONFLICT(id) DO UPDATE`
+- **Field-preserving upsert**: the pipeline writes `INSERT … ON CONFLICT(id) DO UPDATE`
   (`write_sql`), not `INSERT OR REPLACE`. On re-push it preserves the user-owned columns in
   `PRESERVE_ON_CONFLICT` (`category, fun, person, note, deleted`, plus `oneoff` which the pipeline
   never writes) and updates only pipeline-authoritative fields (`date, amount_eur, description`,
   bank/enrichment columns, `updated_at`). This is what makes `BUFFER_DAYS=30` safe — re-pulling an
-  already-imported row no longer reverts in-app edits, resurrects deletions, or wipes `oneoff`.
+  already-imported row does not revert in-app edits, resurrect deletions, or wipe `oneoff`.
   Trade-off: a manual override of `amount_eur`/`date` on a Revolut row *is* overwritten back to the
   bank value on re-pull (required so PENDING rows can finalise).
 
