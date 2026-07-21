@@ -13,6 +13,7 @@ function rowToTx(row) {
   return {
     id:                row.id,
     date:              row.date,
+    ts:                row.ts,
     description:       row.description,
     amount_eur:        row.amount_eur,
     category:          row.category,
@@ -46,6 +47,7 @@ function txToBinds(tx, now) {
   return [
     tx.id,
     tx.date,
+    tx.ts           ?? null,
     tx.description  ?? null,
     tx.amount_eur,
     tx.category,
@@ -158,14 +160,14 @@ export default {
         const now = Date.now();
         const UPSERT = `
           INSERT INTO transactions
-            (id,date,description,amount_eur,category,note,source,fun,person,
+            (id,date,ts,description,amount_eur,category,note,source,fun,person,
              original_amount,original_currency,deleted,
              revolut_category,merchant_mcc,merchant_city,merchant_country,
              merchant_logo,card_label,tx_type,e_commerce,fee_eur,
              oneoff,travel,trip_id,amortize_months,virtual,updated_at)
-          VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)
+          VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)
           ON CONFLICT(id) DO UPDATE SET
-            date=excluded.date, description=excluded.description,
+            date=excluded.date, ts=excluded.ts, description=excluded.description,
             amount_eur=excluded.amount_eur, category=excluded.category,
             note=excluded.note, source=excluded.source,
             fun=excluded.fun, person=excluded.person,
@@ -216,14 +218,14 @@ export default {
         const now = Date.now();
         const INGEST_UPSERT = `
           INSERT INTO transactions
-            (id,date,description,amount_eur,category,note,source,fun,person,
+            (id,date,ts,description,amount_eur,category,note,source,fun,person,
              original_amount,original_currency,deleted,
              revolut_category,merchant_mcc,merchant_city,merchant_country,
              merchant_logo,card_label,tx_type,e_commerce,fee_eur,
              oneoff,travel,trip_id,amortize_months,virtual,updated_at)
-          VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)
+          VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)
           ON CONFLICT(id) DO UPDATE SET
-            date=excluded.date, description=excluded.description,
+            date=excluded.date, ts=excluded.ts, description=excluded.description,
             amount_eur=excluded.amount_eur,
             source=excluded.source,
             original_amount=excluded.original_amount,

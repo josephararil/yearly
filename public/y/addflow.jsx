@@ -8,6 +8,28 @@
 
   const DEL_HOLD_MS = 500;
 
+  // ts = the real instant of the expense (ms epoch), stored alongside the day-level `date` and used
+  // only for intra-day sort ordering (Revolut rows carry the bank's startedDate). The date picker is
+  // day-only, so: logging for today → the actual moment of logging; a backdated day → local noon, a
+  // neutral within-day anchor. `date` itself is unchanged.
+  function tsForDate(dateStr) {
+    return dateStr === YData.todayISO()
+      ? Date.now()
+      : new Date(dateStr + "T12:00:00").getTime();
+  }
+  // On edit: unchanged date keeps the existing ts (may be absent); a changed date preserves the
+  // original time-of-day when there was one, otherwise falls back to tsForDate.
+  function tsForEdit(oldTx, newDate) {
+    if (newDate === oldTx.date) return oldTx.ts;
+    if (oldTx.ts != null) {
+      const d = new Date(oldTx.ts);
+      const pad = (n) => String(n).padStart(2, "0");
+      const time = pad(d.getHours()) + ":" + pad(d.getMinutes()) + ":" + pad(d.getSeconds());
+      return new Date(newDate + "T" + time).getTime();
+    }
+    return tsForDate(newDate);
+  }
+
   function NumPad({ value, onChange }) {
     const digit = (k) => {
       if (!value || value === "0") { onChange(k === "00" ? "0" : k); return; }
@@ -394,7 +416,8 @@
     const commit = (t) => {
       try {
         const tx = {
-          id: YData.uid(), date: t.date, description: t.description || YData.cat(t.category).label,
+          id: YData.uid(), date: t.date, ts: tsForDate(t.date),
+          description: t.description || YData.cat(t.category).label,
           amount_eur: Math.round(parseFloat(t.amount) * 100) / 100, category: t.category,
           note: t.note || undefined, source: "manual",
         };
@@ -549,6 +572,8 @@
           <Button variant="primary" block disabled={!valid}
             onClick={() => {
               const updated = { ...txn, description: draft.description, amount_eur: Math.round(parseFloat(draft.amount) * 100) / 100, category: draft.category, date: draft.date, note: draft.note || undefined };
+              const newTs = tsForEdit(txn, draft.date);
+              if (newTs != null) updated.ts = newTs; else delete updated.ts;
               if (funOn) { updated.fun = true; updated.person = funPerson; } else { delete updated.fun; delete updated.person; }
               if (travelOn) { updated.travel = true; updated.trip_id = tripId; } else { delete updated.travel; delete updated.trip_id; }
               if (oneOff) { updated.oneoff = true; } else { delete updated.oneoff; }

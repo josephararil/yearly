@@ -112,6 +112,12 @@ see README §Callout detectors threshold table for the full rationale.
   getDate()`, never `toISOString()`. `toISOString()` uses UTC midnight and shifts the date
   backward in UTC+ timezones (EET = UTC+2/+3), silently dropping Dec 31 transactions from
   completed years.
+- **`date` vs `ts`** — `date` ("YYYY-MM-DD") is authoritative for every year/month/day-of-year
+  computation and comparison; never derive those from `ts`. `ts` (nullable ms epoch) is additive:
+  the real transaction instant, consumed only to break intra-day ties in sort order (`yearTxns` and
+  the Analysis `date-asc/desc` sorts fall back to stable/date-only when `ts` is absent). Revolut
+  writes `startedDate`; manual entries write logging-time (today) or local noon (backdated). Legacy
+  rows have no `ts` until a Revolut re-import backfills it (`ts` is pipeline-authoritative).
 - **Lump-sum winsorization** — transactions > 2% of `ceiling` are excluded from the blended
   trailing rate calculation (but still included in `spent`). Without this, a single €5k holiday
   inflates the year-end projection by ~4× the purchase price. Winsorized tx appear in

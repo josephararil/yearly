@@ -7,10 +7,10 @@ that talks to these endpoints is documented in [ARCHITECTURE.md](ARCHITECTURE.md
 
 ## D1 schema (`migrations/`)
 
-Four tables, applied via `npx wrangler d1 migrations apply yearly-db --remote`. Eight migration
+Four tables, applied via `npx wrangler d1 migrations apply yearly-db --remote`. Nine migration
 files: `0001_init.sql`, `0002_revolut_fields.sql`, `0003_oneoff_flag.sql`,
 `0004_fix_updated_at_seconds.sql`, `0005_meta.sql`, `0006_travel_flag.sql`, `0007_trip_id.sql`,
-`0008_amortize.sql`.
+`0008_amortize.sql`, `0009_tx_ts.sql`.
 
 > **⚠️ Wrangler migration tracking on remote is out of sync.** The remote `d1_migrations` table
 > doesn't record 0002–0004 as applied, so `wrangler d1 migrations apply --remote` will try to replay
@@ -47,6 +47,12 @@ transactions(id TEXT PK, date TEXT NOT NULL, description TEXT,
 -- amortize_months INTEGER  (nullable; int >= 2, spreads amount_eur over N months — see
 --                            YCalc.expandAmortized)
 -- virtual INTEGER NOT NULL DEFAULT 0  (no-cash entry flag; only meaningful with amortize_months)
+
+-- 0009_tx_ts.sql
+-- ts INTEGER  (nullable; ms epoch of the real transaction instant. date stays authoritative for all
+--              day/month/year math; ts is additive — intra-day sort order only. Revolut writes
+--              startedDate; manual writes logging-time/local-noon. Pipeline-authoritative, so a
+--              re-import backfills it onto date-only legacy rows.)
 
 -- 0005_meta.sql (pipeline-written key/value store)
 meta(key TEXT PRIMARY KEY, value INTEGER NOT NULL)
@@ -95,7 +101,7 @@ Key implementation notes:
 - Uses `env.DB.batch([...])` for the upsert array.
 - `POST /api/revolut/ingest` is a **separate, preserving** upsert for the mobile Revolut import path
   (see [REVOLUT.md](REVOLUT.md)). Unlike `POST /api/transactions` (which overwrites every column on
-  conflict), its `ON CONFLICT DO UPDATE SET` only touches pipeline-authoritative columns (`date`,
+  conflict), its `ON CONFLICT DO UPDATE SET` only touches pipeline-authoritative columns (`date`, `ts`,
   `description`, `amount_eur`, `source`, `original_amount`, `original_currency`, `revolut_category`,
   `merchant_mcc`, `merchant_city`, `merchant_country`, `merchant_logo`, `card_label`, `tx_type`,
   `e_commerce`, `fee_eur`, `updated_at`) and never touches user-owned columns (`category`, `fun`,
