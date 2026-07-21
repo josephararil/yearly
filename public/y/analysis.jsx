@@ -862,8 +862,11 @@
     const [filterFun, setFilterFun] = React.useState(false);
     const [filterTravel, setFilterTravel] = React.useState(false);
     const [showFilters, setShowFilters] = React.useState(false);
+    const [dateFrom, setDateFrom] = React.useState("");
+    const [dateTo, setDateTo] = React.useState("");
 
-    const activeCount = (fc ? 1 : 0) + (sort !== "date-desc" ? 1 : 0) + (filterManual ? 1 : 0) + (filterFun ? 1 : 0) + (filterTravel ? 1 : 0);
+    const dateRangeActive = !!(dateFrom && dateTo);
+    const activeCount = (fc ? 1 : 0) + (sort !== "date-desc" ? 1 : 0) + (filterManual ? 1 : 0) + (filterFun ? 1 : 0) + (filterTravel ? 1 : 0) + (dateRangeActive ? 1 : 0);
 
     const rawTxns = React.useMemo(() => YCalc.yearTxns(store, stats.year), [store, stats.year]);
 
@@ -872,6 +875,7 @@
     if (filterManual) list = list.filter((t) => t.source === "manual");
     if (filterFun) list = list.filter((t) => t.fun);
     if (filterTravel) list = list.filter((t) => t.travel);
+    if (dateRangeActive) list = list.filter((t) => t.date >= dateFrom && t.date <= dateTo);
     if (q.trim()) { const s = q.toLowerCase(); list = list.filter((t) => t.description.toLowerCase().includes(s)); }
     if (sort === "date-desc") list.sort((a, b) => b.date.localeCompare(a.date));
     else if (sort === "date-asc") list.sort((a, b) => a.date.localeCompare(b.date));
@@ -937,6 +941,23 @@
                 <FilterChip label="Manual" active={filterManual} onClick={() => setFilterManual(!filterManual)} />
                 <FilterChip label="Fun" active={filterFun} onClick={() => setFilterFun(!filterFun)} />
                 <FilterChip label="Travel" active={filterTravel} onClick={() => setFilterTravel(!filterTravel)} />
+              </div>
+            </div>
+            {/* Date range row */}
+            <div>
+              <div style={{ fontFamily: "var(--mono)", fontSize: 10, letterSpacing: "0.1em", textTransform: "uppercase", color: "var(--muted)", marginBottom: 6 }}>Date range</div>
+              <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
+                <input className="inp" type="date" value={dateFrom} style={{ colorScheme: "light", flex: 1, minWidth: 0 }}
+                  onChange={(e) => setDateFrom(e.target.value)} />
+                <span className="muted" style={{ fontFamily: "var(--mono)", fontSize: 11 }}>to</span>
+                <input className="inp" type="date" value={dateTo} style={{ colorScheme: "light", flex: 1, minWidth: 0 }}
+                  onChange={(e) => setDateTo(e.target.value)} />
+                {(dateFrom || dateTo) && (
+                  <button onClick={() => { setDateFrom(""); setDateTo(""); }} style={{
+                    flexShrink: 0, border: "none", background: "none", cursor: "pointer",
+                    color: "var(--muted)", fontFamily: "var(--mono)", fontSize: 11,
+                  }}>Clear</button>
+                )}
               </div>
             </div>
           </div>
