@@ -563,19 +563,20 @@
               </div>
             </div>
 
-            {/* Rotating insight card — the single "voice" line, one-per-day rotation */}
-            <InsightCard callouts={callouts} onCallout={onCallout} />
-
-            {/* 90-day trend — chart flush to the container edges */}
-            {trend90 && (
-              <div>
-                <div className="trend-head">
-                  <span className="lab">90-day trend</span>
-                  <span className="val" style={{ color: trend90Color }}>{trend90}</span>
-                </div>
-                <Trend90Chart upto={stats.upto} asOf={stats.asOf} color={trend90Color} />
-              </div>
-            )}
+            {/* 90-day trend (chart flush to the container edges) with the rotating insight card
+                directly beneath — one shared block so there's no gap or extra hairline between them */}
+            <div>
+              {trend90 && (
+                <>
+                  <div className="trend-head">
+                    <span className="lab">90-day trend</span>
+                    <span className="val" style={{ color: trend90Color }}>{trend90}</span>
+                  </div>
+                  <Trend90Chart upto={stats.upto} asOf={stats.asOf} color={trend90Color} />
+                </>
+              )}
+              <InsightCard callouts={callouts} onCallout={onCallout} />
+            </div>
 
             {/* Current velocity — merges monthly target, on-pace, and daily targets */}
             {stats.isCurrent && (
