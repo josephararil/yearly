@@ -84,7 +84,7 @@ formula, status thresholds, and each callout detector.
   currentMonthIndex))` — used by MonthCurve target line and the "needed/mo" stat).
 - `medianDailySpendYTD(stats)` → number|null (median of per-day totals across every elapsed
   calendar day this year, incl. €0 days — a mean-resistant read on "typical day" spend). Used by the
-  Analysis "In numbers" Historical actuals group.
+  Overview "In numbers" block (`YAnalysis.InNumbers`) — Daily spend metric.
 - `historicalMonthRange(store, excludeYm)` → `{min, max, minLabel, maxLabel, n} | null` (all-time
   highest/lowest calendar-month spend total across every year in `store.transactions`; `excludeYm`
   ("YYYY-MM") leaves out one partial month, normally the real current month via `new Date()` so an
@@ -235,8 +235,8 @@ T3 local facts (~0.35–0.45), T0 redundant-with-Hero (~0.0–0.05). Quick index
 
 Two helpers back the pace logic: `requiredDailyToHit(stats)` (over case) and the mirror
 `dailyHeadroom(stats)` (under case) — same `(ceiling − spent)/daysLeft`, opposite gate. These drive
-only the Home pace-guidance callout; the Analysis "In numbers" screen computes its own
-buffer-adjusted "Real daily target" locally in `analysis.jsx` rather than reusing these two, so that
+only the Home pace-guidance callout; the "In numbers" block (`YAnalysis.InNumbers`) computes its own
+buffer-adjusted daily target locally in `analysis.jsx` rather than reusing these two, so that
 tile's numbers subtract `bufferAmt` from `spent` before dividing — a deliberately different (more
 conservative) framing from the Home callout's.
 
@@ -500,11 +500,14 @@ never enqueued to the sync outbox, and never rendered or counted as individual r
 lists/counts individual transactions reads raw `store.transactions`. Add/edit/delete already operate
 on the raw store.
 
-`onOpenFun`/`onOpenTravel` set
-`analysisFocus = { section:"fun"|"travel" }` and route to the matching Analysis tab. `fun`, `travel`,
-`store`, `setStore`, and `addTx` are passed to `AnalysisScreen` (for `FunTab`/`TravelTab`); `fun`,
-`travel`, `store`, `onOpenFun`, and `onOpenTravel` are passed to `HomeScreen` (for the strips).
-`store` is also passed to `EditSheet` so it can read `store.people` for the fun toggle owner picker.
+`onCallout(c)` routes an insight-card drill: `section:"projection"` drills are a no-op (that content
+now lives on the Overview), everything else sets `analysisFocus = { ...c.drill }` and routes to the
+matching Analysis tab. `fun`, `travel`, `store`, `setStore`, and `addTx` are passed to
+`AnalysisScreen` (for `FunTab`/`TravelTab`); `travel`, `store`, `callouts`, and `onCallout` are
+passed to `HomeScreen` (which renders the merged `YAnalysis.InNumbers` block — the former Projection
+tab's "In numbers"). The old Overview Fun/Travel strips and their `onOpenFun`/`onOpenTravel` handlers
+were removed. `store` is also passed to `EditSheet` so it can read `store.people` for the fun toggle
+owner picker.
 
 **Sync wiring in `app.jsx`:** on mount, `YSync.init({ getStore: () => storeRef.current,
 applyServer: setStore })` + `YSync.start()` + `YSync.bootstrap()`. `storeRef` is kept current via

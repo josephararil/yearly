@@ -68,9 +68,11 @@ rows are scannable at a glance; per-person/per-trip detail is left to the edit s
 
 ## `y/fun.jsx` (`window.YFun`) — fun budget UI
 
-`FunStrip({ fun, store, onOpen })` — compact Overview strip: one hairline row per person (name,
-all-time balance in sage/terra, nearest wishlist goal name+pct+thin bar). Whole strip tappable →
-`onOpen()`. "no goals yet" if no wishlist items. Broadsheet tokens only, no cards.
+`FunStrip({ fun, store, onOpen })` — compact strip: one hairline row per person (name, all-time
+balance in sage/terra, nearest wishlist goal name+pct+thin bar). **No longer rendered anywhere** —
+it was the Overview fun-budget summary, removed when the Overview was consolidated; the full fun UI
+lives on the Analysis → Fun tab (`FunTab`). The component is still defined/exported but currently
+unused.
 
 `FunTab({ fun, store, setStore, addTx })` — the Analysis workshop:
 - Per-person cards: name, monthly rate, balance (large, sage/terra coloured), this-month used with
@@ -92,11 +94,12 @@ Internal: `WishlistAddSheet` (name + price + owner Chip picker), `PersonCard` (s
 
 The family-wide analogue of `fun.jsx` (one household allowance, no per-person split, no owner).
 
-`TravelStrip({ travel, store, onOpen })` — compact Overview indicator: an "Available" headline
-(large mono balance, sage/terra), a meta line (`€X/mo · €Y used this month`), and — minimal, purely
-informational — the most recent trip's name (from `travel.trips[0]`). Whole strip tappable →
-`onOpen()`. When the allowance is unconfigured (rate 0, balance 0, no travel spend) it shows a quiet
-"Set an allowance in Settings →" prompt.
+`TravelStrip({ travel, store, onOpen })` — compact indicator: an "Available" headline (large mono
+balance, sage/terra), a meta line (`€X/mo · €Y used this month`), and the most recent trip's name.
+**No longer rendered anywhere** — it was the Overview travel-budget summary, removed when the
+Overview was consolidated; the full travel UI lives on the Analysis → Travel tab (`TravelTab`). The
+component is still defined/exported but currently unused. (A one-line "Total travel budget" figure
+now appears in the Overview `InNumbers` "More context" instead.)
 
 `TravelTab({ travel, store, setStore })` — the Analysis workshop:
 - One family-wide stats block: Available balance (sage/terra), this-month used with over/under
@@ -118,8 +121,8 @@ instead. Trip *selection* when logging an expense lives in `y/addflow.jsx` (`Tri
 
 ## `y/plan.jsx` (`window.YPlan`) — the Plan tab
 
-`PlanTab({ store, setStore, stats })`, rendered on Analysis's fifth top pill (`Projection | Activity
-| Fun | Travel | Plan`). A contained decision notebook — named lifestyle scenarios (packages of
+`PlanTab({ store, setStore, stats })`, rendered on Analysis's fourth (last) top pill (`Activity |
+Fun | Travel | Plan`). A contained decision notebook — named lifestyle scenarios (packages of
 annual-cost "levers") resolving to a deficit and an implied portfolio draw rate, plus the recorded
 reasoning behind them. `store.plan` is settings-blob synced (like `trips`) — see
 [ARCHITECTURE.md](ARCHITECTURE.md#plan--computescenariocomputescenarioschecktriggers) for the data
@@ -191,34 +194,34 @@ screen with zero clicks. Regions, top to bottom:
 
 ## Screens
 
-- `y/home.jsx` (Overview — hero + `VoiceLine` + **one chart with a 4-way switcher** (`MonthCurve` /
-  `ProjectionChart` / `MonthlyBarsChart` / `EstimateChart`) + FunStrip + TravelStrip)
-- `y/analysis.jsx` (Projection/Activity/Fun/Travel tabs — Activity has Categories/Transactions
-  sub-tabs; charts are hand-built SVG that double as the Recharts spec. **The Projection tab's own
-  "This year" line and "Monthly breakdown" bar charts were moved to the Overview switcher; the tab
-  now holds only "What's happening" callouts + "In numbers" stats.**)
+- `y/home.jsx` (Overview — hero (`StatusHero`, bar hidden) + the merged metrics block
+  (`YAnalysis.InNumbers`, ported from the former Analysis → Projection tab) + **one chart with a
+  5-way switcher** (`MonthCurve` / `ProjectionChart` / `MonthlyBarsChart` / `EstimateChart` /
+  `BurnDownChart`). The standalone Fun/Travel budget strips were removed from the Overview.)
+- `y/analysis.jsx` (Activity/Fun/Travel/Plan tabs — Activity has Categories/Transactions/Amortized
+  sub-tabs; charts are hand-built SVG that double as the Recharts spec. **The Projection tab was
+  removed entirely: its "In numbers" block now renders on the Overview via the exported
+  `YAnalysis.InNumbers`, and its "What's happening" full callouts list is gone — a single rotating
+  insight card (`InsightCard`) inside `InNumbers` replaces it.**)
 - `y/settings.jsx` (Budget settings: combined ceiling+buffer / years / fun-budget / travel / portfolio · Data
   settings: templates / Import & Export submenus (CSV · Revolut mobile import · JSON
   backup-restore) / force-resync / clear)
 - `y/addflow.jsx` (unified "Log an expense" sheet: amount hero, template accelerator strip, category
   picker, Tags & options disclosure, Edit sheet)
 
-### `home.jsx` — `VoiceLine`
+### `analysis.jsx` — `InsightCard` (the rotating "voice" line)
 
-The app's "voice" — one orthogonal, plain-language insight rendered directly under the `StatusHero`
-(inside the same `.screen` child, with a hairline top border so it reads as part of the hero block,
-not a separate section). `HomeScreen` now receives `callouts` + `onCallout` and filters to
-`callouts.filter(c => !["ceiling","buffer","calm","final","future"].includes(c.id))` (the
-non-redundant-with-the-Hero subset, in `buildCallouts`'s stable value-sorted order), then picks one
-entry via `dayIndex % eligible.length` (`dayIndex = Math.floor(Date.now() / 86400000)`, i.e. days
-since the Unix epoch) — a deterministic daily rotation through the list rather than always showing
-the single highest-`value` callout. Same callout all day; advances once per day to a different entry
-(round-robin, not random, so it never jumps back to a callout it just showed). Renders a severity dot
-+ `YUI.rich(text)` (numbers in mono `.num`) + a `→`, tappable to drill into Analysis via `onCallout`
-(same routing as `CalloutCard`). Stays silent (renders nothing) when no callout qualifies, and is
-hidden on complete/future years (their single `final`/`future` callouts are filtered out). The small
-inline `Fine / Tight / Slow down` chip in the "This month" header (`pulse-verdict`, month-cap vs
-projected-month-end) is unchanged and independent of the voice line.
+The app's "voice" — one orthogonal, plain-language insight, now defined in `analysis.jsx` and
+rendered **inside the merged `InNumbers` block on the Overview** (between the primary metric trio and
+the 90-day trend), replacing the former `home.jsx` `VoiceLine` and the removed Analysis "What's
+happening" full list. It filters `callouts` to
+`!["ceiling","buffer","calm","final","future"].includes(c.id)` (the non-redundant-with-the-hero
+subset, in `buildCallouts`'s stable value-sorted order), then picks one entry via
+`dayIndex % eligible.length` (`dayIndex = Math.floor(Date.now() / 86400000)`) — a deterministic daily
+rotation. Renders a severity dot + `YUI.rich(text)` + a `→`, tappable via `onCallout`. Drills that
+target `section:"projection"` stay on the Overview (that content now lives here); other sections open
+the matching Analysis tab. Silent when no callout qualifies. The inline `Fine / Tight / Slow down`
+chip in the "This month" header (`pulse-verdict`) is unchanged and independent.
 
 ### `home.jsx` — the chart switcher
 
@@ -299,22 +302,23 @@ Muted fallback for future years (nothing logged yet).
 
 ### `analysis.jsx` — `AnalysisScreen`
 
-Receives `fun`, `travel`, `store`, `setStore`, `addTx` in addition to `stats`/`focus`/`onEditTx`;
-renders `<YFun.FunTab>` on the "Fun" segment and `<YTravel.TravelTab>` on the "Travel" segment. Four
-top-level segments: Projection, Activity, Fun, Travel. **Activity** is `ActivityMergedTab`, which owns
-its own sub-tab state (`activitySubtab`, lifted into `AnalysisScreen` so focus-routing can drive it)
-and renders a second `SegmentedControl` — Categories / Transactions — above whichever of `CategoriesTab`
-/ `TransactionsTab` is selected; both sub-tabs are otherwise unchanged from their former standalone-tab
-selves. Focus routing: `"categories"` → Activity tab, Categories sub-tab (with `focusCategory`),
-`"projection"` → Projection, `"activity"` → Activity tab, Transactions sub-tab, `"fun"` → Fun,
-`"travel"` → Travel. The Transactions sub-tab's "show only" filters include Fun and Travel.
+Receives `fun`, `travel`, `store`, `setStore`, `addTx` in addition to `stats`/`focus`/`onEditTx`
+(no longer receives `callouts`/`onCallout` — the Projection tab that used them is gone); renders
+`<YFun.FunTab>` on the "Fun" segment and `<YTravel.TravelTab>` on the "Travel" segment. **Four**
+top-level segments: **Activity, Fun, Travel, Plan** (the old **Projection** tab was removed; its "In
+numbers" block moved to the Overview — see `InNumbers` below). Default tab is **Activity**.
+**Activity** is `ActivityMergedTab`, which owns its own sub-tab state (`activitySubtab`, lifted into
+`AnalysisScreen` so focus-routing can drive it) and renders a second `SegmentedControl` — Categories /
+Transactions / Amortized. Focus routing: `"categories"` → Activity/Categories (with `focusCategory`),
+`"activity"` → Activity/Transactions, `"fun"` → Fun, `"travel"` → Travel. (A `"projection"` drill no
+longer routes here — `App.onCallout` keeps those on the Overview.) The Transactions sub-tab's "show
+only" filters include Fun and Travel.
 
 **ProjectionChart** and **MonthlyBarsChart** — the "This year" line chart and "Monthly breakdown"
 bar chart formerly lived here in `ProjectionTab`; they now live in `home.jsx` and render only through
 the Overview chart switcher (see the `home.jsx` sections above). Their internal behavior is unchanged
 (interactive crosshair/tooltip, `ToggleChip` series toggles, `maxY` scaling, `--chart-proj`
-uncertainty band, `LegendItem`/`ChartLegend` swatches). `ProjectionTab` no longer renders any chart —
-after the segment bar it goes straight to "What's happening" callouts and "In numbers" stats.
+uncertainty band, `LegendItem`/`ChartLegend` swatches).
 
 **`YUI.ChartExplain`** — shared collapsible component (`ui.jsx`) rendering the line-by-line "colored
 dot + label + description" legend used below each Overview chart: `MonthCurve` (`month-curve`),
@@ -324,63 +328,53 @@ label) and persists its open/closed state to `localStorage['yearly:explain:' + s
 to open when unset) so each chart remembers its own collapsed/expanded state across reloads
 independent of the others.
 
-**"What's happening" section** (`ProjectionTab`) — callouts from `buildCallouts`, now the first thing
-in the tab (the charts that used to precede it moved to the Overview switcher), rendered above "In
-numbers". Shows all callouts (no density filtering). Receives `callouts`
-and `onCallout` props threaded from `AnalysisScreen` → `App`. Clicking a callout still drills to the
-appropriate tab via `onCallout`. Hidden when `callouts` is empty.
+**`InNumbers`** — the merged metrics block, defined in `analysis.jsx`, **exported as
+`YAnalysis.InNumbers` and rendered on the Overview** (`home.jsx`, directly under the hero, above the
+chart switcher). It is a single `.innum` flex column establishing a **visual hierarchy** rather than
+a uniform grid (dashboard classes in `app.css`, marked "Analysis · In numbers dashboard"). Props:
+`stats`, `store`, `travel`, `callouts`, `onCallout`. No box/card chrome — grouping is proximity +
+hairlines. No `section-h` title and no full callouts list (both belonged to the removed Projection
+tab). Two pure helpers back it, exported from `calc.jsx`: `medianDailySpendYTD(stats)` (median of
+per-day totals across every elapsed calendar day, incl. €0 days) and
+`historicalMonthRange(store, excludeYm)` (all-time min/max calendar-month total; `excludeYm` is the
+*real* current in-progress month via `new Date()`).
 
-**"In numbers" section** (`ProjectionTab`) — appears below "What's happening" with a `section-h`
-title, then a single `.innum` flex column that establishes a **visual hierarchy** rather than a
-uniform grid (v84 refactor — dashboard classes live in `app.css`, marked "Analysis · In numbers
-dashboard"). Receives `fun` and `store` props (passed from `AnalysisScreen`). No box/card chrome:
-grouping is by proximity + hairlines. All the same data as before is preserved — nothing was
-dropped, only re-laid-out. Two pure helpers back it, exported from `calc.jsx`:
-`medianDailySpendYTD(stats)` (median of per-day totals across every elapsed calendar day, incl. €0
-days — damps lump-sum skew a mean can't) and `historicalMonthRange(store, excludeYm)` (all-time
-min/max calendar-month total; `excludeYm` is always the *real* current in-progress month via `new
-Date()`, so a past-year view still excludes today's partial month).
+Top-to-bottom the block is:
 
-Top-to-bottom the section is:
-
-1. **`ProjectionHero`** (local component) — the full-width hero. Serif headline = `stats.projection`
-   (or `ceiling` for future years), eyebrow "Projected year-end" / "Final total · {year}" / "Planned
-   ceiling · {year}", and an over/under sentence emphasising `|stats.delta|` (terra `.over` / sage
-   `.under`, ±`bandAmt` when current). Below it a **prominent 12px bullet bar** (`.projbar`, not the
-   thin home `.bullet-*`): a solid fill to `spent`, a faded (opacity .3) projection remainder to
-   `projection`, a hard black ceiling tick (`.projbar-ceil`), and a day-of-year pace marker
-   (`.projbar-doy`). Fill colour is terra when `projection > ceiling` else sage, so "over" is obvious
-   the instant the fill crosses the ceiling tick. Bar + labels (`spent` / `ceiling` / `proj`) hidden
-   for future years.
+1. **`ProjectionBar`** — the **prominent 12px bullet bar** (`.projbar`, not the thin home
+   `.bullet-*`). The over/under headline itself lives in the Overview `StatusHero` above; this is
+   just the bar: a solid fill to `spent`, a faded (opacity .3) projection remainder to `projection`,
+   a hard black ceiling tick (`.projbar-ceil`), a day-of-year pace marker (`.projbar-doy`), and
+   `spent`/`ceiling`/`proj` labels. Fill is terra when `projection > ceiling` else sage, so "over" is
+   obvious the instant the fill crosses the ceiling tick. Renders nothing for future years.
 2. **Primary metric trio** (`.metricrow` — 2–3 equal columns, hairline top/bottom, mono figures):
-   Spent YTD (+ entry count), Daily spend (`dailyRate`, median sub via `medianDailySpendYTD`, hidden
-   for future years), Blended rate (`trailingDailyRate` + `+€X buffer · Y%` sub, or "YTD avg" once
-   complete).
-3. **90-day trend** (`.trend-head` + `Trend90Chart`) — shown current-year with ≥90 days of data;
-   label + coloured verdict (`↑ Increasing` terra / `↓ Decreasing` sage / `→ Constant`), then the
-   sparkline (area + line, 9 ten-day bins) rendered **flush to the container edges** — no `.stat`
-   padding around it any more.
-4. **Current velocity** (`.innum-group`, current year only) — merges the old Monthly-target /
-   On-pace / daily-target tiles into one card: serif primary = `stats.pace` ("on-pace by today ·
-   €X/mo baseline"), then `.velo-line` rows for Adjusted monthly cap (`neededMonthlyCap`, sage/terra
-   vs `avgMonthly`), Daily room/target (`(ceiling − (spent + bufferAmt)) / daysRemaining`, floored 0
-   — local to `analysis.jsx`, does not touch the shared `requiredDailyToHit`/`dailyHeadroom`), Daily
+   Spent YTD (+ entry count), Daily spend (`dailyRate`, median sub, hidden future), Blended rate
+   (`trailingDailyRate` + `+€X buffer · Y%` sub, or "YTD avg" once complete).
+3. **`InsightCard`** — the rotating one-per-day insight (see its own section above), between the trio
+   and the trend.
+4. **90-day trend** (`.trend-head` + `Trend90Chart`) — current-year with ≥90 days of data; label +
+   coloured verdict, then the sparkline rendered **flush to the container edges**.
+5. **Current velocity** (`.innum-group`, current year only) — one card merging the old
+   Monthly-target / On-pace / daily-target tiles: serif primary = `stats.pace`, then `.velo-line`
+   rows for Adjusted monthly cap (`neededMonthlyCap`, sage/terra vs `avgMonthly`), Daily room/target
+   (`(ceiling − (spent + bufferAmt)) / daysRemaining`, floored 0 — local to `analysis.jsx`), Daily
    target this month (`(neededMonthly − spentThisMonth) / daysLeftInMonth`, floored 0), and Target
-   fun / person (`max(0, ceiling − projection) / monthsLeft / numPeople`).
-5. **More context** (`.factlist` dense key→value rows) — the remaining secondary numbers, each
-   conditional: Projected month-end (`projectedMonthEnd`, current year), Average per month (completed
-   months), Monthly range (`historicalMonthRange`, excludes `t.virtual`), Monthly baseline
-   (`ceiling/12`, only when *not* current since it's already in the velocity card), Total fun budget
-   (`funPlanAnnual`, hidden future), vs prior year (`stats.priorSpent > 0`, watch/good coloured).
-6. **FIRE portfolio target** (`.fire` widget, hidden future) — the three FIRE numbers consolidated
-   into one cohesive block with a "to sustain €X/yr" meta: 4% rule (`projection / 0.04`), 3.5% rule
-   (`projection / 0.035`), 3.5% with income (`max(0, projection − externalIncome) / 0.035`).
+   fun / person.
+6. **Collapsible "More context"** (`.innum-toggle` button + `.innum-more`, **default collapsed**) —
+   the toggle (chevron + label + a hairline rule filling the row) shows/hides everything below it.
+   Rendered only when there is content (`hasMore`). Expanded it holds:
+   - a `.factlist` of secondary facts, each conditional: Projected month-end (`projectedMonthEnd`,
+     current year), Average per month, Monthly range (`historicalMonthRange`, excludes `t.virtual`),
+     Monthly baseline (`ceiling/12`, only when *not* current), **Total fun budget** (`funPlanAnnual`),
+     **Total travel budget** (NEW — `travel.monthlyRate × 12`, mirrors the fun row; hidden future),
+     vs prior year (`stats.priorSpent > 0`, watch/good coloured);
+   - the **FIRE portfolio target** `.fire` widget (hidden future) — 4% (`projection/0.04`), 3.5%
+     (`projection/0.035`), 3.5% with income (`max(0, projection − externalIncome)/0.035`);
+   - the **Amortization** section (below).
 
-Removed vs the old grid: the standalone "Days · 365 complete" tile (redundant with the hero eyebrow)
-and the three `.eyebrow`/`.statgrid` sub-group wrappers. `StatCard` is no longer used in
-`ProjectionTab` (still used by `AmortizedTab`).
+`StatCard` is no longer used by `InNumbers` (still used by `AmortizedTab`).
 
-**"Amortization" block** (`ProjectionTab`) — the final `.innum-group`, rendered only when
+**"Amortization" block** — nested inside the collapsible "More context", rendered only when
 `YCalc.amortizationBreakdown(store, stats.year, stats.asOfStr).hasAmortized` is true and the year
 isn't future (`am` is computed once per render, local `const am = ...`). The figures are now a
 compact `.factlist` (Amortized YTD with a "% of spend" cap-meta, Real (cash), Virtual (no-cash,

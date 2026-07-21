@@ -2,7 +2,7 @@
 (function () {
   const { YData, YCalc, YUI, YFun, YTravel, YPlan } = window;
   const { eur0, eurAuto, signedEur, signedPct, pct, MONTHS, fmtDateShort } = YCalc;
-  const { TxRow, CatIcon, CalloutCard, SectionH, TxTag } = YUI;
+  const { TxRow, CatIcon, TxTag, rich } = YUI;
   const DS = window.ApertureDesignSystem_72a4cd || {};
   const SegmentedControl = DS.SegmentedControl, Input = DS.Input, Chip = DS.Chip;
 
@@ -80,18 +80,15 @@
     );
   }
 
-  // ── Hero: projected year-end vs ceiling, as a prominent full-width bullet bar ────────────────
-  // Immediately legible over/under: the fill (and headline emphasis) is terracotta when the
-  // projection clears the ceiling, sage when it stays under. The ceiling is a hard black tick the
-  // projected fill visibly crosses when over. For future years there is nothing to project — we
-  // fall back to the planned ceiling with no bar.
-  function ProjectionHero({ stats }) {
-    const eyebrow = stats.complete ? "Final total · " + stats.year
-      : stats.isFuture ? "Planned ceiling · " + stats.year
-      : "Projected year-end";
-    const headline = stats.isFuture ? stats.ceiling : stats.projection;
+  // ── Projection bar: the prominent full-width bullet bar (spent · projection · ceiling) ─────────
+  // The over/under headline itself lives in the Overview StatusHero; this is just the bar, the first
+  // element of the merged metrics block. Immediately legible over/under: the fill is terracotta when
+  // the projection clears the ceiling, sage when it stays under, and the projected remainder visibly
+  // crosses the hard black ceiling tick when over. Renders nothing for future years (nothing to
+  // project yet).
+  function ProjectionBar({ stats }) {
+    if (stats.isFuture) return null;
     const over = stats.projection > stats.ceiling;
-    const near = !stats.isFuture && Math.abs(stats.delta) < stats.ceiling * 0.005;
     const barColor = over ? "var(--terra)" : "var(--sage)";
 
     const xMax = Math.max(stats.ceiling, stats.projection, 1) * 1.05;
@@ -103,52 +100,54 @@
     const projLabelRight = projPct > 55;
 
     return (
-      <div className="projhero">
-        <div className="projhero-eyebrow">{eyebrow}</div>
-        <div className="projhero-num">{eur0(headline)}</div>
-        <div className="projhero-sub">
-          {stats.isFuture ? (
-            <>Nothing logged yet — this is the ceiling you set.</>
-          ) : near ? (
-            <>Right on your <span className="num">{eur0(stats.ceiling)}</span> ceiling.</>
-          ) : (
-            <>
-              {over ? "Over" : "Under"} the <span className="num">{eur0(stats.ceiling)}</span> ceiling by{" "}
-              <span className={"emph " + (over ? "over" : "under")}>{eur0(Math.abs(stats.delta))}</span>
-              {stats.bandAmt != null && !stats.complete && (
-                <span className="band">(±{eur0(stats.bandAmt)})</span>
-              )}.
-            </>
+      <div className="projbar">
+        <div className="projbar-rail">
+          <div className="projbar-spent" style={{ width: spentPct + "%", background: barColor }} />
+          {!stats.complete && stats.projection > stats.spent && (
+            <div className="projbar-proj" style={{ left: spentPct + "%", width: Math.max(0, projPct - spentPct) + "%", background: barColor }} />
+          )}
+          {!stats.complete && <div className="projbar-doy" style={{ left: doyPct + "%" }} />}
+          <div className="projbar-ceil" style={{ left: ceilPct + "%" }} />
+        </div>
+        <div className="projbar-labels">
+          <span className="projbar-label" style={{ left: 0 }}>
+            <b>{eur0(stats.spent)}</b> spent
+          </span>
+          <span className="projbar-label" style={ceilPct > 82 ? { right: 0 } : { left: ceilPct + "%", transform: "translateX(-50%)" }}>
+            ceiling <b>{eur0(stats.ceiling)}</b>
+          </span>
+          {!stats.complete && stats.projection > stats.spent && (
+            <span className="projbar-label" style={{ top: 13, ...(projLabelRight ? { right: Math.max(0, 100 - projPct) + "%", transform: "translateX(50%)" } : { left: projPct + "%", transform: "translateX(-50%)" }) }}>
+              proj <b style={{ color: barColor }}>{eur0(stats.projection)}</b>
+            </span>
           )}
         </div>
-        {!stats.isFuture && (
-          <>
-            <div className="projbar">
-              <div className="projbar-rail">
-                <div className="projbar-spent" style={{ width: spentPct + "%", background: barColor }} />
-                {!stats.complete && stats.projection > stats.spent && (
-                  <div className="projbar-proj" style={{ left: spentPct + "%", width: Math.max(0, projPct - spentPct) + "%", background: barColor }} />
-                )}
-                {!stats.complete && <div className="projbar-doy" style={{ left: doyPct + "%" }} />}
-                <div className="projbar-ceil" style={{ left: ceilPct + "%" }} />
-              </div>
-              <div className="projbar-labels">
-                <span className="projbar-label" style={{ left: 0 }}>
-                  <b>{eur0(stats.spent)}</b> spent
-                </span>
-                <span className="projbar-label" style={ceilPct > 82 ? { right: 0 } : { left: ceilPct + "%", transform: "translateX(-50%)" }}>
-                  ceiling <b>{eur0(stats.ceiling)}</b>
-                </span>
-                {!stats.complete && stats.projection > stats.spent && (
-                  <span className="projbar-label" style={{ top: 13, ...(projLabelRight ? { right: Math.max(0, 100 - projPct) + "%", transform: "translateX(50%)" } : { left: projPct + "%", transform: "translateX(-50%)" }) }}>
-                    proj <b style={{ color: barColor }}>{eur0(stats.projection)}</b>
-                  </span>
-                )}
-              </div>
-            </div>
-          </>
-        )}
       </div>
+    );
+  }
+
+  // ── Rotating insight card — the app's single "voice" line, seated inside the merged metrics
+  // block (between the YTD trio and the trend). One-per-day rotation over the eligible callouts
+  // (stable buildCallouts order), skipping the ones redundant with the hero. Silent when none earn
+  // it. Clicking drills via onCallout (projection-drills stay on Overview; others open Analysis).
+  function InsightCard({ callouts, onCallout }) {
+    const eligible = callouts
+      ? callouts.filter((c) => !["ceiling", "buffer", "calm", "final", "future"].includes(c.id))
+      : [];
+    const dayIndex = Math.floor(Date.now() / 86400000);
+    const c = eligible.length ? eligible[dayIndex % eligible.length] : null;
+    if (!c) return null;
+    const dot = c.severity === "alert" ? "var(--terra)" : c.severity === "watch" ? "var(--amber)" : "var(--sage)";
+    return (
+      <button onClick={() => onCallout && onCallout(c)} style={{
+        display: "flex", gap: 11, alignItems: "flex-start", width: "100%",
+        padding: "14px 0", textAlign: "left", cursor: "pointer",
+        background: "transparent", border: "none", borderTop: "1px solid var(--hair)", borderBottom: "1px solid var(--hair)",
+      }}>
+        <span style={{ display: "inline-block", marginTop: 6, width: 7, height: 7, borderRadius: "50%", background: dot, flexShrink: 0 }} />
+        <span style={{ flex: 1, fontSize: 14, fontFamily: "var(--sans)", color: "var(--ink-2)", lineHeight: 1.5 }}>{rich(c.text)}</span>
+        <span style={{ color: "var(--muted)", fontSize: 14, marginTop: 1, flexShrink: 0 }}>{"→"}</span>
+      </button>
     );
   }
 
@@ -449,7 +448,13 @@
     );
   }
 
-  function ProjectionTab({ stats, fun, store, callouts, onCallout }) {
+  // ── InNumbers — the merged metrics block, rendered on the Overview above the charts. Presentation
+  // is a hierarchy: prominent projection bar → primary trio → rotating insight card → 90d trend +
+  // current velocity → a collapsible "More context" (default collapsed) holding the secondary facts,
+  // the fun/travel budgets, the FIRE widget and the amortization section. No section title and no
+  // full callouts list — the over/under headline lives in the Overview StatusHero above this.
+  function InNumbers({ stats, store, travel, callouts, onCallout }) {
+    const [showMore, setShowMore] = React.useState(false);
     const curMonth = stats.isFuture ? -1 : stats.asOf.getMonth();
     const completedMonths = stats.complete ? 12 : Math.max(0, curMonth);
     const completedAmounts = stats.byMonth.slice(0, completedMonths).map((m) => m.amount);
@@ -480,6 +485,11 @@
     const externalIncome = (store && store.externalIncome) || 0;
     const firePortfolio35Income = Math.max(0, stats.projection - externalIncome) / 0.035;
 
+    // Travel budget — mirrors the fun-budget row. Travel uses a single household allowance (no
+    // per-person split), so the annual figure is the current monthly rate × 12.
+    const travelMonthly = (travel && travel.monthlyRate) || 0;
+    const travelPlanAnnual = travelMonthly * 12;
+
     // Historical actuals
     const dailyMedian = !stats.isFuture ? YCalc.medianDailySpendYTD(stats) : null;
     const monthRange = !stats.isFuture
@@ -505,31 +515,33 @@
     // Amortization — read-only explanatory layer (see YCalc.amortizationBreakdown).
     const am = YCalc.amortizationBreakdown(store, stats.year, stats.asOfStr);
 
+    const facts = [];
+    if (projMonthEnd !== null) facts.push({ k: "Projected month-end", kn: "this month", v: eur0(projMonthEnd) });
+    if (completedMonths > 0) facts.push({ k: "Average per month", kn: `${completedMonths} completed month${completedMonths === 1 ? "" : "s"}`, v: eur0(avgMonthly) });
+    if (monthRange) facts.push({ k: "Monthly range", kn: `${monthRange.minLabel} – ${monthRange.maxLabel}`, v: `${eur0(monthRange.min)}–${eur0(monthRange.max)}` });
+    if (!stats.isCurrent) facts.push({ k: "Monthly baseline", v: `${eur0(stats.ceiling / 12)}/mo` });
+    if (!stats.isFuture) facts.push({ k: "Total fun budget", kn: `${eur0(stats.funPlanAnnual / 12)}/mo`, v: `${eur0(stats.funPlanAnnual)}/yr` });
+    if (!stats.isFuture) facts.push({ k: "Total travel budget", kn: `${eur0(travelMonthly)}/mo`, v: `${eur0(travelPlanAnnual)}/yr` });
+    if (stats.priorSpent > 0) {
+      const diff = stats.spent - stats.priorSpent;
+      facts.push({
+        k: stats.complete ? `vs ${stats.year - 1} final` : `vs ${stats.year - 1} same point`,
+        kn: signedPct(diff / stats.priorSpent), v: signedEur(diff),
+        color: diff > 0 ? "var(--watch)" : "var(--good)",
+      });
+    }
+    const showFire = !stats.isFuture;
+    const showAmort = am.hasAmortized && !stats.isFuture;
+    const hasMore = facts.length > 0 || showFire || showAmort;
+
     return (
-      <div className="stagger" style={{ display: "flex", flexDirection: "column", gap: 24 }}>
-        {callouts && callouts.length > 0 && (
-          <div>
-            <SectionH
-              title={stats.complete ? "The year in review" : "What's happening"}
-              meta={callouts.length + (callouts.length === 1 ? " NOTE" : " NOTES")}
-            />
-            <div className="callouts">
-              {callouts.map((c) => (
-                <CalloutCard key={c.id} c={c} onClick={() => onCallout && onCallout(c)} />
-              ))}
-            </div>
-          </div>
-        )}
+      <div className="innum">
 
-        <div>
-          <div className="section-h" style={{ marginTop: 0, marginBottom: 18 }}><h2>In numbers</h2></div>
-          <div className="innum">
+        {/* Prominent projection bar — over/under obvious at a glance */}
+        <ProjectionBar stats={stats} />
 
-            {/* Hero — projected year-end vs ceiling, over/under obvious at a glance */}
-            <ProjectionHero stats={stats} />
-
-            {/* Primary metrics — bold figures, muted context */}
-            <div className="metricrow">
+        {/* Primary metrics — bold figures, muted context */}
+        <div className="metricrow">
               <div className="metric">
                 <div className="metric-label">{stats.complete ? "Total spent" : "Spent YTD"}</div>
                 <div className="metric-val">{eur0(stats.spent)}</div>
@@ -550,6 +562,9 @@
                   : `YTD avg ${eur0(stats.dailyRate)}/d`}</div>
               </div>
             </div>
+
+            {/* Rotating insight card — the single "voice" line, one-per-day rotation */}
+            <InsightCard callouts={callouts} onCallout={onCallout} />
 
             {/* 90-day trend — chart flush to the container edges */}
             {trend90 && (
@@ -599,95 +614,88 @@
               </div>
             )}
 
-            {/* More context — secondary facts, dense list */}
-            {(() => {
-              const facts = [];
-              if (projMonthEnd !== null) facts.push({ k: "Projected month-end", kn: "this month", v: eur0(projMonthEnd) });
-              if (completedMonths > 0) facts.push({ k: "Average per month", kn: `${completedMonths} completed month${completedMonths === 1 ? "" : "s"}`, v: eur0(avgMonthly) });
-              if (monthRange) facts.push({ k: "Monthly range", kn: `${monthRange.minLabel} – ${monthRange.maxLabel}`, v: `${eur0(monthRange.min)}–${eur0(monthRange.max)}` });
-              if (!stats.isCurrent) facts.push({ k: "Monthly baseline", v: `${eur0(stats.ceiling / 12)}/mo` });
-              if (!stats.isFuture) facts.push({ k: "Total fun budget", kn: `${eur0(stats.funPlanAnnual / 12)}/mo`, v: `${eur0(stats.funPlanAnnual)}/yr` });
-              if (stats.priorSpent > 0) {
-                const diff = stats.spent - stats.priorSpent;
-                facts.push({
-                  k: stats.complete ? `vs ${stats.year - 1} final` : `vs ${stats.year - 1} same point`,
-                  kn: signedPct(diff / stats.priorSpent), v: signedEur(diff),
-                  color: diff > 0 ? "var(--watch)" : "var(--good)",
-                });
-              }
-              if (!facts.length) return null;
-              return (
-                <div className="innum-group">
-                  <div className="innum-cap">More context</div>
-                  <div className="factlist">
-                    {facts.map((f, i) => (
-                      <div className="factrow" key={i}>
-                        <span className="fact-k">{f.k}{f.kn && <span className="n">{f.kn}</span>}</span>
-                        <span className="fact-v" style={f.color ? { color: f.color } : undefined}>{f.v}</span>
+            {/* Collapsible "More context" — default collapsed; hides everything from the secondary
+                facts down through the amortization/composition breakdown */}
+            {hasMore && (
+              <div className="innum-group">
+                <button className="innum-toggle" aria-expanded={showMore} onClick={() => setShowMore((s) => !s)}>
+                  <window.Icon name={showMore ? "chevronDown" : "chevronRight"} size={13} style={{ color: "var(--muted)", flexShrink: 0 }} />
+                  <span>More context</span>
+                  <span className="innum-toggle-rule" />
+                </button>
+
+                {showMore && (
+                  <div className="innum-more">
+                    {facts.length > 0 && (
+                      <div className="factlist">
+                        {facts.map((f, i) => (
+                          <div className="factrow" key={i}>
+                            <span className="fact-k">{f.k}{f.kn && <span className="n">{f.kn}</span>}</span>
+                            <span className="fact-v" style={f.color ? { color: f.color } : undefined}>{f.v}</span>
+                          </div>
+                        ))}
                       </div>
-                    ))}
-                  </div>
-                </div>
-              );
-            })()}
+                    )}
 
-            {/* FIRE portfolio — one cohesive widget instead of three tiles */}
-            {!stats.isFuture && (
-              <div className="innum-group">
-                <div className="innum-cap">FIRE portfolio target <span className="meta">to sustain {eur0(stats.projection)}/yr</span></div>
-                <div className="fire">
-                  <div className="fire-row">
-                    <span className="lab">4% rule<span className="n">standard safe-withdrawal</span></span>
-                    <span className="amt">{eurK(firePortfolio)}</span>
+                    {/* FIRE portfolio — one cohesive widget instead of three tiles */}
+                    {showFire && (
+                      <div className="innum-group">
+                        <div className="innum-cap">FIRE portfolio target <span className="meta">to sustain {eur0(stats.projection)}/yr</span></div>
+                        <div className="fire">
+                          <div className="fire-row">
+                            <span className="lab">4% rule<span className="n">standard safe-withdrawal</span></span>
+                            <span className="amt">{eurK(firePortfolio)}</span>
+                          </div>
+                          <div className="fire-row">
+                            <span className="lab">3.5% rule<span className="n">conservative</span></span>
+                            <span className="amt">{eurK(firePortfolio35)}</span>
+                          </div>
+                          <div className="fire-row">
+                            <span className="lab">3.5% with income<span className="n">net of {eur0(externalIncome)} external</span></span>
+                            <span className="amt">{eurK(firePortfolio35Income)}</span>
+                          </div>
+                        </div>
+                      </div>
+                    )}
+
+                    {/* Amortization — one unified section (figures + chart) */}
+                    {showAmort && (
+                      <div className="innum-group">
+                        <div className="innum-cap">Amortization <span className="meta">{stats.spent > 0 ? pct(am.ytd.total / stats.spent) + " of spend" : ""}</span></div>
+                        <div className="factlist">
+                          <div className="factrow">
+                            <span className="fact-k">Amortized year-to-date</span>
+                            <span className="fact-v">{eur0(am.ytd.total)}</span>
+                          </div>
+                          <div className="factrow">
+                            <span className="fact-k">Real (cash)</span>
+                            <span className="fact-v">{eur0(am.ytd.real)}</span>
+                          </div>
+                          <div className="factrow">
+                            <span className="fact-k">Virtual (no-cash)</span>
+                            <span className="fact-v" style={{ color: "var(--sage)" }}>{eur0(am.ytd.virtual)}</span>
+                          </div>
+                          {stats.isCurrent && (
+                            <div className="factrow">
+                              <span className="fact-k">This month{stats.byMonth[curMonth].amount > 0 && <span className="n">{pct(am.month.total / stats.byMonth[curMonth].amount)} of month</span>}</span>
+                              <span className="fact-v">{eur0(am.month.total)}</span>
+                            </div>
+                          )}
+                          {stats.isCurrent && (
+                            <div className="factrow">
+                              <span className="fact-k">Committed<span className="n">rest of {stats.year}</span></span>
+                              <span className="fact-v">{eur0(am.committedThisYear)}</span>
+                            </div>
+                          )}
+                        </div>
+                        <AmortizationChart am={am} stats={stats} />
+                      </div>
+                    )}
                   </div>
-                  <div className="fire-row">
-                    <span className="lab">3.5% rule<span className="n">conservative</span></span>
-                    <span className="amt">{eurK(firePortfolio35)}</span>
-                  </div>
-                  <div className="fire-row">
-                    <span className="lab">3.5% with income<span className="n">net of {eur0(externalIncome)} external</span></span>
-                    <span className="amt">{eurK(firePortfolio35Income)}</span>
-                  </div>
-                </div>
+                )}
               </div>
             )}
 
-            {/* Amortization — one unified section (figures + chart) */}
-            {am.hasAmortized && !stats.isFuture && (
-              <div className="innum-group">
-                <div className="innum-cap">Amortization <span className="meta">{stats.spent > 0 ? pct(am.ytd.total / stats.spent) + " of spend" : ""}</span></div>
-                <div className="factlist">
-                  <div className="factrow">
-                    <span className="fact-k">Amortized year-to-date</span>
-                    <span className="fact-v">{eur0(am.ytd.total)}</span>
-                  </div>
-                  <div className="factrow">
-                    <span className="fact-k">Real (cash)</span>
-                    <span className="fact-v">{eur0(am.ytd.real)}</span>
-                  </div>
-                  <div className="factrow">
-                    <span className="fact-k">Virtual (no-cash)</span>
-                    <span className="fact-v" style={{ color: "var(--sage)" }}>{eur0(am.ytd.virtual)}</span>
-                  </div>
-                  {stats.isCurrent && (
-                    <div className="factrow">
-                      <span className="fact-k">This month{stats.byMonth[curMonth].amount > 0 && <span className="n">{pct(am.month.total / stats.byMonth[curMonth].amount)} of month</span>}</span>
-                      <span className="fact-v">{eur0(am.month.total)}</span>
-                    </div>
-                  )}
-                  {stats.isCurrent && (
-                    <div className="factrow">
-                      <span className="fact-k">Committed<span className="n">rest of {stats.year}</span></span>
-                      <span className="fact-v">{eur0(am.committedThisYear)}</span>
-                    </div>
-                  )}
-                </div>
-                <AmortizationChart am={am} stats={stats} />
-              </div>
-            )}
-
-          </div>
-        </div>
       </div>
     );
   }
@@ -955,12 +963,11 @@
     );
   }
 
-  function AnalysisScreen({ stats, focus, onEditTx, fun, travel, store, setStore, addTx, callouts, onCallout }) {
-    const [tab, setTab] = React.useState("Projection");
+  function AnalysisScreen({ stats, focus, onEditTx, fun, travel, store, setStore, addTx }) {
+    const [tab, setTab] = React.useState("Activity");
     const [activitySubtab, setActivitySubtab] = React.useState("Categories");
     React.useEffect(() => {
       if (focus && focus.section === "categories") { setTab("Activity"); setActivitySubtab("Categories"); }
-      else if (focus && focus.section === "projection") setTab("Projection");
       else if (focus && focus.section === "activity") { setTab("Activity"); setActivitySubtab("Transactions"); }
       else if (focus && focus.section === "fun") setTab("Fun");
       else if (focus && focus.section === "travel") setTab("Travel");
@@ -968,9 +975,8 @@
     return (
       <div className="screen">
         <div style={{ position: "sticky", top: 0, zIndex: 5, paddingBottom: 4 }}>
-          <SegmentedControl options={["Projection", "Activity", "Fun", "Travel", "Plan"]} value={tab} fill onChange={setTab} />
+          <SegmentedControl options={["Activity", "Fun", "Travel", "Plan"]} value={tab} fill onChange={setTab} />
         </div>
-        {tab === "Projection" && <ProjectionTab stats={stats} fun={fun} store={store} callouts={callouts} onCallout={onCallout} />}
         {tab === "Activity" && (
           <ActivityMergedTab
             stats={stats}
@@ -989,5 +995,5 @@
     );
   }
 
-  window.YAnalysis = { AnalysisScreen };
+  window.YAnalysis = { AnalysisScreen, InNumbers };
 })();

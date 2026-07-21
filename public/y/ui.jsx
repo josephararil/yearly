@@ -39,7 +39,7 @@
   }
 
   // Status hero — Zone 1 (reality block) + Zone 2 (bullet bar) + Zone 3 placeholder.
-  function StatusHero({ stats, store }) {
+  function StatusHero({ stats, store, hideBar }) {
     const [tip, setTip] = React.useState({ open: false, x: 0 });
 
     const headline = stats.isFuture ? stats.ceiling : stats.projection;
@@ -129,7 +129,7 @@
             <span style={{ color: "var(--muted)" }}> · {drawZone.label}</span>
           </div>
         )}
-        {!stats.isFuture && (
+        {!hideBar && !stats.isFuture && (
           <>
             <div className="hero-hr" />
             <div className="hero-spent">
