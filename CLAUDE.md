@@ -48,10 +48,20 @@ Full local-dev notes (the no-backend 404 handling, reload-loop fix) are in
 
 1. **Service worker caches the whole app.** Code changes are NOT reflected on a simple reload — even
    a scripted `location.reload()` or an SW-unregister+clear-caches call can still serve stale bytes
-   via the browser's own HTTP cache. On every shell change, bump `CACHE_NAME` in `public/sw.js` AND
-   hard-refresh (`Ctrl+Shift+R`, or `computer{action:"key", text:"ctrl+shift+r"}` in the Browser pane
-   tool). When something doesn't appear in preview, **hard-refresh first** — rule it out before
-   debugging logic. Also: if port 8766 is already serving (another session's dev server), navigate
+   via the browser's own HTTP cache. **Bump `CACHE_NAME` in `public/sw.js` and `APP_VERSION` in
+   `settings.jsx` as step 1 of testing any change** — before opening the preview at all, not only if
+   something looks stale — because if `CACHE_NAME` is unchanged the SW never reinstalls, so no amount
+   of hard-refreshing does anything. After bumping, hard-refresh (`Ctrl+Shift+R`, or
+   `computer{action:"key", text:"ctrl+shift+r"}` in the Browser pane tool). If something still doesn't
+   appear, **hard-refresh again first** — rule it out before debugging logic. The Browser pane tool
+   can lag a real browser here: the SW's `controllerchange` reload can race a screenshot taken right
+   after `ctrl+shift+r`, producing a blank/half-loaded capture that looks like "nothing happened" even
+   though the fix is fine. Don't conclude a feature is broken from one such capture — re-screenshot
+   after a beat, or check `document.querySelector('.muted').textContent` for the `APP_VERSION` string
+   to confirm the new build actually took over, before deciding code needs to change. Full sequence
+   (including this ordering) is in
+   [docs/PWA-AND-DEV.md](docs/PWA-AND-DEV.md#claude-code-preview--how-to-deploy-locally-for-testing).
+   Also: if port 8766 is already serving (another session's dev server), navigate
    straight to `http://localhost:8766/public/` instead of letting `preview_start`'s `autoPort` spin up
    a second server on a random port nobody is looking at. Full SW + preview workflow, including the
    port-conflict and hard-refresh procedures: [docs/PWA-AND-DEV.md](docs/PWA-AND-DEV.md#claude-code-preview--how-to-deploy-locally-for-testing).
