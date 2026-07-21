@@ -37,6 +37,39 @@
     );
   }
 
+  // ── 90-day spend trend sparkline (Projection "In numbers") ───────────────────────────────────
+  function Trend90Chart({ upto, asOf, color }) {
+    const days = 90, bins = 9, binSize = days / bins;
+    const end = new Date(asOf);
+    const start = new Date(end); start.setDate(start.getDate() - (days - 1));
+    const startStr = YCalc.localISO(start);
+    const endStr = YCalc.localISO(end);
+    const perDay = new Array(days).fill(0);
+    upto.forEach((t) => {
+      if (t.date < startStr || t.date > endStr) return;
+      const idx = Math.round((new Date(t.date + "T00:00:00") - new Date(startStr + "T00:00:00")) / 86400000);
+      if (idx >= 0 && idx < days) perDay[idx] += t.amount_eur;
+    });
+    const binned = new Array(bins).fill(0);
+    for (let i = 0; i < days; i++) binned[Math.min(bins - 1, Math.floor(i / binSize))] += perDay[i];
+    const avg = binned.map((v) => v / binSize);
+    const max = Math.max(1, ...avg);
+    const W = 320, H = 64, padB = 6, padT = 6;
+    const slot = W / bins;
+    const pts = avg.map((v, i) => [i * slot + slot / 2, padT + (1 - v / max) * (H - padB - padT)]);
+    const line = pts.map((p, i) => (i === 0 ? `M${p[0]},${p[1]}` : `L${p[0]},${p[1]}`)).join(" ");
+    const area = `M${pts[0][0]},${H - padB} ` + pts.map((p) => `L${p[0]},${p[1]}`).join(" ") + ` L${pts[pts.length - 1][0]},${H - padB} Z`;
+    return (
+      <svg viewBox={`0 0 ${W} ${H}`} width="100%" style={{ display: "block" }}>
+        <path d={area} fill={`color-mix(in srgb, ${color} 16%, transparent)`} stroke="none" />
+        <path d={line} fill="none" stroke={color} strokeWidth="2" strokeLinejoin="round" strokeLinecap="round" />
+        {pts.map(([x, y], i) => (
+          <circle key={i} cx={x} cy={y} r={i === pts.length - 1 ? 3 : 2} fill={color} />
+        ))}
+      </svg>
+    );
+  }
+
   function StatCard({ label, value, sub, mono = true, color }) {
     return (
       <div className="stat">
@@ -371,6 +404,9 @@
     const monthsLeft = Math.max(1, stats.daysRemaining / 30.4);
     const targetFunPerMo = Math.max(0, stats.ceiling - stats.projection) / monthsLeft / numPeople;
     const firePortfolio = stats.projection / 0.04;
+    const firePortfolio35 = stats.projection / 0.035;
+    const externalIncome = (store && store.externalIncome) || 0;
+    const firePortfolio35Income = Math.max(0, stats.projection - externalIncome) / 0.035;
 
     // Historical actuals
     const dailyMedian = !stats.isFuture ? YCalc.medianDailySpendYTD(stats) : null;
@@ -470,8 +506,20 @@
                     ? `+${eur0(stats.bufferAmt)} buffer (${Math.round(stats.buffer * 100)}% missed-entry)`
                     : `YTD avg ${eur0(stats.dailyRate)}/d`}
                 />
-                {trend90 && <StatCard label="90d trend" value={trend90} mono={false} color={trend90Color} />}
+                {trend90 && (
+                  <div className="stat" style={{ gridColumn: "1 / -1" }}>
+                    <div className="stat-label">90d trend</div>
+                    <div className="stat-val" style={{ color: trend90Color }}>{trend90}</div>
+                    <div style={{ marginTop: 8 }}>
+                      <Trend90Chart upto={stats.upto} asOf={stats.asOf} color={trend90Color} />
+                    </div>
+                  </div>
+                )}
                 {!stats.isFuture && <StatCard label="FIRE portfolio" value={eurK(firePortfolio)} sub="at 4% rule" />}
+                {!stats.isFuture && <StatCard label="FIRE portfolio" value={eurK(firePortfolio35)} sub="at 3.5% rule" />}
+                {!stats.isFuture && (
+                  <StatCard label="Min. portfolio" value={eurK(firePortfolio35Income)} sub="at 3.5% rule with income" />
+                )}
               </div>
             </div>
 

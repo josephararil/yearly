@@ -88,7 +88,9 @@ formula, status thresholds, and each callout detector.
 - `historicalMonthRange(store, excludeYm)` → `{min, max, minLabel, maxLabel, n} | null` (all-time
   highest/lowest calendar-month spend total across every year in `store.transactions`; `excludeYm`
   ("YYYY-MM") leaves out one partial month, normally the real current month via `new Date()` so an
-  in-progress month never masquerades as the lowest month on record). Used by the same group.
+  in-progress month never masquerades as the lowest month on record). Excludes `t.virtual`
+  (amortized no-cash) transactions — a large virtual parent tx dated in one month shouldn't distort
+  the real-cash range. Used by the same group.
 - `projectedMonthEnd(stats)` → number (current-month daily-rate extrapolation from today to
   month-end; equals `byMonth[m].amount` for complete/future years — shared by MonthCurve and
   StatusHero pulse line). Applies the same lump-sum winsorization as `computeStats`: an

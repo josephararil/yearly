@@ -345,7 +345,9 @@ month or it wrongly shows up as the "lowest" month).
   - Daily spend (YTD) — `dailyRate` + median sub-line (`medianDailySpendYTD`). Hidden for future years.
   - Avg spend/mo — average over completed months, sub shows the completed-month count (the
     "need ≤€X/mo" cue moved to the Targets group's Monthly target tile, see below).
-  - Monthly range — `historicalMonthRange` min–max with the two month labels. Hidden for future years.
+  - Monthly range — `historicalMonthRange` min–max with the two month labels; excludes `t.virtual`
+    (amortized no-cash) transactions so a large virtual parent tx doesn't distort the real-cash
+    range. Hidden for future years.
   - vs prior year same point / final (existing, conditional on `stats.priorSpent > 0`).
 - **Projections & forecasts** — forward-looking:
   - Projected month-end — `YCalc.projectedMonthEnd(stats)`. Current year only.
@@ -353,8 +355,13 @@ month or it wrongly shows up as the "lowest" month).
   - Blended rate — `trailingDailyRate` + buffer-adds sub (`+€X buffer (Y% missed-entry)`) when not
     complete, else falls back to the old "YTD avg €X/d" sub (buffer isn't meaningful post-close).
   - 90d trend — compares last-45d daily rate to prior-45d rate; `↑ Increasing` (terra), `↓
-    Decreasing` (sage), or `→ Constant`. Only shown for current year with ≥ 90 days of data.
-  - FIRE portfolio — `stats.projection / 0.04`; "at 4% rule" sub. Not shown for future years.
+    Decreasing` (sage), or `→ Constant`. Only shown for current year with ≥ 90 days of data. Paired
+    with a full-width `Trend90Chart` sparkline (area + line, 9 ten-day bins over the last 90 days of
+    `stats.upto`), coloured to match the trend word.
+  - FIRE portfolio (×3) — `stats.projection / 0.04` ("at 4% rule"), `stats.projection / 0.035` ("at
+    3.5% rule"), and a "Min. portfolio" tile at `max(0, stats.projection − store.externalIncome) /
+    0.035` ("at 3.5% rule with income") — the minimum portfolio size for a 3.5% draw once external
+    income is netted out; the inverse framing of `impliedDraw`. Not shown for future years.
 - **Targets & budgets** — dynamic constraints from the ceiling:
   - Monthly target — baseline (`ceiling / 12`) with the adjusted-cap sub-line
     (`neededMonthly = YCalc.neededMonthlyCap(stats)`), coloured sage/terra vs `avgMonthly`. Adjusted

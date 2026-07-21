@@ -523,9 +523,13 @@ Top to bottom:
 A segmented control: **Projection · Categories · Activity · Fun · Travel**.
 
 - **Projection** — the full callouts list ("What's happening") and an "In numbers" stat grid (Spent
-  YTD, blended rate, buffer adds, avg spend/mo, 90-day trend, total fun budget, target fun/mo, a
-  "FIRE portfolio" curiosity at the 4% rule, and more). The year line chart and monthly bar chart
-  that used to live here now live in the Overview chart switcher (above).
+  YTD, blended rate, buffer adds, avg spend/mo, a monthly range excluding virtual/amortized
+  no-cash entries, total fun budget, target fun/mo, and more). "90-day trend" pairs the ↑/↓/→
+  label with a small area/line sparkline of the last 90 days' spend (9 ten-day bins). Three "FIRE
+  portfolio" curiosities sit side by side: at the 4% rule, at the 3.5% rule, and the minimum
+  portfolio needed for a 3.5% draw once external income is netted out (the inverse of the implied
+  draw rate shown under the hero). The year line chart and monthly bar chart that used to live
+  here now live in the Overview chart switcher (above).
 - **Categories** — every category with spend, ranked, as an expandable bar row (share %, entry
   count, MoM change). Expanding shows the most recent and largest transactions in that category.
 - **Activity** — search by description, filter chips for every category, a 6-way sort, "show only"
