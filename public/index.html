@@ -59,7 +59,33 @@
 
   <script>
     if ('serviceWorker' in navigator) {
-      navigator.serviceWorker.register('sw.js');
+      // ---- active update lifecycle ----
+      // sw.js already does skipWaiting()+clients.claim(), but that alone leaves an already-open
+      // tab running old JS until something tells it to reload. This drives that: force an update
+      // check on load and on refocus, detect an actual update (vs. first install), and reload
+      // exactly once when the new SW takes control. sessionStorage guard mirrors the safeReload()
+      // throttle pattern in y/sync.jsx so a second controllerchange can't loop the reload.
+      let updateDetected = false;
+      navigator.serviceWorker.register('sw.js').then(registration => {
+        registration.update();
+        document.addEventListener('visibilitychange', () => {
+          if (document.visibilityState === 'visible') registration.update();
+        });
+        registration.addEventListener('updatefound', () => {
+          const installing = registration.installing;
+          if (!installing) return;
+          installing.addEventListener('statechange', () => {
+            if (installing.state === 'installed' && navigator.serviceWorker.controller) {
+              updateDetected = true;
+            }
+          });
+        });
+      });
+      navigator.serviceWorker.addEventListener('controllerchange', () => {
+        if (!updateDetected || sessionStorage.getItem('yearly:swReloaded')) return;
+        sessionStorage.setItem('yearly:swReloaded', '1');
+        location.reload();
+      });
     }
   </script>
 </body>

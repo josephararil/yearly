@@ -58,22 +58,26 @@ design system:
 
 ## PWA (offline + install)
 
-- **`sw.js`** (repo root) — **network-first** service worker. On every fetch it tries the network;
-  on success it writes the response to cache and returns it. On network failure it serves from
-  cache. Precaches the full app shell on install (all `y/*.jsx`, `y/*.css`, `manifest.json`,
-  `index.html`, and the three pinned CDN URLs for React/ReactDOM/Babel). The old cache is deleted on
-  `activate`. `skipWaiting()` + `clients.claim()` ensure the new SW takes over immediately.
-  **Install hardening:** the install handler uses individual `fetch({cache:'no-cache'}).catch()`
-  calls instead of `cache.addAll` so a single URL failure does not abort the entire SW install, and
-  `no-cache` ensures the install always fetches fresh files. Same `!response.redirected` guard
-  applied in the install handler as in the fetch handler. **Logo caching:** merchant logo requests
+- **`sw.js`** (repo root) — **stale-while-revalidate** service worker for the app shell. On every
+  fetch it returns a cached match immediately if present (instant load), and in parallel fetches the
+  network response to refresh the cache for the next load (`event.waitUntil` keeps the SW alive for
+  that background write). Falls back to network when there's no cache hit yet. Precaches the full
+  app shell on install (all `y/*.jsx`, `y/*.css`, `manifest.json`, `index.html`, and the three pinned
+  CDN URLs for React/ReactDOM/Babel). The old cache is deleted on `activate`. `skipWaiting()` +
+  `clients.claim()` make the new SW take over immediately — paired with the active update lifecycle
+  in `index.html` (below), this is what keeps an installed/home-screen PWA converging on the new
+  version without needing an uninstall/reinstall. **Install hardening:** the install handler uses
+  individual `fetch({cache:'no-cache'}).catch()` calls instead of `cache.addAll` so a single URL
+  failure does not abort the entire SW install, and `no-cache` ensures the install always fetches
+  fresh files. Same `!response.redirected` guard applied in the install handler as in the fetch
+  handler. **Logo caching:** merchant logo requests
   (`storage.googleapis.com/revolut-prod-apps_merchant-logo/…`) use a **cache-first** strategy with a
   dedicated `yearly-logos-v1` cache; once fetched a logo is never re-fetched, and this cache is
-  intentionally NOT deleted on app version bumps (logos are stable per URL). All other requests
-  remain network-first.
+  intentionally NOT deleted on app version bumps (logos are stable per URL). `/api/*` and `/cdn-cgi/*`
+  requests are excluded from the SW fetch handler entirely (network-only).
 
 > **Cache-versioning rule:** bump `CACHE_NAME` in `sw.js` whenever the shell changes (new file in
-> the precache list, CDN URL pinned to a new version, etc.). Current version: `yearly-v85` — keep it
+> the precache list, CDN URL pinned to a new version, etc.). Current version: `yearly-v87` — keep it
 > in lockstep with `APP_VERSION` in `settings.jsx`.
 
 - **`manifest.json`** — includes `id`, `scope`, `start_url`, and an `icons` array with 192×192,
@@ -83,9 +87,16 @@ design system:
   rounded corners (rx 115). Used for both 192 and 512 manifest entries.
 - **`icons/icon-maskable.svg`** — same design, full bleed (no rx), content within the inner 80% safe
   zone so the OS mask never clips the wordmark. Used for the `"purpose": "maskable"` manifest entry.
-- **`index.html`** registers the SW at the end of `<body>` with feature detection (`if
-  ('serviceWorker' in navigator) navigator.serviceWorker.register('sw.js')`). Also adds `<link
-  rel="apple-touch-icon" href="icons/icon.svg">` for iOS home-screen icons.
+- **`index.html`** registers the SW at the end of `<body>` and then actively drives the update
+  lifecycle: it calls `registration.update()` right after registering and again on every
+  `visibilitychange` to visible (so a home-screen PWA reopened after being backgrounded checks for a
+  new SW promptly, rather than waiting on the browser's own lazy check). It tracks `updatefound` →
+  the installing worker's `statechange` to `'installed'`; if `navigator.serviceWorker.controller`
+  already existed at that point, this is an update (not the first install) and a flag is set. On
+  `controllerchange`, if that flag is set, the page reloads exactly once — guarded by a
+  `sessionStorage` key (`yearly:swReloaded`) so a second `controllerchange` in the same tab session
+  can't loop the reload, mirroring the `safeReload()` throttle pattern in `y/sync.jsx`. Also adds
+  `<link rel="apple-touch-icon" href="icons/icon.svg">` for iOS home-screen icons.
 
 > After any `sw.js` change: hard-refresh and confirm the new SW activated in DevTools → Application
 > → Service Workers before investigating anything else.
