@@ -58,8 +58,10 @@ Shows a 24px rounded merchant logo (`t.merchant_logo`) when present; falls back 
 category icon (colored square + SVG icon, `CatIcon`-style inline) if absent or on load error.
 `tx-meta` appends `· city` when `t.merchant_city` is set. Both fields are populated by `rowToTx` in
 `sync.jsx` from the Revolut D1 columns. When `t.fun` / `t.travel` is set, a small colored `TxTag`
-("Fun" amber / "Travel" — the Travel category's blue) renders inline next to the title so tagged
-rows are scannable at a glance; per-person/per-trip detail is left to the edit sheet.
+renders inline next to the title so tagged rows are scannable at a glance: Travel shows the Travel
+category's blue "Travel" (per-trip detail is left to the edit sheet); Fun shows amber
+`"Fun (person)"` when `t.person` resolves to a name, else plain `"Fun"` — the assigned person is no
+longer repeated in the `tx-meta` line below.
 
 ### `Toast`
 
@@ -397,15 +399,18 @@ sub-lists: "Recent in [category]" (last 5 by date, reversed) and "Largest in [ca
 `YCalc.yearTxns(store, stats.year)` (filtered to `date <= stats.asOfStr`), **not** the expanded
 `stats.upto` — an amortized parent's drill entry shows the full amount, not a monthly slice.
 **TransactionsTab** — lists **all** raw transactions for the year (same `yearTxns(store,
-stats.year)` source, not `stats.txns`), including fun-tagged ones; fun tx show the person's name as
-a tag. Filters are hidden behind a compact `sliders` icon button to the
-right of the search bar; when active filters exist, a terracotta badge shows the count. Tapping the
-button toggles an inline filter panel with three sections: **Category** (All + one chip per category
-in `stats.catList`), **Sort** (6 options: Newest · Oldest · € High · € Low · A→Z · Z→A — default
-Newest), and **Show only** — three boolean toggles: **Manual** (keeps only `t.source === "manual"`),
-**Fun** (keeps only `t.fun === true`), and **Travel** (keeps only `t.travel === true`). Active
-filters use `--terra` border/background; the filter button itself turns terracotta when any filter
-is active.
+stats.year)` source, not `stats.txns`), including fun-tagged ones (person shown inline in the
+`"Fun (person)"` tag — see `TxRow` above). Filters are hidden behind a compact `sliders` icon button
+to the right of the search bar; when active filters exist, a terracotta badge shows the count.
+Tapping the button toggles an inline filter panel with four sections: **Category** (All + one chip
+per category in `stats.catList`), **Sort** (6 options: Newest · Oldest · € High · € Low · A→Z · Z→A —
+default Newest; ties within a day fall back to each transaction's original store order since only a
+day-level `date` is stored, not a time), **Show only** — three boolean toggles: **Manual** (keeps
+only `t.source === "manual"`), **Fun** (keeps only `t.fun === true`), and **Travel** (keeps only
+`t.travel === true`) — and **Date range**, a pair of `type="date"` inputs (both mandatory before the
+filter engages) that keep only transactions with `date` inclusively between them, plus a Clear
+button. Active filters use `--terra` border/background; the filter button itself turns terracotta
+when any filter is active.
 
 **`AmortizedTab`** — the third Activity sub-tab (`ActivityMergedTab`'s `SegmentedControl` is
 **Categories / Transactions / Amortized**), a read-only ledger of RAW amortized parents (never
