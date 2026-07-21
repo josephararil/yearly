@@ -401,7 +401,7 @@ textarea.inp { height: auto; padding: 11px 15px; resize: vertical; min-height: 4
 /* ===== Analysis · "In numbers" dashboard (v84 refactor) =====================
    Hierarchy over uniformity: one full-width hero, a primary metric trio, then
    grouped secondary facts. Grouping by proximity + hairlines, not by cards. */
-.innum { display: flex; flex-direction: column; gap: 30px; }
+.innum { display: flex; flex-direction: column; gap: 16px; }
 .innum-group { display: flex; flex-direction: column; }
 .innum-cap { font-family: var(--mono); font-size: 10.5px; letter-spacing: 0.18em; text-transform: uppercase; color: var(--muted);
   display: flex; align-items: baseline; justify-content: space-between; gap: 10px; padding-bottom: 10px; }

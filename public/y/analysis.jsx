@@ -563,9 +563,6 @@
               </div>
             </div>
 
-            {/* Rotating insight card — the single "voice" line, one-per-day rotation */}
-            <InsightCard callouts={callouts} onCallout={onCallout} />
-
             {/* 90-day trend — chart flush to the container edges */}
             {trend90 && (
               <div>
@@ -576,6 +573,9 @@
                 <Trend90Chart upto={stats.upto} asOf={stats.asOf} color={trend90Color} />
               </div>
             )}
+
+            {/* Rotating insight card — the single "voice" line, one-per-day rotation */}
+            <InsightCard callouts={callouts} onCallout={onCallout} />
 
             {/* Current velocity — merges monthly target, on-pace, and daily targets */}
             {stats.isCurrent && (
