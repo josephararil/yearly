@@ -169,6 +169,7 @@ or `lastDate < STOP_BEFORE`.
 |---|---|
 | `id` | `id` |
 | `startedDate` (ms) → `YYYY-MM-DD` | `date` | (when the transaction was made, **not** `completedDate`/settlement; falls back to `completedDate` then `updatedDate` if absent) |
+| `startedDate` (ms, raw) | `ts` | (the same instant, kept as ms epoch — `date` is its UTC day. Additive, drives intra-day sort order. Pipeline-authoritative, so a re-import backfills it onto date-only rows.) |
 | `abs(amount) / 100`, FX-converted | `amount_eur` |
 | `currency` (when non-EUR) | `original_currency` |
 | `abs(amount) / 100` (when non-EUR) | `original_amount` |
@@ -265,7 +266,7 @@ transaction that was PENDING when first captured and completed later. Do not del
 - **Field-preserving upsert**: the pipeline writes `INSERT … ON CONFLICT(id) DO UPDATE`
   (`write_sql`), not `INSERT OR REPLACE`. On re-push it preserves the user-owned columns in
   `PRESERVE_ON_CONFLICT` (`category, fun, person, note, deleted`, plus `oneoff` which the pipeline
-  never writes) and updates only pipeline-authoritative fields (`date, amount_eur, description`,
+  never writes) and updates only pipeline-authoritative fields (`date, ts, amount_eur, description`,
   bank/enrichment columns, `updated_at`). This is what makes `BUFFER_DAYS=30` safe — re-pulling an
   already-imported row does not revert in-app edits, resurrect deletions, or wipe `oneoff`.
   Trade-off: a manual override of `amount_eur`/`date` on a Revolut row *is* overwritten back to the

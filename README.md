@@ -633,7 +633,8 @@ Persisted to `localStorage` under `yearly:store:v1` (and mirrored to D1 via sync
 ```ts
 {
   id: string;
-  date: string;                 // "YYYY-MM-DD" (year is derived from date.slice(0,4))
+  date: string;                 // "YYYY-MM-DD" (year is derived from date.slice(0,4)) — authoritative for all day/month/year math
+  ts?: number;                  // ms epoch of the real instant; additive, used only for intra-day sort order. Revolut: startedDate. Manual: logging time (today) or local noon (backdated). Absent on legacy rows until a Revolut re-import backfills it.
   description: string;
   amount_eur: number;           // positive, rounded to cents
   category: CategoryId;

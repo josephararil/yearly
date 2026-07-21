@@ -29,7 +29,7 @@ Flags:
     --quiet          suppress the human-readable summary (warnings still print)
 
 Output columns match the D1 schema exactly:
-    id, date, description, amount_eur, category, note, source, fun,
+    id, date, ts, description, amount_eur, category, note, source, fun,
     person, original_amount, original_currency, deleted, updated_at,
     merchant_mcc, merchant_city, merchant_country, merchant_logo,
     card_label, tx_type, e_commerce, fee_eur, revolut_category
@@ -347,6 +347,10 @@ def build_rows(transactions: list[dict]) -> tuple[list[dict], dict]:
             # Core / existing schema
             "id":                   tx["id"],
             "date":                 date_str,
+            # ts = the exact instant of the transaction (ms epoch). date is the UTC day of this
+            # same instant; ts is additive, used for intra-day sort ordering. Pipeline-authoritative
+            # (in FIELDS, not PRESERVE_ON_CONFLICT) so a re-import backfills it onto date-only rows.
+            "ts":                   int(date_ts),
             "description":          description,
             "amount_eur":           amount_eur,
             "category":             assign_category(tx),
@@ -455,7 +459,9 @@ def process_xlsx(path: Path) -> list[dict]:
     for _, row in df.iterrows():
         # Started Date = when the transaction was made; Completed Date = settlement. Match build_rows().
         started = row.get("Started Date")
-        date_str = pd.to_datetime(started if pd.notna(started) else row["Completed Date"]).strftime("%Y-%m-%d")
+        dt = pd.to_datetime(started if pd.notna(started) else row["Completed Date"])
+        date_str = dt.strftime("%Y-%m-%d")
+        ts_ms = int(dt.timestamp() * 1000)
         currency = row["Currency"]
         amount_orig = abs(float(row["Amount"]))
         description = str(row["Description"]).strip()
@@ -472,6 +478,7 @@ def process_xlsx(path: Path) -> list[dict]:
         rows.append({
             "id":                   row_id,
             "date":                 date_str,
+            "ts":                   ts_ms,
             "description":          description,
             "amount_eur":           round(amount_orig * rate, 2),
             "category":             "General",
@@ -500,7 +507,7 @@ def process_xlsx(path: Path) -> list[dict]:
 # ---------------------------------------------------------------------------
 
 FIELDS = [
-    "id", "date", "description", "amount_eur", "category", "note",
+    "id", "date", "ts", "description", "amount_eur", "category", "note",
     "source", "fun", "person", "original_amount", "original_currency",
     "deleted", "updated_at",
     "merchant_mcc", "merchant_city", "merchant_country",

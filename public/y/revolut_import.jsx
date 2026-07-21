@@ -291,6 +291,7 @@
         // Core / existing schema
         id:                 tx.id,
         date:                dateStr,
+        ts:                  dateTs,
         description:         description,
         amount_eur:          amountEur,
         category:            assignCategory(tx),

@@ -35,6 +35,7 @@
     return {
       id: tx.id,
       date: tx.date,
+      ts: tx.ts != null ? tx.ts : null,
       description: tx.description,
       amount_eur: tx.amount_eur,
       category: tx.category,
@@ -73,6 +74,7 @@
       category: nc,
       source: row.source || 'manual',
     };
+    if (row.ts != null)        tx.ts                = row.ts;
     if (row.note)              tx.note              = row.note;
     if (row.fun)               tx.fun               = true;
     if (row.person)            tx.person            = row.person;

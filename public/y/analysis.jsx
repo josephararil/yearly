@@ -877,8 +877,8 @@
     if (filterTravel) list = list.filter((t) => t.travel);
     if (dateRangeActive) list = list.filter((t) => t.date >= dateFrom && t.date <= dateTo);
     if (q.trim()) { const s = q.toLowerCase(); list = list.filter((t) => t.description.toLowerCase().includes(s)); }
-    if (sort === "date-desc") list.sort((a, b) => b.date.localeCompare(a.date));
-    else if (sort === "date-asc") list.sort((a, b) => a.date.localeCompare(b.date));
+    if (sort === "date-desc") list.sort((a, b) => b.date.localeCompare(a.date) || (b.ts || 0) - (a.ts || 0));
+    else if (sort === "date-asc") list.sort((a, b) => a.date.localeCompare(b.date) || (a.ts || 0) - (b.ts || 0));
     else if (sort === "amt-desc") list.sort((a, b) => b.amount_eur - a.amount_eur);
     else if (sort === "amt-asc") list.sort((a, b) => a.amount_eur - b.amount_eur);
     else if (sort === "az") list.sort((a, b) => a.description.localeCompare(b.description));

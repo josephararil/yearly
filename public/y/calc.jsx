@@ -53,7 +53,8 @@
   function yearTxns(store, year) {
     return store.transactions
       .filter((t) => t.date.slice(0, 4) === String(year))
-      .sort((a, b) => (a.date < b.date ? -1 : a.date > b.date ? 1 : 0));
+      // Ascending by day; ts (real instant) breaks intra-day ties when present, else stable.
+      .sort((a, b) => (a.date < b.date ? -1 : a.date > b.date ? 1 : (a.ts || 0) - (b.ts || 0)));
   }
 
   // ym ("YYYY-MM") + k months, wrapping across year boundaries.

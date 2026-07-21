@@ -1,6 +1,6 @@
 // settings.jsx — target, buffer, years, templates, CSV import/export, clear.
 (function () {
-  const APP_VERSION = 'v89';
+  const APP_VERSION = 'v90';
   const { YData, YCalc, YUI } = window;
   const { eur0, eur2, signedPct, computeStats, localISO } = YCalc;
   const { Sheet, DeltaChip } = YUI;
@@ -77,7 +77,8 @@
 
     const doImport = () => {
       const add = rows.filter((r) => !r.skip).map((r) => ({
-        id: YData.uid(), date: r.date, description: r.description, amount_eur: r.amount_eur,
+        id: YData.uid(), date: r.date, ts: new Date(r.date + "T12:00:00").getTime(),
+        description: r.description, amount_eur: r.amount_eur,
         original_amount: r.original_amount, original_currency: r.original_currency, category: r.category, source: "import",
       }));
       setStore((s) => ({ ...s, transactions: [...s.transactions, ...add] }));
