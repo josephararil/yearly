@@ -59,13 +59,55 @@
     const pts = avg.map((v, i) => [i * slot + slot / 2, padT + (1 - v / max) * (H - padB - padT)]);
     const line = pts.map((p, i) => (i === 0 ? `M${p[0]},${p[1]}` : `L${p[0]},${p[1]}`)).join(" ");
     const area = `M${pts[0][0]},${H - padB} ` + pts.map((p) => `L${p[0]},${p[1]}`).join(" ") + ` L${pts[pts.length - 1][0]},${H - padB} Z`;
+
+    const svgRef = React.useRef(null);
+    const [hover, setHover] = React.useState(null);
+    const binLabel = (i) => {
+      const bStart = new Date(start); bStart.setDate(bStart.getDate() + Math.round(i * binSize));
+      const bEnd = new Date(start); bEnd.setDate(bEnd.getDate() + Math.round((i + 1) * binSize) - 1);
+      const fmt = (d) => MONTHS[d.getMonth()].slice(0, 3) + " " + d.getDate();
+      return fmt(bStart) + "–" + fmt(bEnd);
+    };
+    const handlePointer = (e) => {
+      const svg = svgRef.current;
+      if (!svg) return;
+      const rect = svg.getBoundingClientRect();
+      const scaleX = W / rect.width;
+      const rawX = (e.clientX - rect.left) * scaleX;
+      const i = Math.max(0, Math.min(bins - 1, Math.floor(rawX / slot)));
+      setHover({ i, x: pts[i][0], y: pts[i][1], val: avg[i] });
+    };
+    const handleEnd = () => setHover(null);
+
     return (
-      <svg viewBox={`0 0 ${W} ${H}`} width="100%" style={{ display: "block" }}>
+      <svg ref={svgRef} viewBox={`0 0 ${W} ${H}`} width="100%"
+        style={{ display: "block", touchAction: "none", cursor: "crosshair" }}
+        onPointerMove={handlePointer} onPointerDown={handlePointer}
+        onPointerLeave={handleEnd} onPointerUp={handleEnd} onPointerCancel={handleEnd}>
         <path d={area} fill={`color-mix(in srgb, ${color} 16%, transparent)`} stroke="none" />
         <path d={line} fill="none" stroke={color} strokeWidth="2" strokeLinejoin="round" strokeLinecap="round" />
         {pts.map(([x, y], i) => (
           <circle key={i} cx={x} cy={y} r={i === pts.length - 1 ? 3 : 2} fill={color} />
         ))}
+        {hover && (
+          <>
+            <line x1={hover.x} y1={padT} x2={hover.x} y2={H - padB} stroke="var(--ink-2)" strokeWidth="0.8" strokeDasharray="3 3" opacity="0.5" />
+            <circle cx={hover.x} cy={hover.y} r="4" fill={color} stroke="var(--paper)" strokeWidth="2" />
+            {(() => {
+              const tw = 74, th = 30;
+              let tx = hover.x - tw / 2;
+              tx = Math.max(2, Math.min(W - tw - 2, tx));
+              const ty = Math.max(2, hover.y - th - 6);
+              return (
+                <>
+                  <rect x={tx} y={ty} width={tw} height={th} rx="5" fill="var(--paper)" stroke="var(--hair-strong)" strokeWidth="0.8" />
+                  <text x={tx + tw / 2} y={ty + 13} textAnchor="middle" fontSize="10.5" fill="var(--ink)" fontFamily="var(--mono)" fontWeight="600">{eurK(hover.val)}/day</text>
+                  <text x={tx + tw / 2} y={ty + 25} textAnchor="middle" fontSize="8.5" fill="var(--muted)" fontFamily="var(--mono)">{binLabel(hover.i)}</text>
+                </>
+              );
+            })()}
+          </>
+        )}
       </svg>
     );
   }
@@ -98,16 +140,40 @@
     const ceilPct = p(stats.ceiling);
     const doyPct = p((stats.doy / stats.daysInYear) * stats.ceiling);
     const projLabelRight = projPct > 55;
+    const showProj = !stats.complete && stats.projection > stats.spent;
+
+    const [hover, setHover] = React.useState(false);
+    const show = () => setHover(true);
+    const hide = () => setHover(false);
 
     return (
       <div className="projbar">
-        <div className="projbar-rail">
+        <div className="projbar-rail" style={{ cursor: "pointer", touchAction: "none" }}
+          onPointerMove={show} onPointerDown={show}
+          onPointerLeave={hide} onPointerUp={hide} onPointerCancel={hide}>
           <div className="projbar-spent" style={{ width: spentPct + "%", background: barColor }} />
-          {!stats.complete && stats.projection > stats.spent && (
+          {showProj && (
             <div className="projbar-proj" style={{ left: spentPct + "%", width: Math.max(0, projPct - spentPct) + "%", background: barColor }} />
           )}
           {!stats.complete && <div className="projbar-doy" style={{ left: doyPct + "%" }} />}
           <div className="projbar-ceil" style={{ left: ceilPct + "%" }} />
+          {hover && (
+            <div className="projbar-tip">
+              <div className="projbar-tip-row">
+                <span>Spent</span><b>{eur0(stats.spent)}</b>
+                <span className="projbar-tip-pct">{stats.ceiling > 0 ? pct(stats.spent / stats.ceiling) : "0%"}</span>
+              </div>
+              {showProj && (
+                <div className="projbar-tip-row" style={{ color: barColor }}>
+                  <span>Projected</span><b>{eur0(stats.projection)}</b>
+                  <span className="projbar-tip-pct">{stats.ceiling > 0 ? pct(stats.projection / stats.ceiling) : "0%"}</span>
+                </div>
+              )}
+              <div className="projbar-tip-row">
+                <span>Ceiling</span><b>{eur0(stats.ceiling)}</b>
+              </div>
+            </div>
+          )}
         </div>
         <div className="projbar-labels">
           <span className="projbar-label" style={{ left: 0 }}>
@@ -116,7 +182,7 @@
           <span className="projbar-label" style={ceilPct > 82 ? { right: 0 } : { left: ceilPct + "%", transform: "translateX(-50%)" }}>
             ceiling <b>{eur0(stats.ceiling)}</b>
           </span>
-          {!stats.complete && stats.projection > stats.spent && (
+          {showProj && (
             <span className="projbar-label" style={{ top: 13, ...(projLabelRight ? { right: Math.max(0, 100 - projPct) + "%", transform: "translateX(50%)" } : { left: projPct + "%", transform: "translateX(-50%)" }) }}>
               proj <b style={{ color: barColor }}>{eur0(stats.projection)}</b>
             </span>

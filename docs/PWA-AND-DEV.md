@@ -76,9 +76,16 @@ design system:
   intentionally NOT deleted on app version bumps (logos are stable per URL). `/api/*` and `/cdn-cgi/*`
   requests are excluded from the SW fetch handler entirely (network-only).
 
-> **Cache-versioning rule:** bump `CACHE_NAME` in `sw.js` whenever the shell changes (new file in
-> the precache list, CDN URL pinned to a new version, etc.). Current version: `yearly-v87` — keep it
-> in lockstep with `APP_VERSION` in `settings.jsx`.
+> **Cache-versioning rule:** bump `CACHE_NAME` in `sw.js` whenever **any** `y/*.jsx` or `y/*.css` file
+> changes — not just "shell" changes like a new precached file or a re-pinned CDN URL. The SW only
+> reinstalls (and drops its old Cache Storage entries) when `CACHE_NAME` changes; if you edit
+> `analysis.jsx` or `app.css` and leave `CACHE_NAME` alone, the stale-while-revalidate SW keeps
+> serving the pre-edit bytes from Cache Storage indefinitely — a hard-refresh does not fix this,
+> because the browser's HTTP cache isn't the layer that's stale, the SW's own Cache Storage is, and
+> that's untouched by `Ctrl+Shift+R`. Bump it **before** you open the browser to check your work, as
+> the first step of testing, every time — treat "did I bump the version" as part of the edit itself,
+> the same way you'd expect a lint/typecheck step to run. Current version: `yearly-v88` — keep it in
+> lockstep with `APP_VERSION` in `settings.jsx`.
 
 - **`manifest.json`** — includes `id`, `scope`, `start_url`, and an `icons` array with 192×192,
   512×512, and a maskable 512×512 variant (all SVG). SVG icons work in Chrome 91+ and modern
@@ -270,3 +277,23 @@ then `computer({tabId, action:"key", text:"ctrl+shift+r"})`.
 `"chrome-error://chromewebdata/"`, do NOT attempt further evals/navigation (they silently no-op). Use
 `preview_stop` → `preview_start` for a fresh browser (or `tabs_create` for a fresh tab against the
 same server), then repeat from the top.
+
+### A screenshot right after hard-refresh can be a false negative
+
+Once `CACHE_NAME` is bumped, `index.html`'s active update lifecycle installs the new SW, calls
+`skipWaiting()`/`clients.claim()`, and reloads the page exactly once on `controllerchange`. That
+reload is asynchronous relative to your `ctrl+shift+r` key-press — a `computer{action:"screenshot"}`
+fired immediately after can land mid-reload (blank page, half-mounted React tree) and look like the
+feature is missing or broken, when the real build simply hadn't taken over yet. This has produced a
+false "it doesn't work" conclusion in the Browser pane tool even when a real browser on the same URL
+showed the feature working correctly.
+
+Before concluding a change is broken from a preview capture:
+1. Re-screenshot once more (or `read_page`) a few seconds later — if it now shows the feature, the
+   first capture was just the reload race, not a real bug.
+2. Or confirm the new build is actually controlling the page first:
+   `javascript_tool: document.querySelector('.muted')?.textContent` should contain the current
+   `APP_VERSION` (e.g. `v88`) — if it still shows the old version, the SW hasn't switched over yet;
+   wait and re-check rather than debugging the source.
+3. Only after confirming the new version is live and a fresh capture still doesn't show the expected
+   behavior should you go back to the code.
