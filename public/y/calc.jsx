@@ -533,6 +533,7 @@ function computeStats(store, year, asOfDate, staleDays = 0) {
   function historicalMonthRange(store, excludeYm) {
     const totals = {};
     (store.transactions || []).forEach((t) => {
+      if (t.virtual) return;
       const ym = t.date.slice(0, 7);
       if (ym === excludeYm) return;
       totals[ym] = (totals[ym] || 0) + t.amount_eur;
