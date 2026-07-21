@@ -1,5 +1,5 @@
 // Bump this version whenever the app shell changes to invalidate the old cache.
-const CACHE_NAME = 'yearly-v86';
+const CACHE_NAME = 'yearly-v87';
 // Logo cache is intentionally never deleted on app updates — logos are stable per-merchant URL.
 const LOGO_CACHE = 'yearly-logos-v1';
 
@@ -84,16 +84,24 @@ self.addEventListener('fetch', event => {
     return;
   }
 
-  // Network-first for the app shell.
+  // Stale-while-revalidate for the app shell: an existing cache entry is returned instantly;
+  // the network response (if any) refreshes the cache in the background for the next load.
+  // Combined with the active update lifecycle in index.html (registration.update() +
+  // controllerchange reload), this keeps loads instant without going stale indefinitely.
   event.respondWith(
-    fetch(event.request)
-      .then(response => {
-        if ((response.ok || response.type === 'opaque') && !response.redirected) {
-          const copy = response.clone();
-          caches.open(CACHE_NAME).then(cache => cache.put(event.request, copy));
-        }
-        return response;
+    caches.open(CACHE_NAME).then(cache =>
+      cache.match(event.request).then(cached => {
+        const networkFetch = fetch(event.request)
+          .then(response => {
+            if ((response.ok || response.type === 'opaque') && !response.redirected) {
+              cache.put(event.request, response.clone());
+            }
+            return response;
+          })
+          .catch(() => cached || new Response('', { status: 503 }));
+        event.waitUntil(networkFetch);
+        return cached || networkFetch;
       })
-      .catch(() => caches.match(event.request))
+    )
   );
 });
