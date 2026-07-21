@@ -331,62 +331,61 @@ and `onCallout` props threaded from `AnalysisScreen` → `App`. Clicking a callo
 appropriate tab via `onCallout`. Hidden when `callouts` is empty.
 
 **"In numbers" section** (`ProjectionTab`) — appears below "What's happening" with a `section-h`
-title, then three `.eyebrow`-labeled sub-groups (each its own `.statgrid`), reusing the same
-`StatCard` tile throughout. Receives `fun` and `store` props (passed from `AnalysisScreen`). Two new
-pure helpers back this section, exported from `calc.jsx`: `medianDailySpendYTD(stats)` (median of
-per-day totals across every elapsed calendar day, incl. €0 days — damps lump-sum skew that a mean
-can't) and `historicalMonthRange(store, excludeYm)` (all-time min/max calendar-month total across
-every year in `store.transactions`; `excludeYm` is always the *real* current in-progress month via
-`new Date()`, not the viewed year's month — a past-year view must still exclude today's partial
-month or it wrongly shows up as the "lowest" month).
+title, then a single `.innum` flex column that establishes a **visual hierarchy** rather than a
+uniform grid (v84 refactor — dashboard classes live in `app.css`, marked "Analysis · In numbers
+dashboard"). Receives `fun` and `store` props (passed from `AnalysisScreen`). No box/card chrome:
+grouping is by proximity + hairlines. All the same data as before is preserved — nothing was
+dropped, only re-laid-out. Two pure helpers back it, exported from `calc.jsx`:
+`medianDailySpendYTD(stats)` (median of per-day totals across every elapsed calendar day, incl. €0
+days — damps lump-sum skew a mean can't) and `historicalMonthRange(store, excludeYm)` (all-time
+min/max calendar-month total; `excludeYm` is always the *real* current in-progress month via `new
+Date()`, so a past-year view still excludes today's partial month).
 
-- **Historical actuals** — backward-looking, from settled tx data:
-  - Spent YTD + entry count (one tile, existing).
-  - Daily spend (YTD) — `dailyRate` + median sub-line (`medianDailySpendYTD`). Hidden for future years.
-  - Avg spend/mo — average over completed months, sub shows the completed-month count (the
-    "need ≤€X/mo" cue moved to the Targets group's Monthly target tile, see below).
-  - Monthly range — `historicalMonthRange` min–max with the two month labels; excludes `t.virtual`
-    (amortized no-cash) transactions so a large virtual parent tx doesn't distort the real-cash
-    range. Hidden for future years.
-  - vs prior year same point / final (existing, conditional on `stats.priorSpent > 0`).
-- **Projections & forecasts** — forward-looking:
-  - Projected month-end — `YCalc.projectedMonthEnd(stats)`. Current year only.
-  - Projected year-end / Final total (complete years) — `stats.projection` vs ceiling. Hidden for future years.
-  - Blended rate — `trailingDailyRate` + buffer-adds sub (`+€X buffer (Y% missed-entry)`) when not
-    complete, else falls back to the old "YTD avg €X/d" sub (buffer isn't meaningful post-close).
-  - 90d trend — compares last-45d daily rate to prior-45d rate; `↑ Increasing` (terra), `↓
-    Decreasing` (sage), or `→ Constant`. Only shown for current year with ≥ 90 days of data. Paired
-    with a full-width `Trend90Chart` sparkline (area + line, 9 ten-day bins over the last 90 days of
-    `stats.upto`), coloured to match the trend word.
-  - FIRE portfolio (×3) — `stats.projection / 0.04` ("at 4% rule"), `stats.projection / 0.035` ("at
-    3.5% rule"), and a "Min. portfolio" tile at `max(0, stats.projection − store.externalIncome) /
-    0.035` ("at 3.5% rule with income") — the minimum portfolio size for a 3.5% draw once external
-    income is netted out; the inverse framing of `impliedDraw`. Not shown for future years.
-- **Targets & budgets** — dynamic constraints from the ceiling:
-  - Monthly target — baseline (`ceiling / 12`) with the adjusted-cap sub-line
-    (`neededMonthly = YCalc.neededMonthlyCap(stats)`), coloured sage/terra vs `avgMonthly`. Adjusted
-    sub only present for the current year (matches `neededMonthly`'s existing guard).
-  - On-pace by today (existing).
-  - Total fun budget — `funPlanAnnual` per year with per-month sub. Not shown for future years.
-  - **Real daily target** — NEW, local to `analysis.jsx` (does not touch the shared
-    `requiredDailyToHit`/`dailyHeadroom` in `calc.jsx`, which still drive the Home screen's
-    pace-guidance callout unchanged): `(ceiling − (spent + bufferAmt)) / daysRemaining`, floored at
-    0; framed as `≤ €X/day` when `stats.projection > ceiling`, else `room €X/day`. Current year only.
-  - **Daily target (this month)** — NEW: `(neededMonthly − spentThisMonth) / daysLeftInMonth`,
-    floored at 0. Current year only.
-  - Target fun/mo — `max(0, ceiling − stats.projection) / monthsLeft / numPeople` where
-    `monthsLeft = max(1, daysRemaining / 30.4)`; sage when positive, terra when 0 (`projection ≥
-    ceiling`). Current year only.
+Top-to-bottom the section is:
 
-Removed: "Projected finish" and "VS Target" cards (both surfaced on the Overview hero).
+1. **`ProjectionHero`** (local component) — the full-width hero. Serif headline = `stats.projection`
+   (or `ceiling` for future years), eyebrow "Projected year-end" / "Final total · {year}" / "Planned
+   ceiling · {year}", and an over/under sentence emphasising `|stats.delta|` (terra `.over` / sage
+   `.under`, ±`bandAmt` when current). Below it a **prominent 12px bullet bar** (`.projbar`, not the
+   thin home `.bullet-*`): a solid fill to `spent`, a faded (opacity .3) projection remainder to
+   `projection`, a hard black ceiling tick (`.projbar-ceil`), and a day-of-year pace marker
+   (`.projbar-doy`). Fill colour is terra when `projection > ceiling` else sage, so "over" is obvious
+   the instant the fill crosses the ceiling tick. Bar + labels (`spent` / `ceiling` / `proj`) hidden
+   for future years.
+2. **Primary metric trio** (`.metricrow` — 2–3 equal columns, hairline top/bottom, mono figures):
+   Spent YTD (+ entry count), Daily spend (`dailyRate`, median sub via `medianDailySpendYTD`, hidden
+   for future years), Blended rate (`trailingDailyRate` + `+€X buffer · Y%` sub, or "YTD avg" once
+   complete).
+3. **90-day trend** (`.trend-head` + `Trend90Chart`) — shown current-year with ≥90 days of data;
+   label + coloured verdict (`↑ Increasing` terra / `↓ Decreasing` sage / `→ Constant`), then the
+   sparkline (area + line, 9 ten-day bins) rendered **flush to the container edges** — no `.stat`
+   padding around it any more.
+4. **Current velocity** (`.innum-group`, current year only) — merges the old Monthly-target /
+   On-pace / daily-target tiles into one card: serif primary = `stats.pace` ("on-pace by today ·
+   €X/mo baseline"), then `.velo-line` rows for Adjusted monthly cap (`neededMonthlyCap`, sage/terra
+   vs `avgMonthly`), Daily room/target (`(ceiling − (spent + bufferAmt)) / daysRemaining`, floored 0
+   — local to `analysis.jsx`, does not touch the shared `requiredDailyToHit`/`dailyHeadroom`), Daily
+   target this month (`(neededMonthly − spentThisMonth) / daysLeftInMonth`, floored 0), and Target
+   fun / person (`max(0, ceiling − projection) / monthsLeft / numPeople`).
+5. **More context** (`.factlist` dense key→value rows) — the remaining secondary numbers, each
+   conditional: Projected month-end (`projectedMonthEnd`, current year), Average per month (completed
+   months), Monthly range (`historicalMonthRange`, excludes `t.virtual`), Monthly baseline
+   (`ceiling/12`, only when *not* current since it's already in the velocity card), Total fun budget
+   (`funPlanAnnual`, hidden future), vs prior year (`stats.priorSpent > 0`, watch/good coloured).
+6. **FIRE portfolio target** (`.fire` widget, hidden future) — the three FIRE numbers consolidated
+   into one cohesive block with a "to sustain €X/yr" meta: 4% rule (`projection / 0.04`), 3.5% rule
+   (`projection / 0.035`), 3.5% with income (`max(0, projection − externalIncome) / 0.035`).
 
-**"Amortization" block** (`ProjectionTab`) — a 4th `.eyebrow` group, rendered only when
+Removed vs the old grid: the standalone "Days · 365 complete" tile (redundant with the hero eyebrow)
+and the three `.eyebrow`/`.statgrid` sub-group wrappers. `StatCard` is no longer used in
+`ProjectionTab` (still used by `AmortizedTab`).
+
+**"Amortization" block** (`ProjectionTab`) — the final `.innum-group`, rendered only when
 `YCalc.amortizationBreakdown(store, stats.year, stats.asOfStr).hasAmortized` is true and the year
-isn't future (`am` is computed once per render, local `const am = ...`). StatCards (same `StatCard`
-tile as the other groups): **Amortized YTD** (`am.ytd.total`, sub = % of `stats.spent`); **This
-month** (`am.month.total`, sub = % of `stats.byMonth[curMonth].amount`, current year only); **Real
-(cash)** (`am.ytd.real`); **Virtual (no-cash)** (`am.ytd.virtual`, `--sage` colored, sub "no-cash");
-**Committed this year** (`am.committedThisYear`, sub "rest of {year}", current year only).
+isn't future (`am` is computed once per render, local `const am = ...`). The figures are now a
+compact `.factlist` (Amortized YTD with a "% of spend" cap-meta, Real (cash), Virtual (no-cash,
+`--sage`), plus This month and Committed rest-of-year for the current year) instead of `StatCard`
+tiles.
 
 Below the cards, `AmortizationChart` — a local `SegmentedControl` (`Composition` / `By month` / `By
 year`, default Composition) swapping between three small inline-SVG charts, all sharing the

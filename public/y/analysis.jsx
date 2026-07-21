@@ -80,6 +80,78 @@
     );
   }
 
+  // ── Hero: projected year-end vs ceiling, as a prominent full-width bullet bar ────────────────
+  // Immediately legible over/under: the fill (and headline emphasis) is terracotta when the
+  // projection clears the ceiling, sage when it stays under. The ceiling is a hard black tick the
+  // projected fill visibly crosses when over. For future years there is nothing to project — we
+  // fall back to the planned ceiling with no bar.
+  function ProjectionHero({ stats }) {
+    const eyebrow = stats.complete ? "Final total · " + stats.year
+      : stats.isFuture ? "Planned ceiling · " + stats.year
+      : "Projected year-end";
+    const headline = stats.isFuture ? stats.ceiling : stats.projection;
+    const over = stats.projection > stats.ceiling;
+    const near = !stats.isFuture && Math.abs(stats.delta) < stats.ceiling * 0.005;
+    const barColor = over ? "var(--terra)" : "var(--sage)";
+
+    const xMax = Math.max(stats.ceiling, stats.projection, 1) * 1.05;
+    const p = (v) => Math.min(100, Math.max(0, (v / xMax) * 100));
+    const spentPct = p(stats.spent);
+    const projPct = p(stats.projection);
+    const ceilPct = p(stats.ceiling);
+    const doyPct = p((stats.doy / stats.daysInYear) * stats.ceiling);
+    const projLabelRight = projPct > 55;
+
+    return (
+      <div className="projhero">
+        <div className="projhero-eyebrow">{eyebrow}</div>
+        <div className="projhero-num">{eur0(headline)}</div>
+        <div className="projhero-sub">
+          {stats.isFuture ? (
+            <>Nothing logged yet — this is the ceiling you set.</>
+          ) : near ? (
+            <>Right on your <span className="num">{eur0(stats.ceiling)}</span> ceiling.</>
+          ) : (
+            <>
+              {over ? "Over" : "Under"} the <span className="num">{eur0(stats.ceiling)}</span> ceiling by{" "}
+              <span className={"emph " + (over ? "over" : "under")}>{eur0(Math.abs(stats.delta))}</span>
+              {stats.bandAmt != null && !stats.complete && (
+                <span className="band">(±{eur0(stats.bandAmt)})</span>
+              )}.
+            </>
+          )}
+        </div>
+        {!stats.isFuture && (
+          <>
+            <div className="projbar">
+              <div className="projbar-rail">
+                <div className="projbar-spent" style={{ width: spentPct + "%", background: barColor }} />
+                {!stats.complete && stats.projection > stats.spent && (
+                  <div className="projbar-proj" style={{ left: spentPct + "%", width: Math.max(0, projPct - spentPct) + "%", background: barColor }} />
+                )}
+                {!stats.complete && <div className="projbar-doy" style={{ left: doyPct + "%" }} />}
+                <div className="projbar-ceil" style={{ left: ceilPct + "%" }} />
+              </div>
+              <div className="projbar-labels">
+                <span className="projbar-label" style={{ left: 0 }}>
+                  <b>{eur0(stats.spent)}</b> spent
+                </span>
+                <span className="projbar-label" style={ceilPct > 82 ? { right: 0 } : { left: ceilPct + "%", transform: "translateX(-50%)" }}>
+                  ceiling <b>{eur0(stats.ceiling)}</b>
+                </span>
+                {!stats.complete && stats.projection > stats.spent && (
+                  <span className="projbar-label" style={{ top: 13, ...(projLabelRight ? { right: Math.max(0, 100 - projPct) + "%", transform: "translateX(50%)" } : { left: projPct + "%", transform: "translateX(-50%)" }) }}>
+                    proj <b style={{ color: barColor }}>{eur0(stats.projection)}</b>
+                  </span>
+                )}
+              </div>
+            </div>
+          </>
+        )}
+      </div>
+    );
+  }
+
   // ── Amortization mini chart-switcher (Projection "In numbers") ───────────────────────────────
   function AmLegendItem({ c, dash, rect, label, opacity }) {
     return (
@@ -450,139 +522,164 @@
         )}
 
         <div>
-          <div className="section-h" style={{ marginTop: 0, marginBottom: 14 }}><h2>In numbers</h2></div>
-          <div style={{ display: "flex", flexDirection: "column", gap: 22 }}>
+          <div className="section-h" style={{ marginTop: 0, marginBottom: 18 }}><h2>In numbers</h2></div>
+          <div className="innum">
 
-            <div>
-              <div className="eyebrow" style={{ marginBottom: 4 }}>Historical actuals</div>
-              <div className="statgrid">
-                <StatCard label="Spent year-to-date" value={eur0(stats.spent)} sub={`${stats.upto.length} entries`} />
-                {dailyMedian !== null && (
-                  <StatCard label="Daily spend (YTD)" value={eur0(stats.dailyRate) + "/d"} sub={`median ${eur0(dailyMedian)}/d`} />
-                )}
-                {completedMonths > 0 && (
-                  <StatCard
-                    label="Avg spend/mo"
-                    value={eur0(avgMonthly)}
-                    sub={`${completedMonths} completed month${completedMonths === 1 ? "" : "s"}`}
-                  />
-                )}
-                {monthRange && (
-                  <StatCard
-                    label="Monthly range"
-                    value={`${eur0(monthRange.min)}–${eur0(monthRange.max)}`}
-                    sub={`${monthRange.minLabel} to ${monthRange.maxLabel}`}
-                  />
-                )}
-                {stats.priorSpent > 0 && (() => {
-                  const diff = stats.spent - stats.priorSpent;
-                  return (
-                    <StatCard
-                      label={stats.complete ? `vs ${stats.year - 1} final` : `vs ${stats.year - 1} same point`}
-                      value={signedEur(diff)}
-                      sub={signedPct(diff / stats.priorSpent)}
-                      color={diff > 0 ? "var(--watch)" : "var(--good)"}
-                    />
-                  );
-                })()}
+            {/* Hero — projected year-end vs ceiling, over/under obvious at a glance */}
+            <ProjectionHero stats={stats} />
+
+            {/* Primary metrics — bold figures, muted context */}
+            <div className="metricrow">
+              <div className="metric">
+                <div className="metric-label">{stats.complete ? "Total spent" : "Spent YTD"}</div>
+                <div className="metric-val">{eur0(stats.spent)}</div>
+                <div className="metric-sub">{stats.upto.length} entries</div>
+              </div>
+              {!stats.isFuture && (
+                <div className="metric">
+                  <div className="metric-label">Daily spend</div>
+                  <div className="metric-val">{eur0(stats.dailyRate)}<span style={{ fontSize: 13, color: "var(--muted)", fontWeight: 500 }}>/d</span></div>
+                  <div className="metric-sub">{dailyMedian !== null ? `median ${eur0(dailyMedian)}/d` : "year-to-date avg"}</div>
+                </div>
+              )}
+              <div className="metric">
+                <div className="metric-label">Blended rate</div>
+                <div className="metric-val">{eur0(stats.trailingDailyRate)}<span style={{ fontSize: 13, color: "var(--muted)", fontWeight: 500 }}>/d</span></div>
+                <div className="metric-sub">{!stats.complete
+                  ? `+${eur0(stats.bufferAmt)} buffer · ${Math.round(stats.buffer * 100)}%`
+                  : `YTD avg ${eur0(stats.dailyRate)}/d`}</div>
               </div>
             </div>
 
-            <div>
-              <div className="eyebrow" style={{ marginBottom: 4 }}>Projections &amp; forecasts</div>
-              <div className="statgrid">
-                {projMonthEnd !== null && <StatCard label="Projected month-end" value={eur0(projMonthEnd)} sub="this month" />}
-                {!stats.isFuture && (
-                  <StatCard
-                    label={stats.complete ? "Final total" : "Projected year-end"}
-                    value={eur0(stats.projection)}
-                    sub={`vs ${eur0(stats.ceiling)} ceiling`}
-                  />
-                )}
-                <StatCard
-                  label="Blended rate"
-                  value={eur0(stats.trailingDailyRate) + "/d"}
-                  sub={!stats.complete
-                    ? `+${eur0(stats.bufferAmt)} buffer (${Math.round(stats.buffer * 100)}% missed-entry)`
-                    : `YTD avg ${eur0(stats.dailyRate)}/d`}
-                />
-                {trend90 && (
-                  <div className="stat" style={{ gridColumn: "1 / -1" }}>
-                    <div className="stat-label">90d trend</div>
-                    <div className="stat-val" style={{ color: trend90Color }}>{trend90}</div>
-                    <div style={{ marginTop: 8 }}>
-                      <Trend90Chart upto={stats.upto} asOf={stats.asOf} color={trend90Color} />
-                    </div>
-                  </div>
-                )}
-                {!stats.isFuture && <StatCard label="FIRE portfolio" value={eurK(firePortfolio)} sub="at 4% rule" />}
-                {!stats.isFuture && <StatCard label="FIRE portfolio" value={eurK(firePortfolio35)} sub="at 3.5% rule" />}
-                {!stats.isFuture && (
-                  <StatCard label="Min. portfolio" value={eurK(firePortfolio35Income)} sub="at 3.5% rule with income" />
-                )}
-              </div>
-            </div>
-
-            <div>
-              <div className="eyebrow" style={{ marginBottom: 4 }}>Targets &amp; budgets</div>
-              <div className="statgrid">
-                <StatCard
-                  label="Monthly target"
-                  value={eur0(stats.ceiling / 12)}
-                  sub={neededMonthly !== null
-                    ? <span style={{ color: avgMonthly > neededMonthly ? "var(--terra)" : "var(--sage)" }}>adjusted ≤{eur0(neededMonthly)}/mo</span>
-                    : "baseline"}
-                />
-                <StatCard label={stats.complete ? "Days" : "On-pace by today"} value={stats.complete ? "365" : eur0(stats.pace)} sub={stats.complete ? "complete" : `day ${stats.doy} of ${stats.daysInYear}`} />
-                {!stats.isFuture && <StatCard label="Total fun budget" value={eur0(stats.funPlanAnnual) + "/yr"} sub={eur0(stats.funPlanAnnual / 12) + "/mo"} />}
-                {realDailyTarget !== null && (
-                  <StatCard
-                    label="Real daily target"
-                    value={overCeiling ? `≤ ${eur0(realDailyTarget)}/day` : `room ${eur0(realDailyTarget)}/day`}
-                    sub={`${daysLeftYear} days left · buffer-adjusted`}
-                    color={overCeiling ? "var(--watch)" : "var(--good)"}
-                  />
-                )}
-                {dailyTargetThisMonth !== null && (
-                  <StatCard
-                    label="Daily target (this month)"
-                    value={`≤ ${eur0(dailyTargetThisMonth)}/day`}
-                    sub={`${daysLeftMonth} days left this month`}
-                  />
-                )}
-                {stats.isCurrent && (
-                  <StatCard
-                    label="Target fun/mo"
-                    value={eur0(targetFunPerMo)}
-                    sub="per person"
-                    color={targetFunPerMo === 0 ? "var(--terra)" : "var(--sage)"}
-                  />
-                )}
-              </div>
-            </div>
-
-            {am.hasAmortized && !stats.isFuture && (
+            {/* 90-day trend — chart flush to the container edges */}
+            {trend90 && (
               <div>
-                <div className="eyebrow" style={{ marginBottom: 4 }}>Amortization</div>
-                <div className="statgrid">
-                  <StatCard
-                    label="Amortized YTD"
-                    value={eur0(am.ytd.total)}
-                    sub={stats.spent > 0 ? pct(am.ytd.total / stats.spent) + " of spend" : undefined}
-                  />
-                  {stats.isCurrent && (
-                    <StatCard
-                      label="This month"
-                      value={eur0(am.month.total)}
-                      sub={stats.byMonth[curMonth].amount > 0
-                        ? pct(am.month.total / stats.byMonth[curMonth].amount) + " of this month"
-                        : undefined}
-                    />
+                <div className="trend-head">
+                  <span className="lab">90-day trend</span>
+                  <span className="val" style={{ color: trend90Color }}>{trend90}</span>
+                </div>
+                <Trend90Chart upto={stats.upto} asOf={stats.asOf} color={trend90Color} />
+              </div>
+            )}
+
+            {/* Current velocity — merges monthly target, on-pace, and daily targets */}
+            {stats.isCurrent && (
+              <div className="innum-group">
+                <div className="innum-cap">Current velocity <span className="meta">day {stats.doy} of {stats.daysInYear}</span></div>
+                <div className="velo-primary">
+                  <span className="velo-num num">{eur0(stats.pace)}</span>
+                  <span className="velo-cap">on-pace by today · {eur0(stats.ceiling / 12)}/mo baseline</span>
+                </div>
+                <div className="velo-rows">
+                  {neededMonthly !== null && (
+                    <div className="velo-line">
+                      <span className="k">Adjusted monthly cap</span>
+                      <span className="v" style={{ color: avgMonthly > neededMonthly ? "var(--terra)" : "var(--sage)" }}>≤ {eur0(neededMonthly)}/mo</span>
+                    </div>
                   )}
-                  <StatCard label="Real (cash)" value={eur0(am.ytd.real)} />
-                  <StatCard label="Virtual (no-cash)" value={eur0(am.ytd.virtual)} color="var(--sage)" sub="no-cash" />
+                  {realDailyTarget !== null && (
+                    <div className="velo-line">
+                      <span className="k">{overCeiling ? "Daily target to recover" : "Daily room left"}</span>
+                      <span className="v" style={{ color: overCeiling ? "var(--terra)" : "var(--sage)" }}>
+                        {overCeiling ? "≤ " : ""}{eur0(realDailyTarget)}/day <span style={{ color: "var(--muted)", fontWeight: 400 }}>· {daysLeftYear}d left</span>
+                      </span>
+                    </div>
+                  )}
+                  {dailyTargetThisMonth !== null && (
+                    <div className="velo-line">
+                      <span className="k">Daily target this month</span>
+                      <span className="v">≤ {eur0(dailyTargetThisMonth)}/day <span style={{ color: "var(--muted)", fontWeight: 400 }}>· {daysLeftMonth}d left</span></span>
+                    </div>
+                  )}
+                  <div className="velo-line">
+                    <span className="k">Target fun · per person</span>
+                    <span className="v" style={{ color: targetFunPerMo === 0 ? "var(--terra)" : "var(--sage)" }}>{eur0(targetFunPerMo)}/mo</span>
+                  </div>
+                </div>
+              </div>
+            )}
+
+            {/* More context — secondary facts, dense list */}
+            {(() => {
+              const facts = [];
+              if (projMonthEnd !== null) facts.push({ k: "Projected month-end", kn: "this month", v: eur0(projMonthEnd) });
+              if (completedMonths > 0) facts.push({ k: "Average per month", kn: `${completedMonths} completed month${completedMonths === 1 ? "" : "s"}`, v: eur0(avgMonthly) });
+              if (monthRange) facts.push({ k: "Monthly range", kn: `${monthRange.minLabel} – ${monthRange.maxLabel}`, v: `${eur0(monthRange.min)}–${eur0(monthRange.max)}` });
+              if (!stats.isCurrent) facts.push({ k: "Monthly baseline", v: `${eur0(stats.ceiling / 12)}/mo` });
+              if (!stats.isFuture) facts.push({ k: "Total fun budget", kn: `${eur0(stats.funPlanAnnual / 12)}/mo`, v: `${eur0(stats.funPlanAnnual)}/yr` });
+              if (stats.priorSpent > 0) {
+                const diff = stats.spent - stats.priorSpent;
+                facts.push({
+                  k: stats.complete ? `vs ${stats.year - 1} final` : `vs ${stats.year - 1} same point`,
+                  kn: signedPct(diff / stats.priorSpent), v: signedEur(diff),
+                  color: diff > 0 ? "var(--watch)" : "var(--good)",
+                });
+              }
+              if (!facts.length) return null;
+              return (
+                <div className="innum-group">
+                  <div className="innum-cap">More context</div>
+                  <div className="factlist">
+                    {facts.map((f, i) => (
+                      <div className="factrow" key={i}>
+                        <span className="fact-k">{f.k}{f.kn && <span className="n">{f.kn}</span>}</span>
+                        <span className="fact-v" style={f.color ? { color: f.color } : undefined}>{f.v}</span>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              );
+            })()}
+
+            {/* FIRE portfolio — one cohesive widget instead of three tiles */}
+            {!stats.isFuture && (
+              <div className="innum-group">
+                <div className="innum-cap">FIRE portfolio target <span className="meta">to sustain {eur0(stats.projection)}/yr</span></div>
+                <div className="fire">
+                  <div className="fire-row">
+                    <span className="lab">4% rule<span className="n">standard safe-withdrawal</span></span>
+                    <span className="amt">{eurK(firePortfolio)}</span>
+                  </div>
+                  <div className="fire-row">
+                    <span className="lab">3.5% rule<span className="n">conservative</span></span>
+                    <span className="amt">{eurK(firePortfolio35)}</span>
+                  </div>
+                  <div className="fire-row">
+                    <span className="lab">3.5% with income<span className="n">net of {eur0(externalIncome)} external</span></span>
+                    <span className="amt">{eurK(firePortfolio35Income)}</span>
+                  </div>
+                </div>
+              </div>
+            )}
+
+            {/* Amortization — one unified section (figures + chart) */}
+            {am.hasAmortized && !stats.isFuture && (
+              <div className="innum-group">
+                <div className="innum-cap">Amortization <span className="meta">{stats.spent > 0 ? pct(am.ytd.total / stats.spent) + " of spend" : ""}</span></div>
+                <div className="factlist">
+                  <div className="factrow">
+                    <span className="fact-k">Amortized year-to-date</span>
+                    <span className="fact-v">{eur0(am.ytd.total)}</span>
+                  </div>
+                  <div className="factrow">
+                    <span className="fact-k">Real (cash)</span>
+                    <span className="fact-v">{eur0(am.ytd.real)}</span>
+                  </div>
+                  <div className="factrow">
+                    <span className="fact-k">Virtual (no-cash)</span>
+                    <span className="fact-v" style={{ color: "var(--sage)" }}>{eur0(am.ytd.virtual)}</span>
+                  </div>
                   {stats.isCurrent && (
-                    <StatCard label="Committed this year" value={eur0(am.committedThisYear)} sub={`rest of ${stats.year}`} />
+                    <div className="factrow">
+                      <span className="fact-k">This month{stats.byMonth[curMonth].amount > 0 && <span className="n">{pct(am.month.total / stats.byMonth[curMonth].amount)} of month</span>}</span>
+                      <span className="fact-v">{eur0(am.month.total)}</span>
+                    </div>
+                  )}
+                  {stats.isCurrent && (
+                    <div className="factrow">
+                      <span className="fact-k">Committed<span className="n">rest of {stats.year}</span></span>
+                      <span className="fact-v">{eur0(am.committedThisYear)}</span>
+                    </div>
                   )}
                 </div>
                 <AmortizationChart am={am} stats={stats} />
