@@ -14,7 +14,7 @@
 (function () {
   const { YData, YCalc, YUI } = window;
   const { eur0, localISO } = YCalc;
-  const { TxTag } = YUI;
+  const { TxTag, InfoTip } = YUI;
 
   const pct1 = (n) => (n * 100).toFixed(1) + "%";
   const REVERSIBILITY_OPTS = ["instant", "medium", "low"];
@@ -105,7 +105,7 @@
     return (
       <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: 12, paddingBottom: 18, borderBottom: "1px solid var(--hair)", marginBottom: 18 }}>
         <div>
-          <div className="stat-label">Portfolio</div>
+          <div className="stat-label"><InfoTip id="plan-portfolio">Portfolio</InfoTip></div>
           <InlineEditNum value={plan.portfolio} onSave={savePortfolio} />
           <div className="stat-sub">
             as of {plan.portfolioAsOf || "—"}
@@ -113,12 +113,12 @@
           </div>
         </div>
         <div>
-          <div className="stat-label">Income</div>
+          <div className="stat-label"><InfoTip id="plan-income">Income</InfoTip></div>
           <InlineEditNum value={plan.externalIncome} onSave={saveIncome} />
           <div className="stat-sub">per year</div>
         </div>
         <div>
-          <div className="stat-label">This year implies</div>
+          <div className="stat-label"><InfoTip id="plan-thisyear" ctx={{ stats, plan, thisYearDraw }}>This year implies</InfoTip></div>
           <div style={{ fontFamily: "var(--mono)", fontSize: 18, fontWeight: 600, color: "var(--ink)" }}>
             {thisYearDraw != null ? pct1(thisYearDraw) : "—"}
           </div>
@@ -296,7 +296,9 @@
           {[2.0, 3.5, 4.5].map((v) => (
             <React.Fragment key={v}>
               <div style={{ position: "absolute", left: (v / 5 * 100) + "%", top: -4, width: 1, height: 18, background: "var(--hair-strong)" }} />
-              <div style={{ position: "absolute", left: (v / 5 * 100) + "%", top: 16, transform: "translateX(-50%)", fontFamily: "var(--mono)", fontSize: 8.5, color: "var(--muted)" }}>{v.toFixed(1)}</div>
+              <div style={{ position: "absolute", left: (v / 5 * 100) + "%", top: 16, transform: "translateX(-50%)", fontFamily: "var(--mono)", fontSize: 8.5, color: "var(--muted)" }}>
+                <InfoTip id="plan-bands">{v.toFixed(1)}</InfoTip>
+              </div>
             </React.Fragment>
           ))}
           {savedSelected && leftPct(savedSelected.draw) != null && (
@@ -426,21 +428,21 @@
         <AddLeverPicker availableLevers={availableLevers} onAdd={addLeverRef} />
 
         <div style={{ marginTop: 12, fontFamily: "var(--mono)", fontSize: 11.5, color: "var(--muted)" }}>
-          baseline <InlineTapNum value={sandbox.baselineOverride} placeholder={`${eur0(currentCeiling)} (live ceiling)`} onCommit={setBaselineOverride} />
-          {" · "}income <InlineTapNum value={sandbox.incomeOverride} placeholder={eur0(plan.externalIncome || 0)} onCommit={setIncomeOverride} />
+          <InfoTip id="plan-baseline" ctx={{ currentCeiling, sandbox }}>baseline</InfoTip> <InlineTapNum value={sandbox.baselineOverride} placeholder={`${eur0(currentCeiling)} (live ceiling)`} onCommit={setBaselineOverride} />
+          {" · "}<InfoTip id="plan-income-lever" ctx={{ plan, sandbox }}>income</InfoTip> <InlineTapNum value={sandbox.incomeOverride} placeholder={eur0(plan.externalIncome || 0)} onCommit={setIncomeOverride} />
         </div>
 
         <div style={{ display: "flex", gap: 10, marginTop: 18, marginBottom: 8 }}>
           <div style={{ flex: 1 }}>
-            <div className="stat-label">Spend</div>
+            <div className="stat-label"><InfoTip id="plan-spend" ctx={{ liveRow }}>Spend</InfoTip></div>
             <div style={{ fontFamily: "var(--mono)", fontSize: 18, fontWeight: 600, color: "var(--ink)" }}>{eur0(liveRow.spend)}</div>
           </div>
           <div style={{ flex: 1 }}>
-            <div className="stat-label">Deficit</div>
+            <div className="stat-label"><InfoTip id="plan-deficit" ctx={{ liveRow }}>Deficit</InfoTip></div>
             <div style={{ fontFamily: "var(--mono)", fontSize: 18, fontWeight: 600, color: "var(--ink)" }}>{eur0(liveRow.deficit)}</div>
           </div>
           <div style={{ flex: 1, textAlign: "right" }}>
-            <div className="stat-label">Draw</div>
+            <div className="stat-label"><InfoTip id="plan-draw" ctx={{ liveRow, plan }}>Draw</InfoTip></div>
             <div style={{ fontFamily: "var(--mono)", fontSize: 29, fontWeight: 700, color: liveRow.band === "d" ? "var(--terra)" : "var(--ink)" }}>
               {liveRow.draw != null ? pct1(liveRow.draw) : "—"}
             </div>
@@ -538,13 +540,13 @@
             <input className="inp inp-num" style={{ height: 36 }} type="number" value={amount} onChange={(e) => setAmount(e.target.value)} />
           </div>
           <div className="field" style={{ flex: 1 }}>
-            <label>Reversibility</label>
+            <label><InfoTip id="plan-form-reversibility">Reversibility</InfoTip></label>
             <select className="inp" style={{ height: 36 }} value={reversibility} onChange={(e) => setReversibility(e.target.value)}>
               {REVERSIBILITY_OPTS.map((o) => <option key={o} value={o}>{o}</option>)}
             </select>
           </div>
           <div className="field" style={{ flex: 1 }}>
-            <label>Durability</label>
+            <label><InfoTip id="plan-form-durability">Durability</InfoTip></label>
             <select className="inp" style={{ height: 36 }} value={durability} onChange={(e) => setDurability(e.target.value)}>
               {DURABILITY_OPTS.map((o) => <option key={o} value={o}>{o}</option>)}
             </select>
@@ -565,7 +567,7 @@
           <textarea className="inp" value={notes} onChange={(e) => setNotes(e.target.value)} />
         </div>
         <div className="field">
-          <label>Scale (optional — renders a slider in the builder)</label>
+          <label><InfoTip id="plan-form-scale">Scale (optional — renders a slider in the builder)</InfoTip></label>
           <div style={{ display: "flex", gap: 10 }}>
             <input className="inp inp-num" style={{ height: 36 }} type="number" placeholder="min" value={scaleMin} onChange={(e) => setScaleMin(e.target.value)} />
             <input className="inp inp-num" style={{ height: 36 }} type="number" placeholder="max" value={scaleMax} onChange={(e) => setScaleMax(e.target.value)} />
@@ -589,10 +591,14 @@
       <div style={{ padding: "10px 0", borderBottom: "1px solid var(--hair)" }}>
         <div style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline", gap: 10 }}>
           <span style={{ fontFamily: "var(--sans)", fontSize: 13.5, color: "var(--ink)" }}>{lever.label}</span>
-          <span style={{ fontFamily: "var(--mono)", fontSize: 13, fontWeight: 600, color: "var(--ink)", flexShrink: 0 }}>{eur0(lever.amount)}</span>
+          <span style={{ fontFamily: "var(--mono)", fontSize: 13, fontWeight: 600, color: "var(--ink)", flexShrink: 0 }}>
+            <InfoTip id="plan-lever-amt" ctx={{ lever }}>{eur0(lever.amount)}</InfoTip>
+          </span>
         </div>
         <div style={{ fontFamily: "var(--mono)", fontSize: 10.5, color: "var(--muted)", marginTop: 3 }}>
-          {lever.reversibility} · {lever.horizon || "—"} · {lever.beneficiary || "—"} · {lever.durability}
+          <InfoTip id="plan-lever-meta" ctx={{ lever }}>
+            {lever.reversibility} · {lever.horizon || "—"} · {lever.beneficiary || "—"} · {lever.durability}
+          </InfoTip>
         </div>
         {lever.notes && (
           <div style={{ fontFamily: "var(--sans)", fontSize: 12, color: "var(--ink-2)", marginTop: 4, lineHeight: 1.4 }}>{lever.notes}</div>
@@ -677,7 +683,7 @@
           <input className="inp" style={{ height: 36 }} value={label} onChange={(e) => setLabel(e.target.value)} />
         </div>
         <div className="field">
-          <label>Portfolio floor</label>
+          <label><InfoTip id="plan-form-floor">Portfolio floor</InfoTip></label>
           <input className="inp inp-num" style={{ height: 36 }} type="number" value={floor} onChange={(e) => setFloor(e.target.value)} />
         </div>
         <div className="field">
@@ -692,7 +698,7 @@
     );
   }
 
-  function TriggerRow({ trow, onSave, onDelete }) {
+  function TriggerRow({ trow, plan, onSave, onDelete }) {
     const [editing, setEditing] = React.useState(false);
     if (editing) {
       return <TriggerEditForm trigger={trow} onSave={(fields) => { onSave(fields); setEditing(false); }} onCancel={() => setEditing(false)} />;
@@ -701,7 +707,9 @@
       <div style={{ padding: "10px 0", borderBottom: "1px solid var(--hair)" }}>
         <div style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline", gap: 10 }}>
           <span style={{ fontFamily: "var(--sans)", fontSize: 13.5, color: "var(--ink)" }}>{trow.label}</span>
-          <span style={{ fontFamily: "var(--mono)", fontSize: 13, fontWeight: 600, color: "var(--ink)", flexShrink: 0 }}>{eur0(trow.portfolioFloor)}</span>
+          <span style={{ fontFamily: "var(--mono)", fontSize: 13, fontWeight: 600, color: "var(--ink)", flexShrink: 0 }}>
+            <InfoTip id="plan-trigger-floor" ctx={{ trow }}>{eur0(trow.portfolioFloor)}</InfoTip>
+          </span>
         </div>
         {trow.action && (
           <div style={{ fontFamily: "var(--sans)", fontSize: 12, color: "var(--ink-2)", marginTop: 4, lineHeight: 1.4 }}>{trow.action}</div>
@@ -712,7 +720,7 @@
             <ConfirmDelete onConfirm={onDelete} />
           </div>
           <span style={{ fontFamily: "var(--mono)", fontSize: 11, color: trow.breached ? "var(--terra)" : "var(--muted)" }}>
-            {trow.breached ? "breached" : "—"}
+            <InfoTip id="plan-trigger-breach" ctx={{ trow, plan }}>{trow.breached ? "breached" : "—"}</InfoTip>
           </span>
         </div>
       </div>
@@ -743,7 +751,7 @@
         <div className={"opts-body" + (open ? " open" : "")}>
           <div className="opts-body-inner">
             {trows.map((t) => (
-              <TriggerRow key={t.id} trow={t} onSave={(fields) => saveTrigger(t.id, fields)} onDelete={() => deleteTrigger(t.id)} />
+              <TriggerRow key={t.id} trow={t} plan={plan} onSave={(fields) => saveTrigger(t.id, fields)} onDelete={() => deleteTrigger(t.id)} />
             ))}
             {adding ? (
               <TriggerEditForm onSave={addTrigger} onCancel={() => setAdding(false)} />

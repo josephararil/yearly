@@ -2,7 +2,7 @@
 (function () {
   const { YData, YCalc, YUI, YFun, YTravel, YPlan } = window;
   const { eur0, eurAuto, signedEur, signedPct, pct, MONTHS, fmtDateShort } = YCalc;
-  const { TxRow, CatIcon, TxTag, rich } = YUI;
+  const { TxRow, CatIcon, TxTag, rich, InfoTip } = YUI;
   const DS = window.ApertureDesignSystem_72a4cd || {};
   const SegmentedControl = DS.SegmentedControl, Input = DS.Input, Chip = DS.Chip;
 
@@ -158,19 +158,17 @@
           {!stats.complete && <div className="projbar-doy" style={{ left: doyPct + "%" }} />}
           <div className="projbar-ceil" style={{ left: ceilPct + "%" }} />
           {hover && (
-            <div className="projbar-tip">
-              <div className="projbar-tip-row">
-                <span>Spent</span><b>{eur0(stats.spent)}</b>
-                <span className="projbar-tip-pct">{stats.ceiling > 0 ? pct(stats.spent / stats.ceiling) : "0%"}</span>
+            <div className="ytip" style={{ left: "50%", transform: "translateX(-50%)" }}>
+              <div className="ytip-meaning">
+                Spent <b>{eur0(stats.spent)}</b> ({stats.ceiling > 0 ? pct(stats.spent / stats.ceiling) : "0%"})
               </div>
-              {showProj && (
-                <div className="projbar-tip-row" style={{ color: barColor }}>
-                  <span>Projected</span><b>{eur0(stats.projection)}</b>
-                  <span className="projbar-tip-pct">{stats.ceiling > 0 ? pct(stats.projection / stats.ceiling) : "0%"}</span>
-                </div>
-              )}
-              <div className="projbar-tip-row">
-                <span>Ceiling</span><b>{eur0(stats.ceiling)}</b>
+              <div className="ytip-deriv">
+                {showProj && (
+                  <div style={{ color: barColor }}>
+                    Projected {eur0(stats.projection)} ({stats.ceiling > 0 ? pct(stats.projection / stats.ceiling) : "0%"})
+                  </div>
+                )}
+                <div>Ceiling {eur0(stats.ceiling)}</div>
               </div>
             </div>
           )}
@@ -526,8 +524,10 @@
     const completedAmounts = stats.byMonth.slice(0, completedMonths).map((m) => m.amount);
     const avgMonthly = completedMonths > 0 ? completedAmounts.reduce((a, v) => a + v, 0) / completedMonths : 0;
     const neededMonthly = stats.isCurrent ? YCalc.neededMonthlyCap(stats) : null;
+    const monthsLeftCount = 12 - curMonth;
+    const spentBeforeThisMonth = stats.isCurrent ? stats.byMonth.slice(0, curMonth).reduce((a, x) => a + x.amount, 0) : 0;
 
-    let trend90 = null, trend90Color = "var(--ink)";
+    let trend90 = null, trend90Color = "var(--ink)", trend90Recent45 = 0, trend90Prior45 = 0;
     if (stats.isCurrent && stats.doy >= 90) {
       const d45 = new Date(stats.asOf); d45.setDate(d45.getDate() - 45);
       const d45str = YCalc.localISO(d45);
@@ -535,6 +535,7 @@
       const d90str = YCalc.localISO(d90);
       const recent45 = stats.upto.filter((t) => t.date > d45str).reduce((a, t) => a + t.amount_eur, 0) / 45;
       const prior45 = stats.upto.filter((t) => t.date > d90str && t.date <= d45str).reduce((a, t) => a + t.amount_eur, 0) / 45;
+      trend90Recent45 = recent45; trend90Prior45 = prior45;
       if (prior45 > 0) {
         const ratio = recent45 / prior45;
         if (ratio > 1.08) { trend90 = "↑ Increasing"; trend90Color = "var(--terra)"; }
@@ -582,18 +583,19 @@
     const am = YCalc.amortizationBreakdown(store, stats.year, stats.asOfStr);
 
     const facts = [];
-    if (projMonthEnd !== null) facts.push({ k: "Projected month-end", kn: "this month", v: eur0(projMonthEnd) });
-    if (completedMonths > 0) facts.push({ k: "Average per month", kn: `${completedMonths} completed month${completedMonths === 1 ? "" : "s"}`, v: eur0(avgMonthly) });
-    if (monthRange) facts.push({ k: "Monthly range", kn: `${monthRange.minLabel} – ${monthRange.maxLabel}`, v: `${eur0(monthRange.min)}–${eur0(monthRange.max)}` });
+    if (projMonthEnd !== null) facts.push({ k: "Projected month-end", kn: "this month", v: eur0(projMonthEnd), tip: "fact-monthend", ctx: { projMonthEnd } });
+    if (completedMonths > 0) facts.push({ k: "Average per month", kn: `${completedMonths} completed month${completedMonths === 1 ? "" : "s"}`, v: eur0(avgMonthly), tip: "fact-avg", ctx: { avgMonthly, completedMonths } });
+    if (monthRange) facts.push({ k: "Monthly range", kn: `${monthRange.minLabel} – ${monthRange.maxLabel}`, v: `${eur0(monthRange.min)}–${eur0(monthRange.max)}`, tip: "fact-range", ctx: { monthRange } });
     if (!stats.isCurrent) facts.push({ k: "Monthly baseline", v: `${eur0(stats.ceiling / 12)}/mo` });
-    if (!stats.isFuture) facts.push({ k: "Total fun budget", kn: `${eur0(stats.funPlanAnnual / 12)}/mo`, v: `${eur0(stats.funPlanAnnual)}/yr` });
-    if (!stats.isFuture) facts.push({ k: "Total travel budget", kn: `${eur0(travelMonthly)}/mo`, v: `${eur0(travelPlanAnnual)}/yr` });
+    if (!stats.isFuture) facts.push({ k: "Total fun budget", kn: `${eur0(stats.funPlanAnnual / 12)}/mo`, v: `${eur0(stats.funPlanAnnual)}/yr`, tip: "fact-fun", ctx: { stats } });
+    if (!stats.isFuture) facts.push({ k: "Total travel budget", kn: `${eur0(travelMonthly)}/mo`, v: `${eur0(travelPlanAnnual)}/yr`, tip: "fact-travel", ctx: { travelMonthly, travelPlanAnnual } });
     if (stats.priorSpent > 0) {
       const diff = stats.spent - stats.priorSpent;
       facts.push({
         k: stats.complete ? `vs ${stats.year - 1} final` : `vs ${stats.year - 1} same point`,
         kn: signedPct(diff / stats.priorSpent), v: signedEur(diff),
         color: diff > 0 ? "var(--watch)" : "var(--good)",
+        tip: "fact-prior", ctx: { stats },
       });
     }
     const showFire = !stats.isFuture;
@@ -609,19 +611,19 @@
         {/* Primary metrics — bold figures, muted context */}
         <div className="metricrow">
               <div className="metric">
-                <div className="metric-label">{stats.complete ? "Total spent" : "Spent YTD"}</div>
+                <InfoTip id="metric-spent" ctx={{ stats }}><div className="metric-label">{stats.complete ? "Total spent" : "Spent YTD"}</div></InfoTip>
                 <div className="metric-val">{eur0(stats.spent)}</div>
                 <div className="metric-sub">{stats.upto.length} entries</div>
               </div>
               {!stats.isFuture && (
                 <div className="metric">
-                  <div className="metric-label">Daily spend</div>
+                  <InfoTip id="metric-daily" ctx={{ stats, dailyMedian }}><div className="metric-label">Daily spend</div></InfoTip>
                   <div className="metric-val">{eur0(stats.dailyRate)}<span style={{ fontSize: 13, color: "var(--muted)", fontWeight: 500 }}>/d</span></div>
                   <div className="metric-sub">{dailyMedian !== null ? `median ${eur0(dailyMedian)}/d` : "year-to-date avg"}</div>
                 </div>
               )}
               <div className="metric">
-                <div className="metric-label">Blended rate</div>
+                <InfoTip id="metric-blended" ctx={{ stats }}><div className="metric-label">Blended rate</div></InfoTip>
                 <div className="metric-val">{eur0(stats.trailingDailyRate)}<span style={{ fontSize: 13, color: "var(--muted)", fontWeight: 500 }}>/d</span></div>
                 <div className="metric-sub">{!stats.complete
                   ? `+${eur0(stats.bufferAmt)} buffer · ${Math.round(stats.buffer * 100)}%`
@@ -633,7 +635,7 @@
             {trend90 && (
               <div>
                 <div className="trend-head">
-                  <span className="lab">90-day trend</span>
+                  <InfoTip id="trend90-dir" ctx={{ recent45: trend90Recent45, prior45: trend90Prior45 }}><span className="lab">90-day trend</span></InfoTip>
                   <span className="val" style={{ color: trend90Color }}>{trend90}</span>
                 </div>
                 <Trend90Chart upto={stats.upto} asOf={stats.asOf} color={trend90Color} />
@@ -648,19 +650,21 @@
               <div className="innum-group">
                 <div className="innum-cap">Current velocity <span className="meta">day {stats.doy} of {stats.daysInYear}</span></div>
                 <div className="velo-primary">
-                  <span className="velo-num num">{eur0(stats.pace)}</span>
+                  <InfoTip id="velo-pace" ctx={{ stats }}><span className="velo-num num">{eur0(stats.pace)}</span></InfoTip>
                   <span className="velo-cap">on-pace by today · {eur0(stats.ceiling / 12)}/mo baseline</span>
                 </div>
                 <div className="velo-rows">
                   {neededMonthly !== null && (
                     <div className="velo-line">
-                      <span className="k">Adjusted monthly cap</span>
+                      <InfoTip id="velo-cap" ctx={{ stats, neededMonthly, spentBefore: spentBeforeThisMonth, monthsLeftCount }}><span className="k">Adjusted monthly cap</span></InfoTip>
                       <span className="v" style={{ color: avgMonthly > neededMonthly ? "var(--terra)" : "var(--sage)" }}>≤ {eur0(neededMonthly)}/mo</span>
                     </div>
                   )}
                   {realDailyTarget !== null && (
                     <div className="velo-line">
-                      <span className="k">{overCeiling ? "Daily target to recover" : "Daily room left"}</span>
+                      <InfoTip id="velo-daily" ctx={{ overCeiling, adjustedSpent, stats, daysLeftYear, realDailyTarget }}>
+                        <span className="k">{overCeiling ? "Daily target to recover" : "Daily room left"}</span>
+                      </InfoTip>
                       <span className="v" style={{ color: overCeiling ? "var(--terra)" : "var(--sage)" }}>
                         {overCeiling ? "≤ " : ""}{eur0(realDailyTarget)}/day <span style={{ color: "var(--muted)", fontWeight: 400 }}>· {daysLeftYear}d left</span>
                       </span>
@@ -668,12 +672,12 @@
                   )}
                   {dailyTargetThisMonth !== null && (
                     <div className="velo-line">
-                      <span className="k">Daily target this month</span>
+                      <InfoTip id="velo-daily-month" ctx={{ neededMonthly, spentThisMonth, daysLeftMonth, dailyTargetThisMonth }}><span className="k">Daily target this month</span></InfoTip>
                       <span className="v">≤ {eur0(dailyTargetThisMonth)}/day <span style={{ color: "var(--muted)", fontWeight: 400 }}>· {daysLeftMonth}d left</span></span>
                     </div>
                   )}
                   <div className="velo-line">
-                    <span className="k">Target fun · per person</span>
+                    <InfoTip id="velo-fun" ctx={{ stats, targetFunPerMo, numPeople, monthsLeft }}><span className="k">Target fun · per person</span></InfoTip>
                     <span className="v" style={{ color: targetFunPerMo === 0 ? "var(--terra)" : "var(--sage)" }}>{eur0(targetFunPerMo)}/mo</span>
                   </div>
                 </div>
@@ -696,7 +700,9 @@
                       <div className="factlist">
                         {facts.map((f, i) => (
                           <div className="factrow" key={i}>
-                            <span className="fact-k">{f.k}{f.kn && <span className="n">{f.kn}</span>}</span>
+                            {f.tip
+                              ? <InfoTip id={f.tip} ctx={f.ctx}><span className="fact-k">{f.k}{f.kn && <span className="n">{f.kn}</span>}</span></InfoTip>
+                              : <span className="fact-k">{f.k}{f.kn && <span className="n">{f.kn}</span>}</span>}
                             <span className="fact-v" style={f.color ? { color: f.color } : undefined}>{f.v}</span>
                           </div>
                         ))}
@@ -706,18 +712,20 @@
                     {/* FIRE portfolio — one cohesive widget instead of three tiles */}
                     {showFire && (
                       <div className="innum-group">
-                        <div className="innum-cap">FIRE portfolio target <span className="meta">to sustain {eur0(stats.projection)}/yr</span></div>
+                        <InfoTip id="fire-cap" ctx={{ stats }}>
+                          <div className="innum-cap">FIRE portfolio target <span className="meta">to sustain {eur0(stats.projection)}/yr</span></div>
+                        </InfoTip>
                         <div className="fire">
                           <div className="fire-row">
-                            <span className="lab">4% rule<span className="n">standard safe-withdrawal</span></span>
+                            <InfoTip id="fire-4" ctx={{ stats, firePortfolio }}><span className="lab">4% rule<span className="n">standard safe-withdrawal</span></span></InfoTip>
                             <span className="amt">{eurK(firePortfolio)}</span>
                           </div>
                           <div className="fire-row">
-                            <span className="lab">3.5% rule<span className="n">conservative</span></span>
+                            <InfoTip id="fire-35" ctx={{ stats, firePortfolio35 }}><span className="lab">3.5% rule<span className="n">conservative</span></span></InfoTip>
                             <span className="amt">{eurK(firePortfolio35)}</span>
                           </div>
                           <div className="fire-row">
-                            <span className="lab">3.5% with income<span className="n">net of {eur0(externalIncome)} external</span></span>
+                            <InfoTip id="fire-35i" ctx={{ stats, externalIncome, firePortfolio35Income }}><span className="lab">3.5% with income<span className="n">net of {eur0(externalIncome)} external</span></span></InfoTip>
                             <span className="amt">{eurK(firePortfolio35Income)}</span>
                           </div>
                         </div>
@@ -727,29 +735,31 @@
                     {/* Amortization — one unified section (figures + chart) */}
                     {showAmort && (
                       <div className="innum-group">
-                        <div className="innum-cap">Amortization <span className="meta">{stats.spent > 0 ? pct(am.ytd.total / stats.spent) + " of spend" : ""}</span></div>
+                        <InfoTip id="amort-cap" ctx={{ am, stats }}>
+                          <div className="innum-cap">Amortization <span className="meta">{stats.spent > 0 ? pct(am.ytd.total / stats.spent) + " of spend" : ""}</span></div>
+                        </InfoTip>
                         <div className="factlist">
                           <div className="factrow">
-                            <span className="fact-k">Amortized year-to-date</span>
+                            <InfoTip id="amort-ytd" ctx={{ am }}><span className="fact-k">Amortized year-to-date</span></InfoTip>
                             <span className="fact-v">{eur0(am.ytd.total)}</span>
                           </div>
                           <div className="factrow">
-                            <span className="fact-k">Real (cash)</span>
+                            <InfoTip id="amort-real" ctx={{ am }}><span className="fact-k">Real (cash)</span></InfoTip>
                             <span className="fact-v">{eur0(am.ytd.real)}</span>
                           </div>
                           <div className="factrow">
-                            <span className="fact-k">Virtual (no-cash)</span>
+                            <InfoTip id="amort-virtual" ctx={{ am }}><span className="fact-k">Virtual (no-cash)</span></InfoTip>
                             <span className="fact-v" style={{ color: "var(--sage)" }}>{eur0(am.ytd.virtual)}</span>
                           </div>
                           {stats.isCurrent && (
                             <div className="factrow">
-                              <span className="fact-k">This month{stats.byMonth[curMonth].amount > 0 && <span className="n">{pct(am.month.total / stats.byMonth[curMonth].amount)} of month</span>}</span>
+                              <InfoTip id="amort-month" ctx={{ am }}><span className="fact-k">This month{stats.byMonth[curMonth].amount > 0 && <span className="n">{pct(am.month.total / stats.byMonth[curMonth].amount)} of month</span>}</span></InfoTip>
                               <span className="fact-v">{eur0(am.month.total)}</span>
                             </div>
                           )}
                           {stats.isCurrent && (
                             <div className="factrow">
-                              <span className="fact-k">Committed<span className="n">rest of {stats.year}</span></span>
+                              <InfoTip id="amort-committed" ctx={{ am, stats }}><span className="fact-k">Committed<span className="n">rest of {stats.year}</span></span></InfoTip>
                               <span className="fact-v">{eur0(am.committedThisYear)}</span>
                             </div>
                           )}
@@ -779,7 +789,9 @@
         <div>
           <div className="section-h" style={{ marginTop: 0, marginBottom: 6 }}>
             <h2>Where it's going</h2><span className="spacer" />
-            <span className="muted" style={{ fontSize: 12 }}>{eur0(stats.spent)} total</span>
+            <span className="muted" style={{ fontSize: 12 }}>
+              <InfoTip id="cat-total" ctx={{ stats }}>{eur0(stats.spent)} total</InfoTip>
+            </span>
           </div>
           {stats.catList.map((c) => {
             const cat = YData.cat(c.id);
@@ -798,10 +810,12 @@
                     </span>
                     <span className="catbar-track"><span className="catbar-fill" style={{ width: Math.max(3, (c.amount / max) * 100) + "%", background: cat.color }} /></span>
                     <span className="catbar-sub">
-                      <span>{pct(c.share)} of spend</span>
-                      <span>{c.count} entries</span>
+                      <InfoTip id="cat-share" ctx={{ c, stats }} hoverOnly><span>{pct(c.share)} of spend</span></InfoTip>
+                      <InfoTip id="cat-entries" ctx={{ c }} hoverOnly><span>{c.count} entries</span></InfoTip>
                       {mv != null && Math.abs(mv) > 0.05 && (
-                        <span style={{ color: mv > 0 ? "var(--amber)" : "var(--sage)" }}>{signedPct(mv)} MoM</span>
+                        <InfoTip id="cat-mom" ctx={{ arr, lastFull, prior, mv }} hoverOnly>
+                          <span style={{ color: mv > 0 ? "var(--amber)" : "var(--sage)" }}>{signedPct(mv)} MoM</span>
+                        </InfoTip>
                       )}
                     </span>
                   </span>
@@ -968,7 +982,9 @@
             <div className="txlist">{list.map((t) => <TxRow key={t.id} t={t} onClick={() => onEditTx(t)} people={people} />)}</div>
           ) : <div className="empty">No matching transactions.</div>}
         </div>
-        <div className="muted" style={{ textAlign: "center", fontFamily: "var(--mono)", fontSize: 11 }}>{list.length} of {rawTxns.length} entries</div>
+        <div className="muted" style={{ textAlign: "center", fontFamily: "var(--mono)", fontSize: 11 }}>
+          <InfoTip id="tx-count" ctx={{ shown: list.length, total: rawTxns.length }}>{list.length} of {rawTxns.length} entries</InfoTip>
+        </div>
       </div>
     );
   }
@@ -988,14 +1004,16 @@
           <span className="catbar-top">
             <span className="catbar-name" style={{ display: "flex", alignItems: "center", gap: 6, minWidth: 0 }}>
               <span style={{ overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{p.description}</span>
-              <TxTag label={(p.virtual ? "VIRTUAL " : "") + "×" + p.amortize_months + "mo"} color="var(--terra)" />
+              <InfoTip id="amz-tag" ctx={{ p }} hoverOnly>
+                <TxTag label={(p.virtual ? "VIRTUAL " : "") + "×" + p.amortize_months + "mo"} color="var(--terra)" />
+              </InfoTip>
             </span>
             <span className="catbar-amt num">{eurAuto(p.amount_eur)}</span>
           </span>
           <span className="catbar-track"><span className="catbar-fill" style={{ width: width + "%", background: fillColor }} /></span>
           <span className="catbar-sub" style={{ flexDirection: "column", alignItems: "flex-start", gap: 2 }}>
-            <span>{eur0(p.monthly)}/mo · {p.startYm}→{p.endYm}</span>
-            <span>{eur0(p.remainingAmt)} remaining · {p.remaining} mo left</span>
+            <InfoTip id="amz-schedule" ctx={{ p }} hoverOnly><span>{eur0(p.monthly)}/mo · {p.startYm}→{p.endYm}</span></InfoTip>
+            <InfoTip id="amz-remaining" ctx={{ p }} hoverOnly><span>{eur0(p.remainingAmt)} remaining · {p.remaining} mo left</span></InfoTip>
           </span>
         </span>
       </button>
@@ -1009,7 +1027,9 @@
       <div>
         <div style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline", marginBottom: 2 }}>
           <div className="eyebrow">{title}</div>
-          <span className="muted num" style={{ fontSize: 12 }}>{eurAuto(subtotal)}</span>
+          <span className="muted num" style={{ fontSize: 12 }}>
+            <InfoTip id="amz-subtotal" ctx={{ title, subtotal, count: list.length }}>{eurAuto(subtotal)}</InfoTip>
+          </span>
         </div>
         {list.map((p) => <AmortParentRow key={p.id} p={p} store={store} onEditTx={onEditTx} />)}
       </div>
@@ -1029,9 +1049,9 @@
     return (
       <div className="stagger" style={{ display: "flex", flexDirection: "column", gap: 16 }}>
         <div className="statgrid">
-          <StatCard label="Outstanding real" value={eur0(am.totals.real)} sub="cash" />
-          <StatCard label="Outstanding virtual" value={eur0(am.totals.virtual)} sub="no-cash" color="var(--sage)" />
-          <StatCard label="Active amortizations" value={String(am.parents.length)} mono={false} />
+          <StatCard label={<InfoTip id="amz-out-real" ctx={{ am }}>Outstanding real</InfoTip>} value={eur0(am.totals.real)} sub="cash" />
+          <StatCard label={<InfoTip id="amz-out-virtual" ctx={{ am }}>Outstanding virtual</InfoTip>} value={eur0(am.totals.virtual)} sub="no-cash" color="var(--sage)" />
+          <StatCard label={<InfoTip id="amz-active" ctx={{ am }}>Active amortizations</InfoTip>} value={String(am.parents.length)} mono={false} />
         </div>
         <AmortSection title="Real (cash)" list={real} store={store} onEditTx={onEditTx} />
         <AmortSection title="Virtual (no-cash)" list={virtual} store={store} onEditTx={onEditTx} />

@@ -7,7 +7,8 @@ touching `ui.jsx`, `fun.jsx`, or a screen module. Engine/state internals are in
 ## `y/ui.jsx` (`window.YUI`) — shared primitives
 
 Exports: `StatusHero`, `CalloutCard`, `TxRow`, `CatIcon`, `DeltaChip`, `Sheet`, `SectionH`,
-`Toast`, `TxTag`, and `rich` (renders numbers inside text in the mono `.num` style).
+`Toast`, `TxTag`, `InfoTip`, `TIP_CONTENT`, and `rich` (renders numbers inside text in the mono
+`.num` style).
 
 `TxTag({ label, color })` — small pill badge (mono 9px uppercase, tinted background/border from
 `color`); used inline by `TxRow` for the Fun/Travel/`×Nmo`/`VIRTUAL` badges and reused directly by
@@ -15,6 +16,65 @@ Exports: `StatusHero`, `CalloutCard`, `TxRow`, `CatIcon`, `DeltaChip`, `Sheet`, 
 
 > The hero is fixed to numerals; the Overview monthly chart is `MonthCurve`, defined locally in
 > `home.jsx`.
+
+### `InfoTip` / `TIP_CONTENT` — hover/tap tooltip primitive
+
+`InfoTip({ id, ctx, children, hoverOnly, className })` is the one reusable way to attach an
+explanatory tooltip to a piece of copy. It wraps `children` in a `<span className="tip-trigger">`
+(dotted hairline underline, `cursor:help`) inside a `position:relative` host so the card can anchor
+to it. Content comes from `TIP_CONTENT`, a single registry object keyed by tip `id`: each entry is
+either a static `{ meaning, derivation }` object or a function `(ctx) => ({ meaning, derivation })`
+that reads live values off the `ctx` bag passed at the call site (`{ stats, store, am, ... }`).
+Copy leads with the plain-language `meaning`, then the `derivation` — a compact formula with live
+numbers sourced from `ctx` + `window.YCalc` formatters (`eur0`, `pct`, `signedEur`, `signedPct`).
+Renders bare `children` (no trigger, no card) when the `id` has no `TIP_CONTENT` entry, or when the
+resolved `meaning`/`derivation` are both empty — a row can opt out simply by omitting its id.
+
+Affordance: desktop shows the card on `pointerenter`/hides on `pointerleave`; mobile/tap toggles
+open via `onClick` (which calls `stopPropagation()` so a tip nested inside a button never fires the
+ancestor's `onClick`). Pass `hoverOnly` to disable the tap toggle where the trigger sits on top of
+the element's primary tap action (e.g. a category/amortization row that expands/opens a sheet) — a
+`hoverOnly` tip skips its own `onClick` handling entirely (no `stopPropagation`), so the tap bubbles
+straight through to the row's own `onClick` (row still expands/opens) while a real mouse hover still
+shows the card via `pointerenter`. Only one `InfoTip` is open at a time: opening dispatches
+a `document` `CustomEvent('ytip:open', { detail: <instance id> })`; every `InfoTip` listens and
+closes itself when it receives an event whose id isn't its own. Dismisses on outside `pointerdown`,
+`scroll` (capture), and `Escape`. On open, the card reads the trigger's `getBoundingClientRect()`
+and anchors `left:0` near the left viewport edge, `right:0` near the right edge, else centered
+(`left:50%; transform:translateX(-50%)`) — the card itself sits `bottom: calc(100% + 6px)` above the
+trigger. CSS: `.tip-trigger`, `.ytip`, `.ytip-meaning`, `.ytip-deriv` in `app.css`.
+
+`TIP_CONTENT` is the single source of truth for tooltip wording across the app — every screen adds
+its ids to this one object in `ui.jsx` rather than growing a separate registry per file. Overview
+(`StatusHero`, `analysis.jsx` `InNumbers`) instruments the hero projection/delta/band/draw/drawzone,
+the three metric tiles, the 90-day trend heading, the current-velocity rows, the More-context facts,
+the FIRE rows, and the amortization rows — see each id's entry in `TIP_CONTENT` for the exact
+derivation. Not instrumented: `ProjectionBar` (has its own hover tip, rendered on the shared `.ytip`
+card), the `InsightCard` line,
+and the SVG crosshair tooltips (`Trend90Chart`, the amortization `Am*` charts, the month curve) —
+those stay bespoke since a crosshair-follows-cursor interaction can't share a static-anchor
+primitive.
+
+`analysis.jsx`'s Activity tabs also instrument via `TIP_CONTENT`: `CategoriesTab`'s "€X total"
+header (`cat-total`) and, per category row, the "% of spend"/"N entries"/"±% MoM" subs
+(`cat-share`/`cat-entries`/`cat-mom`, all `hoverOnly` since the row itself is the expand button);
+`TransactionsTab`'s "X of Y entries" footer (`tx-count`, a plain tip — not a button); and
+`AmortizedTab`'s three `StatCard` labels (`amz-out-real`/`amz-out-virtual`/`amz-active`), each
+section's subtotal (`amz-subtotal`), and per amortized row the `×Nmo`/`VIRTUAL` tag
+(`amz-tag`), the "€X/mo · start→end" schedule (`amz-schedule`), and the "€X remaining · N mo left"
+line (`amz-remaining`) — the latter three `hoverOnly` since `AmortParentRow` is itself a button that
+opens the edit sheet.
+
+`fun.jsx`'s Fun tab instruments via `TIP_CONTENT` too: `PersonCard`'s monthly-rate value
+(`fun-rate`) and its "Balance"/"This month"/"All-time" stat labels (`fun-balance`/`fun-month`/
+`fun-alltime`), all plain tips (no button underneath); the per-wishlist-item ETA text
+(`fun-eta`, covering the "ready now"/no-rate/N-mo branches); `FunTab`'s "€X total" header
+(`fun-total`); and per fun-category row the amount (`fun-cat-amt`) and the combined "% of fun / N
+entries" sub (`fun-cat-share`) — both re-enable `pointer-events` locally since the row's own
+`pointerEvents: "none"` would otherwise block them. `FunStrip` (defined on `window.YFun` but not
+currently mounted anywhere) mirrors the balance/goal-% numbers as `fun-strip-balance`/
+`fun-strip-goal`, both `hoverOnly` since the whole strip is one tap target that navigates to the Fun
+tab.
 
 ### `StatusHero`
 
@@ -41,9 +101,11 @@ meaningfully ≠ ceiling). Tick labels render in a separate `.bullet-labels` row
 (mono 10px `--muted`) sorted left-to-right with alternating `top` (0 or 13px) to avoid horizontal
 collision; leftmost/rightmost labels clamp via `left:0` / `right:0` to prevent overflow. The spent
 figure is not duplicated here (it already appears in `.hero-spent`). The wrap is clickable
-(`onPointerDown` → `handleTap`); `.bullet-tip` appears above the rail with paper fill + hairline
-border. Tooltip x-anchors left/center/right based on `tip.x` to avoid edge overflow. Dismisses on
-second tap or pointerdown outside. State: `useState({open,x})` local to `StatusHero`.
+(`onPointerDown` → `handleTap`); a `.ytip` card (the same shared tooltip look as `InfoTip`) appears
+above the rail, with a `.ytip-meaning` over/remaining line and a `.ytip-deriv` fun-spent line.
+Tooltip x-anchors left/center/right based on `tip.x` to avoid edge overflow. Dismisses on second tap
+or pointerdown outside. State: `useState({open,x})` local to `StatusHero`, not wired through
+`InfoTip`/`TIP_CONTENT`.
 
 **Zone 3 — Monthly pulse** (current year only): two-row layout. Row 1 (`.pulse-r1`, `display:flex`
 `justify-content:space-between`) carries the mono month label (e.g. JUNE) on the left and the sans
@@ -116,6 +178,17 @@ Internal: `TripCreateSheet`, `TripBreakdown`, `TripRow`, `tripDateRange(trip)`.
 
 Trip *selection* when logging an expense lives in `y/addflow.jsx` (`TripField`, see below).
 
+`travel.jsx` instruments via `TIP_CONTENT` too: `TravelTab`'s monthly-rate value (`trv-rate`) and
+its "Available"/"This month"/"Spent YTD" stat labels (`trv-balance`/`trv-month`/`trv-ytd`, plain
+tips, no button underneath), plus the "~€X/yr" projection line (`trv-proj`, generic — day-of-year
+math isn't plugged in). Per `TripRow`, the collapsed total (`trv-trip-total`) is `hoverOnly` since
+the row summary is itself the expand/collapse button; the "Has N expenses — can't delete" note is a
+plain tip (`trv-trip-lock`). Per `TripBreakdown` category row, the amount (`trv-cat-amt`) and the
+combined "% of trip / N entries" sub (`trv-cat-share`) re-enable `pointer-events` locally since the
+row's own `pointerEvents: "none"` would otherwise block them. `TravelStrip` mirrors the
+balance/meta numbers as `trv-strip-balance`/`trv-strip-meta`, both `hoverOnly` since the whole strip
+is one tap target that navigates to the Travel tab.
+
 ## `y/plan.jsx` (`window.YPlan`) — the Plan tab
 
 `PlanTab({ store, setStore, stats })`, rendered on Analysis's fourth (last) top pill (`Activity |
@@ -186,6 +259,25 @@ screen with zero clicks. Regions, top to bottom:
    (`TriggerRow`): label, portfolio floor, action text, inline Edit/`ConfirmDelete`, and a status —
    quiet muted "—" when `plan.portfolio >= floor`, terracotta "breached" otherwise (from
    `YCalc.checkTriggers`). Purely a checklist; no notifications, no callout integration.
+
+`plan.jsx` instruments via `TIP_CONTENT` too: the header strip's "Portfolio"/"Income" labels
+(`plan-portfolio`/`plan-income`, plain tips explaining what each input is — the tap-to-edit figure
+below each stays untouched so the tip never fights the edit tap) and the "This year implies" label
+(`plan-thisyear`, live draw derivation); the comparison axis's 2.0/3.5/4.5 tick labels (`plan-bands`,
+one generic id shared by all three, since the ticks are static). In the builder: the "baseline"/
+"income" inline words next to `InlineTapNum` (`plan-baseline`/`plan-income-lever` — the tip sits on
+the word, not the tap-to-edit figure) and the Spend/Deficit/Draw stat labels
+(`plan-spend`/`plan-deficit`/`plan-draw`, all live off `liveRow`). In the lever library: each
+`LeverRow`'s amount (`plan-lever-amt`) and its reversibility/horizon/beneficiary/durability meta line
+(`plan-lever-meta`, explains what each attribute means rather than repeating the values already
+shown) — both plain tips since the library row itself isn't a tap target. In the triggers block:
+each `TriggerRow`'s portfolio floor (`plan-trigger-floor`) and breached/"—" status
+(`plan-trigger-breach`, live against `plan.portfolio`). Form labels in `LeverEditForm`/
+`TriggerEditForm` — Reversibility, Durability, Scale, Portfolio floor (`plan-form-reversibility`/
+`plan-form-durability`/`plan-form-scale`/`plan-form-floor`) — carry a tip on the `<label>` text, apart
+from the input. Not instrumented: the comparison strip's scenario dots (select buttons), inline-edit
+values themselves (`InlineEditNum`/`InlineTapNum`/`NullableNumInput` — tips sit on the adjacent label/
+word instead), and the zone-verdict banner (already explanatory prose).
 
 `ConfirmDelete` (module-local) is the shared two-step delete control used throughout the tab.
 
@@ -336,7 +428,10 @@ Top-to-bottom the block is:
    just the bar: a solid fill to `spent`, a faded (opacity .3) projection remainder to `projection`,
    a hard black ceiling tick (`.projbar-ceil`), a day-of-year pace marker (`.projbar-doy`), and
    `spent`/`ceiling`/`proj` labels. Fill is terra when `projection > ceiling` else sage, so "over" is
-   obvious the instant the fill crosses the ceiling tick. Renders nothing for future years.
+   obvious the instant the fill crosses the ceiling tick. Renders nothing for future years. Hovering
+   (or, on touch, pressing) the rail shows a `.ytip` card — the same shared tooltip look as `InfoTip`
+   — with a `.ytip-meaning` Spent line and a `.ytip-deriv` Projected/Ceiling breakdown; own local
+   `hover` state, not wired through `InfoTip`/`TIP_CONTENT`.
 2. **Primary metric trio** (`.metricrow` — 2–3 equal columns, hairline top/bottom, mono figures):
    Spent YTD (+ entry count), Daily spend (`dailyRate`, median sub, hidden future), Blended rate
    (`trailingDailyRate` + `+€X buffer · Y%` sub, or "YTD avg" once complete).
@@ -569,6 +664,20 @@ moves with `CACHE_NAME` in `sw.js`).
 
 There is no Overview-density picker in the UI; `store.density` may still exist in older stores but
 is not editable here.
+
+`settings.jsx` instruments via `TIP_CONTENT` too: the shared `Row` component takes an optional `tip`
+prop (`{ id, ctx }`) that wraps the row `title` in `InfoTip … hoverOnly` — used on the four Budget
+settings row titles (`set-ceiling`, `set-fun`, `set-travel`, `set-portfolio`) so a tap still opens the
+sheet. Inside the opened sheets, read-only numbers get normal tap-enabled tips: `CeilingBufferSheet`'s
+"Missed-entry buffer" label (`set-field-buffer`) and its `projNoBuffer → preview` line
+(`set-buffer-preview`); `FunBudgetSheet`'s "Monthly allowance" label (`set-field-allowance`) and its
+`ceiling = main + fun` footer (`set-fun-identity`); `PortfolioSheet`'s "Portfolio value" and "External
+income" labels (`set-field-portfolio`, `set-field-income`) and its draw preview line
+(`set-draw-preview`); and the shared `BalanceCorrection` sub-component's "Current balance" label plus
+`TravelConfigSheet`'s own inline balance label (both `set-balance`, GENERIC — the balance formula
+isn't otherwise surfaced as a single live expression). Skipped: **Past years** (nav row into
+`YearsSheet`), **Quick templates**/**Import**/**Export**/**Force resync**/**Clear all data** (nav rows
+or already explained by their `sub` text).
 
 **JSON backup/restore**: Import JSON calls `YData.migrateStore(parsed)` before `setStore` so old
 backups (with `target`, no `people`/`wishlist`) migrate cleanly. Hidden `#jsonfile` input (mounted at

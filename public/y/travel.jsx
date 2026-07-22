@@ -7,7 +7,7 @@
 (function () {
   const { YData, YCalc, YUI } = window;
   const { eur0, eurAuto, localISO } = YCalc;
-  const { Sheet } = YUI;
+  const { Sheet, InfoTip } = YUI;
   const DS = window.ApertureDesignSystem_72a4cd || {};
   const Button = DS.Button;
 
@@ -44,10 +44,12 @@
             </span>
           ) : (
             <span style={{ fontFamily: "var(--mono)", fontSize: 26, fontWeight: 600, color: balColor, whiteSpace: "nowrap" }}>
-              {isNeg ? ("−" + eur0(Math.abs(balance))) : eur0(balance)}
-              {isNeg && (
-                <span style={{ fontFamily: "var(--mono)", fontSize: 10, color: "var(--terra)", marginLeft: 6 }}>owe back</span>
-              )}
+              <InfoTip id="trv-strip-balance" ctx={{ travel }} hoverOnly>
+                {isNeg ? ("−" + eur0(Math.abs(balance))) : eur0(balance)}
+                {isNeg && (
+                  <span style={{ fontFamily: "var(--mono)", fontSize: 10, color: "var(--terra)", marginLeft: 6 }}>owe back</span>
+                )}
+              </InfoTip>
             </span>
           )}
         </div>
@@ -55,7 +57,9 @@
         {/* Meta line */}
         {!unconfigured && (
           <div style={{ fontFamily: "var(--mono)", fontSize: 11, color: "var(--muted)" }}>
-            {eur0(monthlyRate)}/mo · {eur0(usedThisMonth)} used this month
+            <InfoTip id="trv-strip-meta" ctx={{ travel }} hoverOnly>
+              {eur0(monthlyRate)}/mo · {eur0(usedThisMonth)} used this month
+            </InfoTip>
           </div>
         )}
 
@@ -136,14 +140,20 @@
                 <span className="catbar-main">
                   <span className="catbar-top">
                     <span className="catbar-name">{cat.label}</span>
-                    <span className="catbar-amt num">{eurAuto(c.amount)}</span>
+                    <span className="catbar-amt num" style={{ pointerEvents: "auto" }}>
+                      <InfoTip id="trv-cat-amt" ctx={{ c }}>{eurAuto(c.amount)}</InfoTip>
+                    </span>
                   </span>
                   <span className="catbar-track">
                     <span className="catbar-fill" style={{ width: Math.max(3, (c.amount / max) * 100) + "%", background: cat.color }} />
                   </span>
-                  <span className="catbar-sub">
-                    <span>{Math.round(c.share * 100)}% of trip</span>
-                    <span>{c.count} {c.count === 1 ? "entry" : "entries"}</span>
+                  <span className="catbar-sub" style={{ pointerEvents: "auto" }}>
+                    <InfoTip id="trv-cat-share" ctx={{ c }}>
+                      <span style={{ display: "inline-flex", gap: 10 }}>
+                        <span>{Math.round(c.share * 100)}% of trip</span>
+                        <span>{c.count} {c.count === 1 ? "entry" : "entries"}</span>
+                      </span>
+                    </InfoTip>
                   </span>
                 </span>
               </div>
@@ -192,7 +202,9 @@
             )}
           </span>
           <span style={{ display: "flex", alignItems: "center", gap: 8, flexShrink: 0 }}>
-            <span style={{ fontFamily: "var(--mono)", fontSize: 14, fontWeight: 600, color: "var(--ink)" }}>{eur0(trip.total)}</span>
+            <span style={{ fontFamily: "var(--mono)", fontSize: 14, fontWeight: 600, color: "var(--ink)" }}>
+              <InfoTip id="trv-trip-total" ctx={{ trip }} hoverOnly>{eur0(trip.total)}</InfoTip>
+            </span>
             <window.Icon name="chevronDown" size={16} style={{
               color: "var(--muted)", transform: open ? "rotate(180deg)" : "none",
               transition: "transform var(--dur-fast) var(--ease)",
@@ -212,7 +224,9 @@
                 <button className="linklike" onClick={onDelete} style={{ fontSize: 12, color: "var(--terra)" }}>Delete</button>
               ) : (
                 <span style={{ fontFamily: "var(--mono)", fontSize: 11, color: "var(--muted)" }}>
-                  Has {trip.count} {trip.count === 1 ? "expense" : "expenses"} — can't delete
+                  <InfoTip id="trv-trip-lock" ctx={{ trip }}>
+                    Has {trip.count} {trip.count === 1 ? "expense" : "expenses"} — can't delete
+                  </InfoTip>
                 </span>
               )}
             </div>
@@ -263,20 +277,24 @@
             <span style={{ fontFamily: "var(--sans)", fontSize: 16, fontWeight: 600, color: "var(--ink)" }}>Travel budget</span>
             {monthlyRate > 0 && (
               <span style={{ fontFamily: "var(--mono)", fontSize: 11, color: "var(--muted)", textTransform: "uppercase", letterSpacing: "0.05em" }}>
-                {eur0(monthlyRate)}/mo
+                <InfoTip id="trv-rate" ctx={{ travel }}>{eur0(monthlyRate)}/mo</InfoTip>
               </span>
             )}
           </div>
           <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: 10 }}>
             <div>
-              <div style={{ fontFamily: "var(--mono)", fontSize: 10, color: "var(--muted)", textTransform: "uppercase", letterSpacing: "0.07em", marginBottom: 3 }}>Available</div>
+              <div style={{ fontFamily: "var(--mono)", fontSize: 10, color: "var(--muted)", textTransform: "uppercase", letterSpacing: "0.07em", marginBottom: 3 }}>
+                <InfoTip id="trv-balance" ctx={{ travel }}>Available</InfoTip>
+              </div>
               <div style={{ fontFamily: "var(--mono)", fontSize: 20, fontWeight: 600, color: balance < 0 ? "var(--terra)" : "var(--sage)" }}>
                 {balance < 0 ? "−" + eur0(Math.abs(balance)) : eur0(balance)}
               </div>
               {balance < 0 && <div style={{ fontFamily: "var(--mono)", fontSize: 10, color: "var(--terra)" }}>owe back</div>}
             </div>
             <div>
-              <div style={{ fontFamily: "var(--mono)", fontSize: 10, color: "var(--muted)", textTransform: "uppercase", letterSpacing: "0.07em", marginBottom: 3 }}>This month</div>
+              <div style={{ fontFamily: "var(--mono)", fontSize: 10, color: "var(--muted)", textTransform: "uppercase", letterSpacing: "0.07em", marginBottom: 3 }}>
+                <InfoTip id="trv-month" ctx={{ travel }}>This month</InfoTip>
+              </div>
               <div style={{ fontFamily: "var(--mono)", fontSize: 20, fontWeight: 600, color: "var(--ink)" }}>{eur0(usedThisMonth)}</div>
               {monthlyRate > 0 && (
                 <div style={{ fontFamily: "var(--mono)", fontSize: 10, color: isOver ? "var(--terra)" : "var(--sage)" }}>
@@ -285,9 +303,15 @@
               )}
             </div>
             <div>
-              <div style={{ fontFamily: "var(--mono)", fontSize: 10, color: "var(--muted)", textTransform: "uppercase", letterSpacing: "0.07em", marginBottom: 3 }}>Spent YTD</div>
+              <div style={{ fontFamily: "var(--mono)", fontSize: 10, color: "var(--muted)", textTransform: "uppercase", letterSpacing: "0.07em", marginBottom: 3 }}>
+                <InfoTip id="trv-ytd" ctx={{ travel }}>Spent YTD</InfoTip>
+              </div>
               <div style={{ fontFamily: "var(--mono)", fontSize: 20, fontWeight: 600, color: "var(--ink-2)" }}>{eur0(travelSpentYTD)}</div>
-              {travelProjection > 0 && <div style={{ fontFamily: "var(--mono)", fontSize: 10, color: "var(--muted)" }}>~{eur0(travelProjection)}/yr</div>}
+              {travelProjection > 0 && (
+                <div style={{ fontFamily: "var(--mono)", fontSize: 10, color: "var(--muted)" }}>
+                  <InfoTip id="trv-proj" ctx={{ travel }}>~{eur0(travelProjection)}/yr</InfoTip>
+                </div>
+              )}
             </div>
           </div>
         </div>

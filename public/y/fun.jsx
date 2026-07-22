@@ -2,7 +2,7 @@
 (function () {
   const { YData, YCalc, YUI } = window;
   const { eur0, eurAuto } = YCalc;
-  const { Sheet, SectionH } = YUI;
+  const { Sheet, SectionH, InfoTip } = YUI;
   const DS = window.ApertureDesignSystem_72a4cd || {};
   const Button = DS.Button, Chip = DS.Chip;
 
@@ -58,10 +58,12 @@
 
               {/* Balance */}
               <span style={{ fontFamily: "var(--mono)", fontSize: 13, color: balColor, flexShrink: 0, whiteSpace: "nowrap" }}>
-                {isNeg ? ("−" + eur0(Math.abs(p.balance))) : eur0(p.balance)}
-                {isNeg && (
-                  <span style={{ fontFamily: "var(--mono)", fontSize: 10, color: "var(--terra)", marginLeft: 4 }}>owe back</span>
-                )}
+                <InfoTip id="fun-strip-balance" ctx={{ p }} hoverOnly>
+                  {isNeg ? ("−" + eur0(Math.abs(p.balance))) : eur0(p.balance)}
+                  {isNeg && (
+                    <span style={{ fontFamily: "var(--mono)", fontSize: 10, color: "var(--terra)", marginLeft: 4 }}>owe back</span>
+                  )}
+                </InfoTip>
               </span>
 
               {/* Nearest wishlist goal */}
@@ -70,7 +72,9 @@
                   <>
                     <div style={{ fontFamily: "var(--sans)", fontSize: 12, color: "var(--ink-2)", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", marginBottom: 3 }}>
                       {goal.name}{" "}
-                      <span style={{ fontFamily: "var(--mono)", color: balColor }}>{Math.round(goalPct)}%</span>
+                      <InfoTip id="fun-strip-goal" ctx={{ p, goal, goalPct }} hoverOnly>
+                        <span style={{ fontFamily: "var(--mono)", color: balColor }}>{Math.round(goalPct)}%</span>
+                      </InfoTip>
                     </div>
                     <div style={{ height: 2, borderRadius: 1, background: "var(--hair)", position: "relative", overflow: "hidden" }}>
                       <div style={{ position: "absolute", left: 0, top: 0, height: "100%", width: goalPct + "%", background: balColor, borderRadius: 1 }} />
@@ -154,7 +158,7 @@
           <span style={{ fontFamily: "var(--sans)", fontSize: 16, fontWeight: 600, color: "var(--ink)" }}>{p.name}</span>
           {p.monthlyRate > 0 && (
             <span style={{ fontFamily: "var(--mono)", fontSize: 11, color: "var(--muted)", textTransform: "uppercase", letterSpacing: "0.05em" }}>
-              {eur0(p.monthlyRate)}/mo
+              <InfoTip id="fun-rate" ctx={{ p }}>{eur0(p.monthlyRate)}/mo</InfoTip>
             </span>
           )}
         </div>
@@ -162,14 +166,18 @@
         {/* Stats grid */}
         <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: 10, marginBottom: 14 }}>
           <div>
-            <div style={{ fontFamily: "var(--mono)", fontSize: 10, color: "var(--muted)", textTransform: "uppercase", letterSpacing: "0.07em", marginBottom: 3 }}>Balance</div>
+            <div style={{ fontFamily: "var(--mono)", fontSize: 10, color: "var(--muted)", textTransform: "uppercase", letterSpacing: "0.07em", marginBottom: 3 }}>
+              <InfoTip id="fun-balance" ctx={{ p }}>Balance</InfoTip>
+            </div>
             <div style={{ fontFamily: "var(--mono)", fontSize: 20, fontWeight: 600, color: p.balance < 0 ? "var(--terra)" : "var(--sage)" }}>
               {p.balance < 0 ? "−" + eur0(Math.abs(p.balance)) : eur0(p.balance)}
             </div>
             {p.balance < 0 && <div style={{ fontFamily: "var(--mono)", fontSize: 10, color: "var(--terra)" }}>owe back</div>}
           </div>
           <div>
-            <div style={{ fontFamily: "var(--mono)", fontSize: 10, color: "var(--muted)", textTransform: "uppercase", letterSpacing: "0.07em", marginBottom: 3 }}>This month</div>
+            <div style={{ fontFamily: "var(--mono)", fontSize: 10, color: "var(--muted)", textTransform: "uppercase", letterSpacing: "0.07em", marginBottom: 3 }}>
+              <InfoTip id="fun-month" ctx={{ p }}>This month</InfoTip>
+            </div>
             <div style={{ fontFamily: "var(--mono)", fontSize: 20, fontWeight: 600, color: "var(--ink)" }}>{eur0(p.usedThisMonth)}</div>
             {p.monthlyRate > 0 && (
               <div style={{ fontFamily: "var(--mono)", fontSize: 10, color: isOver ? "var(--terra)" : "var(--sage)" }}>
@@ -178,7 +186,9 @@
             )}
           </div>
           <div>
-            <div style={{ fontFamily: "var(--mono)", fontSize: 10, color: "var(--muted)", textTransform: "uppercase", letterSpacing: "0.07em", marginBottom: 3 }}>All-time</div>
+            <div style={{ fontFamily: "var(--mono)", fontSize: 10, color: "var(--muted)", textTransform: "uppercase", letterSpacing: "0.07em", marginBottom: 3 }}>
+              <InfoTip id="fun-alltime" ctx={{ p }}>All-time</InfoTip>
+            </div>
             <div style={{ fontFamily: "var(--mono)", fontSize: 20, fontWeight: 600, color: "var(--ink-2)" }}>{eur0(p.spentAllTime)}</div>
           </div>
         </div>
@@ -215,7 +225,9 @@
                       {item.name}
                     </span>
                     <span style={{ fontFamily: "var(--mono)", fontSize: 12, color: "var(--ink-2)", flexShrink: 0 }}>{eur0(item.price)}</span>
-                    <span style={{ fontFamily: "var(--mono)", fontSize: 11, color: ready ? "var(--sage)" : "var(--muted)", flexShrink: 0, minWidth: 50, textAlign: "right" }}>{eta}</span>
+                    <span style={{ fontFamily: "var(--mono)", fontSize: 11, color: ready ? "var(--sage)" : "var(--muted)", flexShrink: 0, minWidth: 50, textAlign: "right" }}>
+                      <InfoTip id="fun-eta" ctx={{ item, p }}>{eta}</InfoTip>
+                    </span>
                   </div>
                   <div style={{ height: 3, borderRadius: 2, background: "var(--hair)", marginBottom: 6, position: "relative", overflow: "hidden" }}>
                     <div style={{ position: "absolute", left: 0, top: 0, height: "100%", width: pct + "%", background: ready ? "var(--sage)" : "var(--terra)", borderRadius: 2 }} />
@@ -284,7 +296,7 @@
             <div className="section-h" style={{ marginTop: 0, marginBottom: 6 }}>
               <h2>Fun categories</h2>
               <span className="spacer" />
-              <span className="muted" style={{ fontSize: 12 }}>{eur0(fun.funSpentYTD)} total</span>
+              <span className="muted" style={{ fontSize: 12 }}><InfoTip id="fun-total" ctx={{ fun }}>{eur0(fun.funSpentYTD)} total</InfoTip></span>
             </div>
             {catList.map((c) => {
               const cat = YData.cat(c.id);
@@ -298,14 +310,20 @@
                     <span className="catbar-main">
                       <span className="catbar-top">
                         <span className="catbar-name">{cat.label}</span>
-                        <span className="catbar-amt num">{eurAuto(c.amount)}</span>
+                        <span className="catbar-amt num" style={{ pointerEvents: "auto" }}>
+                          <InfoTip id="fun-cat-amt" ctx={{ c }}>{eurAuto(c.amount)}</InfoTip>
+                        </span>
                       </span>
                       <span className="catbar-track">
                         <span className="catbar-fill" style={{ width: Math.max(3, (c.amount / max) * 100) + "%", background: cat.color }} />
                       </span>
-                      <span className="catbar-sub">
-                        <span>{Math.round(c.share * 100)}% of fun</span>
-                        <span>{c.count} {c.count === 1 ? "entry" : "entries"}</span>
+                      <span className="catbar-sub" style={{ pointerEvents: "auto" }}>
+                        <InfoTip id="fun-cat-share" ctx={{ c }}>
+                          <span style={{ display: "inline-flex", gap: 10 }}>
+                            <span>{Math.round(c.share * 100)}% of fun</span>
+                            <span>{c.count} {c.count === 1 ? "entry" : "entries"}</span>
+                          </span>
+                        </InfoTip>
                       </span>
                     </span>
                   </div>
