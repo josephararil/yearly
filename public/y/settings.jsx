@@ -1,18 +1,20 @@
 // settings.jsx — target, buffer, years, templates, CSV import/export, clear.
 (function () {
-  const APP_VERSION = 'v95';
+  const APP_VERSION = 'v96';
   const { YData, YCalc, YUI } = window;
   const { eur0, eur2, signedPct, computeStats, localISO } = YCalc;
-  const { Sheet, DeltaChip } = YUI;
+  const { Sheet, DeltaChip, InfoTip } = YUI;
   const DS = window.ApertureDesignSystem_72a4cd || {};
   const Button = DS.Button, SegmentedControl = DS.SegmentedControl;
 
-  function Row({ icon, title, sub, value, onClick, danger }) {
+  function Row({ icon, title, sub, value, onClick, danger, tip }) {
     return (
       <button className="setrow" onClick={onClick}>
         <span className="setrow-ic" style={danger ? { color: "var(--alert)" } : undefined}><window.Icon name={icon} size={18} /></span>
         <span className="setrow-main">
-          <div className="setrow-title" style={danger ? { color: "var(--alert)" } : undefined}>{title}</div>
+          <div className="setrow-title" style={danger ? { color: "var(--alert)" } : undefined}>
+            {tip ? <InfoTip id={tip.id} ctx={tip.ctx} hoverOnly>{title}</InfoTip> : title}
+          </div>
           {sub && <div className="setrow-sub">{sub}</div>}
         </span>
         {value && <span className="setrow-val">{value}</span>}
@@ -542,7 +544,7 @@
     return (
       <div style={{ marginTop: 12 }}>
         <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 6 }}>
-          <span style={{ fontFamily: "var(--mono)", fontSize: 11, color: "var(--muted)", textTransform: "uppercase", letterSpacing: "0.07em" }}>Current balance</span>
+          <span style={{ fontFamily: "var(--mono)", fontSize: 11, color: "var(--muted)", textTransform: "uppercase", letterSpacing: "0.07em" }}><InfoTip id="set-balance">Current balance</InfoTip></span>
           <span style={{ fontFamily: "var(--mono)", fontSize: 13, color: balance < 0 ? "var(--terra)" : "var(--sage)" }}>
             {balance < 0 ? "−€" + Math.round(Math.abs(balance)) : "€" + Math.round(balance)}
           </span>
@@ -620,7 +622,7 @@
           <div key={p.id} className="panel panel-pad" style={{ marginBottom: 12 }}>
             <div style={{ fontSize: 15, fontWeight: 600, marginBottom: 10 }}>{p.name}</div>
             <div className="field" style={{ marginBottom: 0 }}>
-              <label>Monthly allowance (€)</label>
+              <label><InfoTip id="set-field-allowance">Monthly allowance (€)</InfoTip></label>
               <input className="inp inp-num" inputMode="numeric" value={rates[p.id] || ""}
                 onChange={(e) => setRates((r) => ({ ...r, [p.id]: e.target.value.replace(/[^\d]/g, "") }))}
                 style={{ textAlign: "center", fontSize: 18 }} />
@@ -637,7 +639,9 @@
         ))}
         {stats && (
           <div style={{ padding: "2px 2px 14px", fontFamily: "var(--mono)", fontSize: 12, color: "var(--muted)", textAlign: "center" }}>
-            {eur0(stats.ceiling)} ceiling = {eur0(stats.mainTarget)} main + {eur0(stats.funPlanAnnual)}/yr fun
+            <InfoTip id="set-fun-identity" ctx={{ stats }}>
+              {eur0(stats.ceiling)} ceiling = {eur0(stats.mainTarget)} main + {eur0(stats.funPlanAnnual)}/yr fun
+            </InfoTip>
           </div>
         )}
         <Button variant="primary" block onClick={save}>Save</Button>
@@ -701,7 +705,7 @@
 
         <div style={{ borderTop: "1px solid var(--hair)", paddingTop: 16, marginBottom: 16 }}>
           <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 6 }}>
-            <span style={{ fontFamily: "var(--mono)", fontSize: 11, color: "var(--muted)", textTransform: "uppercase", letterSpacing: "0.07em" }}>Current balance</span>
+            <span style={{ fontFamily: "var(--mono)", fontSize: 11, color: "var(--muted)", textTransform: "uppercase", letterSpacing: "0.07em" }}><InfoTip id="set-balance">Current balance</InfoTip></span>
             <span style={{ fontFamily: "var(--mono)", fontSize: 13, color: currentBalance < 0 ? "var(--terra)" : "var(--sage)" }}>
               {currentBalance < 0 ? "−€" + Math.round(Math.abs(currentBalance)) : "€" + Math.round(currentBalance)}
             </span>
@@ -764,21 +768,23 @@
           matter, the threshold crossings do.
         </p>
         <div className="field">
-          <label>Portfolio value (€)</label>
+          <label><InfoTip id="set-field-portfolio">Portfolio value (€)</InfoTip></label>
           <input className="inp inp-num" inputMode="numeric" value={pf}
             onChange={(e) => setPf(e.target.value.replace(/[^\d]/g, ""))}
             placeholder="e.g. 850000" style={{ textAlign: "center", fontSize: 18 }} />
         </div>
         <div className="field">
-          <label>External income / year (€, optional)</label>
+          <label><InfoTip id="set-field-income">External income / year (€, optional)</InfoTip></label>
           <input className="inp inp-num" inputMode="numeric" value={inc}
             onChange={(e) => setInc(e.target.value.replace(/[^\d]/g, ""))}
             placeholder="salary, rent, etc. — leave blank if none" style={{ textAlign: "center", fontSize: 18 }} />
         </div>
         {previewDraw != null && (
           <div style={{ textAlign: "center", margin: "16px 0", fontFamily: "var(--mono)", fontSize: 14, color: zone.color }}>
-            Implies a <b>{(previewDraw * 100).toFixed(1)}%</b> draw
-            <span style={{ color: "var(--muted)" }}> · {zone.label}</span>
+            <InfoTip id="set-draw-preview" ctx={{ stats, portfolio, externalIncome, previewDraw, zone }}>
+              Implies a <b>{(previewDraw * 100).toFixed(1)}%</b> draw
+              <span style={{ color: "var(--muted)" }}> · {zone.label}</span>
+            </InfoTip>
           </div>
         )}
         <Button variant="primary" block onClick={save}>Save</Button>
@@ -854,11 +860,15 @@
         <input className="inp inp-num" inputMode="numeric" value={v} onChange={(e) => setV(e.target.value.replace(/[^\d]/g, ""))} style={{ textAlign: "center", fontSize: 18, marginBottom: 4 }} />
 
         <div style={{ borderTop: "1px solid var(--hair)", paddingTop: 16, marginTop: 16, marginBottom: 8 }}>
-          <div className="field-label" style={{ marginBottom: 4 }}>Missed-entry buffer</div>
+          <div className="field-label" style={{ marginBottom: 4 }}><InfoTip id="set-field-buffer">Missed-entry buffer</InfoTip></div>
           <p className="muted" style={{ fontSize: 12.5, marginTop: 0, lineHeight: 1.5 }}>People forget to log things. This lifts the projection by a flat percentage so it isn't artificially optimistic.</p>
           <div style={{ textAlign: "center", margin: "8px 0 14px" }}>
             <div className="num" style={{ fontSize: 40, fontWeight: 600 }}>{buf}%</div>
-            <div className="muted" style={{ fontSize: 13 }}>projection {eur0(buffStats.projNoBuffer)} → <span style={{ color: "var(--ink)" }} className="num">{eur0(preview)}</span></div>
+            <div className="muted" style={{ fontSize: 13 }}>
+              <InfoTip id="set-buffer-preview" ctx={{ buffStats, buf }}>
+                projection {eur0(buffStats.projNoBuffer)} → <span style={{ color: "var(--ink)" }} className="num">{eur0(preview)}</span>
+              </InfoTip>
+            </div>
           </div>
           <div className="rangewrap" style={{ marginBottom: 8 }}>
             <span className="muted num">0%</span>
@@ -947,12 +957,16 @@
       <div className="screen">
         <div className="section-h" style={{ marginTop: 0 }}><h2>Budget settings</h2></div>
         <div className="panel" style={{ overflow: "hidden" }}>
-          <Row icon="target" title="Household ceiling" sub={`${store.currentYear} ceiling · ${Math.round((cur.buffer || 0) * 100)}% buffer`} value={eur0(curCeiling)} onClick={() => setSub("ceiling")} />
+          <Row icon="target" title="Household ceiling" sub={`${store.currentYear} ceiling · ${Math.round((cur.buffer || 0) * 100)}% buffer`} value={eur0(curCeiling)} onClick={() => setSub("ceiling")}
+            tip={{ id: "set-ceiling", ctx: { curCeiling, buffer: cur.buffer } }} />
           <Row icon="clock" title="Past years" sub="target vs actual history" onClick={() => setSub("years")} />
-          <Row icon="activity" title="Fun budget" sub="per-person allowances & balances" value={stats ? eur0(stats.funPlanAnnual) + "/yr" : undefined} onClick={() => setFunOpen(true)} />
-          <Row icon="travel" title="Travel budget" sub={travelBalStr} value={eur0(travelRate * 12) + "/yr"} onClick={() => setTravelOpen(true)} />
+          <Row icon="activity" title="Fun budget" sub="per-person allowances & balances" value={stats ? eur0(stats.funPlanAnnual) + "/yr" : undefined} onClick={() => setFunOpen(true)}
+            tip={{ id: "set-fun", ctx: { stats } }} />
+          <Row icon="travel" title="Travel budget" sub={travelBalStr} value={eur0(travelRate * 12) + "/yr"} onClick={() => setTravelOpen(true)}
+            tip={{ id: "set-travel", ctx: { travelRate, travelBal } }} />
           <Row icon="trendingUp" title="Portfolio & draw rate" sub="implied draw vs your portfolio"
-            value={drawStr} onClick={() => setSub("portfolio")} />
+            value={drawStr} onClick={() => setSub("portfolio")}
+            tip={{ id: "set-portfolio", ctx: { draw } }} />
         </div>
 
         <div className="section-h"><h2>Data settings</h2></div>

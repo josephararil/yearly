@@ -354,6 +354,54 @@
       meaning: "Portfolio value below which this trigger is considered breached.",
       derivation: "Compared against the current portfolio value in the header above.",
     },
+    "set-ceiling": ({ curCeiling, buffer }) => ({
+      meaning: "The sacred annual outflow number all math measures against.",
+      derivation: `${eur0(curCeiling)} ceiling · ${Math.round((buffer || 0) * 100)}% missed-entry buffer`,
+    }),
+    "set-fun": ({ stats }) => ({
+      meaning: "Sum of everyone's per-person fun allowance, annualized.",
+      derivation: `${eur0(stats.funPlanAnnual / 12)}/mo × 12 = ${eur0(stats.funPlanAnnual)}/yr`,
+    }),
+    "set-travel": ({ travelRate, travelBal }) => ({
+      meaning: "Annual travel allowance from the latest monthly rate; balance is what's accrued minus travel-tagged spend.",
+      derivation: `${eur0(travelRate)}/mo × 12 = ${eur0(travelRate * 12)}/yr · balance ${eur0(travelBal)}`,
+    }),
+    "set-portfolio": ({ draw }) => ({
+      meaning: "Portfolio withdrawal rate this year's projected spend implies.",
+      derivation: draw != null ? `${(draw * 100).toFixed(1)}% draw` : "Set a portfolio below to see the implied draw.",
+    }),
+    "set-buffer-preview": ({ buffStats, buf }) => ({
+      meaning: "What the buffer percentage adds to the raw projection.",
+      derivation: `${eur0(buffStats.projNoBuffer)} raw × (1 + ${buf}%) = ${eur0(buffStats.projNoBuffer * (1 + buf / 100))}`,
+    }),
+    "set-fun-identity": ({ stats }) => ({
+      meaning: "How the ceiling decomposes into main spend and fun spend.",
+      derivation: `${eur0(stats.ceiling)} ceiling = ${eur0(stats.mainTarget)} main + ${eur0(stats.funPlanAnnual)}/yr fun`,
+    }),
+    "set-draw-preview": ({ stats, portfolio, externalIncome, previewDraw, zone }) => ({
+      meaning: "Draw the current portfolio and income imply.",
+      derivation: `(${eur0(stats.projection)} projected − ${eur0(externalIncome)} income) / ${eur0(portfolio)} portfolio = ${(previewDraw * 100).toFixed(1)}% · ${zone.label}`,
+    }),
+    "set-field-buffer": {
+      meaning: "Lifts the projection by a flat percentage since people forget to log things.",
+      derivation: "0–15%, applied only to the projected remainder, not what's already spent.",
+    },
+    "set-field-allowance": {
+      meaning: "This person's monthly fun allowance, effective from the current month onward.",
+      derivation: "Past months keep their old rate.",
+    },
+    "set-field-portfolio": {
+      meaning: "Your current portfolio value — the denominator for the implied draw rate.",
+      derivation: "Update manually each quarter; precision doesn't matter, the threshold crossings do.",
+    },
+    "set-field-income": {
+      meaning: "External income netted against projected spend before computing the draw rate.",
+      derivation: "Salary, rent, etc. — leave blank if none.",
+    },
+    "set-balance": {
+      meaning: "Unspent allowance banked; negative means owed back.",
+      derivation: "Accrued allowance since start − all-time tagged spend, ± any manual adjustment.",
+    },
   };
 
   let tipSeq = 0;

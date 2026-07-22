@@ -659,6 +659,20 @@ moves with `CACHE_NAME` in `sw.js`).
 There is no Overview-density picker in the UI; `store.density` may still exist in older stores but
 is not editable here.
 
+`settings.jsx` instruments via `TIP_CONTENT` too: the shared `Row` component takes an optional `tip`
+prop (`{ id, ctx }`) that wraps the row `title` in `InfoTip … hoverOnly` — used on the four Budget
+settings row titles (`set-ceiling`, `set-fun`, `set-travel`, `set-portfolio`) so a tap still opens the
+sheet. Inside the opened sheets, read-only numbers get normal tap-enabled tips: `CeilingBufferSheet`'s
+"Missed-entry buffer" label (`set-field-buffer`) and its `projNoBuffer → preview` line
+(`set-buffer-preview`); `FunBudgetSheet`'s "Monthly allowance" label (`set-field-allowance`) and its
+`ceiling = main + fun` footer (`set-fun-identity`); `PortfolioSheet`'s "Portfolio value" and "External
+income" labels (`set-field-portfolio`, `set-field-income`) and its draw preview line
+(`set-draw-preview`); and the shared `BalanceCorrection` sub-component's "Current balance" label plus
+`TravelConfigSheet`'s own inline balance label (both `set-balance`, GENERIC — the balance formula
+isn't otherwise surfaced as a single live expression). Skipped: **Past years** (nav row into
+`YearsSheet`), **Quick templates**/**Import**/**Export**/**Force resync**/**Clear all data** (nav rows
+or already explained by their `sub` text).
+
 **JSON backup/restore**: Import JSON calls `YData.migrateStore(parsed)` before `setStore` so old
 backups (with `target`, no `people`/`wishlist`) migrate cleanly. Hidden `#jsonfile` input (mounted at
 the `SettingsScreen` top level so the Import submenu can trigger it) mirrors the CSV `#csvfile`
