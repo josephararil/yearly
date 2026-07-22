@@ -1,7 +1,224 @@
 // ui.jsx — shared presentational primitives. Exposed on window.
 (function () {
   const { Icon, YData, YCalc } = window;
-  const { eur0, eurAuto, signedEur, fmtDateShort, fmtDateLong } = YCalc;
+  const { eur0, eurAuto, signedEur, signedPct, pct, fmtDateShort, fmtDateLong } = YCalc;
+
+  // ── TIP_CONTENT — central copy registry for InfoTip, keyed by tip id. Each value is either a
+  // static { meaning, derivation } object, or a function (ctx) => { meaning, derivation } that reads
+  // live values off the ctx bag passed at the call site. Copy references only ctx fields + YCalc
+  // formatters (eur0, pct, signedEur, signedPct) — no new state, no new math.
+  const TIP_CONTENT = {
+    "hero-projection": ({ stats }) => ({
+      meaning: "Your projected total household spend by Dec 31.",
+      derivation: `${eur0(stats.spent)} spent + ${eur0(stats.projection - stats.spent)} projected for the rest of the year (incl. ${eur0(stats.bufferAmt)} buffer) = ${eur0(stats.projection)}`,
+    }),
+    "hero-delta": ({ stats }) => ({
+      meaning: "How far the projection lands from the ceiling.",
+      derivation: `${eur0(stats.projection)} projected − ${eur0(stats.ceiling)} ceiling = ${signedEur(stats.delta)}`,
+    }),
+    "hero-band": ({ stats }) => ({
+      meaning: "Forecast uncertainty from how much recent weekly spend has varied.",
+      derivation: `±${eur0(stats.bandAmt)}, narrows as more of the year becomes known fact.`,
+    }),
+    "hero-draw": ({ stats, store, draw }) => ({
+      meaning: "Portfolio withdrawal rate this year's projected spend implies.",
+      derivation: `(${eur0(stats.projection)} projected − ${eur0((store && store.externalIncome) || 0)} income) / ${eur0(store.portfolio)} portfolio = ${(draw * 100).toFixed(1)}%`,
+    }),
+    "hero-drawzone": ({ draw, drawZone }) => ({
+      meaning: "Where this draw rate sits against the 4% rule.",
+      derivation: `≤2% conservative · ≤3.5% sustainable · ≤4% at the limit · above is high — ${(draw * 100).toFixed(1)}% is ${drawZone.label}.`,
+    }),
+    "metric-spent": ({ stats }) => ({
+      meaning: stats.complete ? "Total logged for the year." : "Total logged so far this year.",
+      derivation: `${stats.upto.length} entries = ${eur0(stats.spent)}`,
+    }),
+    "metric-daily": ({ stats, dailyMedian }) => ({
+      meaning: "Average daily spend year-to-date.",
+      derivation: dailyMedian != null
+        ? `${eur0(stats.spent)} / ${stats.doy} days = ${eur0(stats.dailyRate)}/day (median ${eur0(dailyMedian)}/day)`
+        : `${eur0(stats.spent)} / ${stats.doy} days = ${eur0(stats.dailyRate)}/day`,
+    }),
+    "metric-blended": ({ stats }) => ({
+      meaning: "Forward rate blending year-to-date pace with the last 60 days, then a missed-entry buffer.",
+      derivation: `${eur0(stats.trailingDailyRate)}/day blended + ${Math.round(stats.buffer * 100)}% buffer (${eur0(stats.bufferAmt)}) applied to the projected remainder`,
+    }),
+    "trend90-dir": ({ recent45, prior45 }) => ({
+      meaning: "Direction of the last 45 days vs the 45 days before that.",
+      derivation: `${eur0(recent45)}/day recent vs ${eur0(prior45)}/day prior (${signedPct((recent45 - prior45) / prior45)})`,
+    }),
+    "velo-pace": ({ stats }) => ({
+      meaning: "Where you'd be if spending exactly on-ceiling today; the even monthly baseline for comparison.",
+      derivation: `day ${stats.doy} / ${stats.daysInYear} × ${eur0(stats.ceiling)} = ${eur0(stats.pace)} on-pace · ${eur0(stats.ceiling / 12)}/mo baseline`,
+    }),
+    "velo-cap": ({ stats, neededMonthly, spentBefore, monthsLeftCount }) => ({
+      meaning: "Max average monthly spend for the rest of the year to still land on the ceiling.",
+      derivation: `(${eur0(stats.ceiling)} ceiling − ${eur0(spentBefore)} spent before this month) / ${monthsLeftCount} months left = ${eur0(neededMonthly)}/mo`,
+    }),
+    "velo-daily": ({ overCeiling, adjustedSpent, stats, daysLeftYear, realDailyTarget }) => ({
+      meaning: overCeiling
+        ? "Daily spend cap to get back under the ceiling by year end."
+        : "Daily room left while staying under the ceiling.",
+      derivation: `(${eur0(stats.ceiling)} ceiling − ${eur0(adjustedSpent)} spent+buffer) / ${daysLeftYear} days left = ${eur0(realDailyTarget)}/day`,
+    }),
+    "velo-daily-month": ({ neededMonthly, spentThisMonth, daysLeftMonth, dailyTargetThisMonth }) => ({
+      meaning: "Daily cap for the rest of this month to hit the adjusted monthly cap.",
+      derivation: `(${eur0(neededMonthly)} cap − ${eur0(spentThisMonth)} spent this month) / ${daysLeftMonth} days left = ${eur0(dailyTargetThisMonth)}/day`,
+    }),
+    "velo-fun": ({ stats, targetFunPerMo, numPeople, monthsLeft }) => ({
+      meaning: "Per-person fun allowance that still lands on the ceiling.",
+      derivation: `max(0, ${eur0(stats.ceiling)} − ${eur0(stats.projection)}) / ${monthsLeft.toFixed(1)} months / ${numPeople} people = ${eur0(targetFunPerMo)}/mo`,
+    }),
+    "fact-monthend": ({ projMonthEnd }) => ({
+      meaning: "Forecast total for the current month.",
+      derivation: `Spent so far this month + blended rate for the remaining days + anything committed = ${eur0(projMonthEnd)}`,
+    }),
+    "fact-avg": ({ avgMonthly, completedMonths }) => ({
+      meaning: "Mean of completed-month totals this year.",
+      derivation: `sum of ${completedMonths} completed month${completedMonths === 1 ? "" : "s"} / ${completedMonths} = ${eur0(avgMonthly)}`,
+    }),
+    "fact-range": ({ monthRange }) => ({
+      meaning: "Lowest and highest completed-month totals in your history.",
+      derivation: `${monthRange.minLabel} ${eur0(monthRange.min)} – ${monthRange.maxLabel} ${eur0(monthRange.max)}`,
+    }),
+    "fact-fun": ({ stats }) => ({
+      meaning: "Sum of everyone's per-person fun allowance, annualized.",
+      derivation: `${eur0(stats.funPlanAnnual / 12)}/mo × 12 = ${eur0(stats.funPlanAnnual)}/yr`,
+    }),
+    "fact-travel": ({ travelMonthly, travelPlanAnnual }) => ({
+      meaning: "Household travel allowance, annualized from the current monthly rate.",
+      derivation: `${eur0(travelMonthly)}/mo × 12 = ${eur0(travelPlanAnnual)}/yr`,
+    }),
+    "fact-prior": ({ stats }) => ({
+      meaning: "Spend vs the same point last year.",
+      derivation: `${eur0(stats.spent)} this year − ${eur0(stats.priorSpent)} last year = ${signedEur(stats.spent - stats.priorSpent)} (${signedPct((stats.spent - stats.priorSpent) / stats.priorSpent)})`,
+    }),
+    "fire-cap": ({ stats }) => ({
+      meaning: "Portfolio size that would fund this year's projected spend forever, under the 4% rule.",
+      derivation: `A safe-withdrawal portfolio pays out ~4% (or less) of its value a year without depleting principal, sustaining ${eur0(stats.projection)}/yr.`,
+    }),
+    "fire-4": ({ stats, firePortfolio }) => ({
+      meaning: "Portfolio needed under the standard 4% safe-withdrawal rule.",
+      derivation: `${eur0(stats.projection)} / 4% = ${eur0(firePortfolio)}`,
+    }),
+    "fire-35": ({ stats, firePortfolio35 }) => ({
+      meaning: "Portfolio needed under a more conservative 3.5% rule.",
+      derivation: `${eur0(stats.projection)} / 3.5% = ${eur0(firePortfolio35)}`,
+    }),
+    "fire-35i": ({ stats, externalIncome, firePortfolio35Income }) => ({
+      meaning: "Portfolio needed under the 3.5% rule, net of external income.",
+      derivation: `(${eur0(stats.projection)} − ${eur0(externalIncome)} income) / 3.5% = ${eur0(firePortfolio35Income)}`,
+    }),
+    "amort-cap": ({ am, stats }) => ({
+      meaning: "Share of year-to-date spend that comes from spread-out (amortized) purchases.",
+      derivation: stats.spent > 0
+        ? `${eur0(am.ytd.total)} / ${eur0(stats.spent)} = ${pct(am.ytd.total / stats.spent)}`
+        : "",
+    }),
+    "amort-ytd": ({ am }) => ({
+      meaning: "Year-to-date spend from purchases spread over multiple months.",
+      derivation: `${eur0(am.ytd.real)} real + ${eur0(am.ytd.virtual)} virtual = ${eur0(am.ytd.total)}`,
+    }),
+    "amort-real": ({ am }) => ({
+      meaning: "Amortized slices backed by real cash outflow.",
+      derivation: `${eur0(am.ytd.real)}`,
+    }),
+    "amort-virtual": ({ am }) => ({
+      meaning: "No-cash entries (e.g. depreciation) that still count against the ceiling.",
+      derivation: `${eur0(am.ytd.virtual)}`,
+    }),
+    "amort-month": ({ am }) => ({
+      meaning: "Amortized amount landing in the current month.",
+      derivation: `${eur0(am.month.total)}`,
+    }),
+    "amort-committed": ({ am, stats }) => ({
+      meaning: "Not-yet-elapsed amortized slices due later this year.",
+      derivation: `${eur0(am.committedThisYear)} committed for the rest of ${stats.year}`,
+    }),
+  };
+
+  let tipSeq = 0;
+
+  // InfoTip — reusable hover/tap tooltip. Wraps children in a dotted-underline trigger; shows a card
+  // above the trigger with a plain-language meaning + a live derivation, sourced from TIP_CONTENT.
+  function InfoTip({ id, ctx, children, hoverOnly, className }) {
+    const entry = TIP_CONTENT[id];
+    const [open, setOpen] = React.useState(false);
+    const [anchor, setAnchor] = React.useState({});
+    const instanceId = React.useRef("ytip-" + (++tipSeq));
+    const hostRef = React.useRef(null);
+
+    React.useEffect(() => {
+      const onOtherOpen = (e) => { if (e.detail !== instanceId.current) setOpen(false); };
+      document.addEventListener("ytip:open", onOtherOpen);
+      return () => document.removeEventListener("ytip:open", onOtherOpen);
+    }, []);
+
+    React.useEffect(() => {
+      if (!open) return;
+      const dismiss = () => setOpen(false);
+      document.addEventListener("pointerdown", dismiss);
+      document.addEventListener("scroll", dismiss, true);
+      const onKey = (e) => { if (e.key === "Escape") dismiss(); };
+      document.addEventListener("keydown", onKey);
+      return () => {
+        document.removeEventListener("pointerdown", dismiss);
+        document.removeEventListener("scroll", dismiss, true);
+        document.removeEventListener("keydown", onKey);
+      };
+    }, [open]);
+
+    if (!entry) return children;
+    const { meaning, derivation } = typeof entry === "function" ? entry(ctx || {}) : entry;
+    if (!meaning && !derivation) return children;
+
+    const computeAnchor = () => {
+      const el = hostRef.current;
+      if (!el) return {};
+      const rect = el.getBoundingClientRect();
+      const w = window.innerWidth;
+      if (rect.left < w * 0.2) return { left: 0 };
+      if (rect.right > w * 0.8) return { right: 0 };
+      return { left: "50%", transform: "translateX(-50%)" };
+    };
+
+    const openTip = () => {
+      setAnchor(computeAnchor());
+      setOpen(true);
+      document.dispatchEvent(new CustomEvent("ytip:open", { detail: instanceId.current }));
+    };
+
+    const onClick = (e) => {
+      e.stopPropagation();
+      if (hoverOnly) return;
+      if (open) {
+        setOpen(false);
+      } else {
+        setAnchor(computeAnchor());
+        setOpen(true);
+        document.dispatchEvent(new CustomEvent("ytip:open", { detail: instanceId.current }));
+      }
+    };
+
+    return (
+      <span ref={hostRef} style={{ position: "relative", display: "inline" }}>
+        <span
+          className={"tip-trigger" + (className ? " " + className : "")}
+          onPointerEnter={openTip}
+          onPointerLeave={() => setOpen(false)}
+          onPointerDown={(e) => e.stopPropagation()}
+          onClick={onClick}
+        >
+          {children}
+        </span>
+        {open && (
+          <div className="ytip" style={anchor}>
+            {meaning && <div className="ytip-meaning">{meaning}</div>}
+            {derivation && <div className="ytip-deriv">{derivation}</div>}
+          </div>
+        )}
+      </span>
+    );
+  }
 
   // tint a hex color with alpha (e.g. "#32d74b" -> "#32d74b26")
   const tint = (hex, aa) => hex + aa;
@@ -105,7 +322,11 @@
     return (
       <div className="hero">
         <div className="eyebrow">{eyebrow}</div>
-        <div className="hero-num">{eur0(headline)}</div>
+        <div className="hero-num">
+          {stats.isFuture
+            ? eur0(headline)
+            : <InfoTip id="hero-projection" ctx={{ stats }}>{eur0(headline)}</InfoTip>}
+        </div>
         <div className="hero-sub">
           {stats.isFuture ? (
             <>Nothing logged yet.</>
@@ -114,19 +335,25 @@
           ) : (
             <>
               {over ? "Over" : "Under"} your <span className="num">{eur0(stats.ceiling)}</span> ceiling by{" "}
-              <span className={"hero-emph " + (over ? "over" : "under")}>{eur0(Math.abs(stats.delta))}</span>
+              <InfoTip id="hero-delta" ctx={{ stats }}>
+                <span className={"hero-emph " + (over ? "over" : "under")}>{eur0(Math.abs(stats.delta))}</span>
+              </InfoTip>
               {stats.bandAmt != null && (
-                <span style={{ fontFamily: "var(--mono)", color: "var(--muted)", fontSize: "0.7em", marginLeft: 4 }}>
+                <InfoTip id="hero-band" ctx={{ stats }}><span style={{ fontFamily: "var(--mono)", color: "var(--muted)", fontSize: "0.7em", marginLeft: 4 }}>
                   {'\u0028'}±{eur0(stats.bandAmt)}{'\u0029'}
-                </span>
+                </span></InfoTip>
               )}.
             </>
           )}
         </div>
         {draw != null && (
           <div className="hero-draw" style={{ fontFamily: "var(--mono)", fontSize: 12.5, marginTop: 8, color: drawZone.color }}>
-            implies a <span className="num" style={{ fontWeight: 700 }}>{(draw * 100).toFixed(1)}%</span> draw
-            <span style={{ color: "var(--muted)" }}> · {drawZone.label}</span>
+            implies a <InfoTip id="hero-draw" ctx={{ stats, store, draw }}>
+              <span className="num" style={{ fontWeight: 700 }}>{(draw * 100).toFixed(1)}%</span>
+            </InfoTip> draw
+            <InfoTip id="hero-drawzone" ctx={{ draw, drawZone }}>
+              <span style={{ color: "var(--muted)" }}> · {drawZone.label}</span>
+            </InfoTip>
           </div>
         )}
         {!hideBar && !stats.isFuture && (
@@ -353,5 +580,5 @@ function TxTag({ label, color }) {
     );
   }
 
-  window.YUI = { CatIcon, DeltaChip, StatusHero, CalloutCard, TxRow, TxTag, Sheet, SectionH, Toast, rich, tint, ChartExplain };
+  window.YUI = { CatIcon, DeltaChip, StatusHero, CalloutCard, TxRow, TxTag, Sheet, SectionH, Toast, rich, tint, ChartExplain, InfoTip, TIP_CONTENT };
 })();

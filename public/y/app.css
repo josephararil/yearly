@@ -123,6 +123,12 @@ button, input, select, textarea { font-family: inherit; }
 .bullet-tip-main { font-family: var(--mono); font-size: 11px; color: var(--ink); font-weight: 600; }
 .bullet-tip-sub { font-family: var(--mono); font-size: 10px; color: var(--muted); margin-top: 2px; }
 
+/* InfoTip — reusable hover/tap tooltip primitive (y/ui.jsx window.YUI.InfoTip) */
+.tip-trigger { border-bottom: 1px dotted var(--hair-strong); cursor: help; }
+.ytip { position: absolute; bottom: calc(100% + 6px); z-index: 20; max-width: 240px; background: var(--paper); border: 0.8px solid var(--hair-strong); border-radius: 8px; padding: 8px 10px; box-shadow: 0 2px 8px rgba(0,0,0,0.08); pointer-events: none; }
+.ytip-meaning { font-family: var(--sans); font-size: 12px; color: var(--ink); line-height: 1.35; }
+.ytip-deriv { font-family: var(--mono); font-size: 10.5px; color: var(--muted); margin-top: 5px; line-height: 1.4; }
+
 /* Zone 3 — monthly pulse (two deliberate rows) */
 .pulse {}
 .pulse-r1 { display: flex; align-items: baseline; gap: 12px; }

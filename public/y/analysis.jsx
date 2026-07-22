@@ -2,7 +2,7 @@
 (function () {
   const { YData, YCalc, YUI, YFun, YTravel, YPlan } = window;
   const { eur0, eurAuto, signedEur, signedPct, pct, MONTHS, fmtDateShort } = YCalc;
-  const { TxRow, CatIcon, TxTag, rich } = YUI;
+  const { TxRow, CatIcon, TxTag, rich, InfoTip } = YUI;
   const DS = window.ApertureDesignSystem_72a4cd || {};
   const SegmentedControl = DS.SegmentedControl, Input = DS.Input, Chip = DS.Chip;
 
@@ -526,8 +526,10 @@
     const completedAmounts = stats.byMonth.slice(0, completedMonths).map((m) => m.amount);
     const avgMonthly = completedMonths > 0 ? completedAmounts.reduce((a, v) => a + v, 0) / completedMonths : 0;
     const neededMonthly = stats.isCurrent ? YCalc.neededMonthlyCap(stats) : null;
+    const monthsLeftCount = 12 - curMonth;
+    const spentBeforeThisMonth = stats.isCurrent ? stats.byMonth.slice(0, curMonth).reduce((a, x) => a + x.amount, 0) : 0;
 
-    let trend90 = null, trend90Color = "var(--ink)";
+    let trend90 = null, trend90Color = "var(--ink)", trend90Recent45 = 0, trend90Prior45 = 0;
     if (stats.isCurrent && stats.doy >= 90) {
       const d45 = new Date(stats.asOf); d45.setDate(d45.getDate() - 45);
       const d45str = YCalc.localISO(d45);
@@ -535,6 +537,7 @@
       const d90str = YCalc.localISO(d90);
       const recent45 = stats.upto.filter((t) => t.date > d45str).reduce((a, t) => a + t.amount_eur, 0) / 45;
       const prior45 = stats.upto.filter((t) => t.date > d90str && t.date <= d45str).reduce((a, t) => a + t.amount_eur, 0) / 45;
+      trend90Recent45 = recent45; trend90Prior45 = prior45;
       if (prior45 > 0) {
         const ratio = recent45 / prior45;
         if (ratio > 1.08) { trend90 = "↑ Increasing"; trend90Color = "var(--terra)"; }
@@ -582,18 +585,19 @@
     const am = YCalc.amortizationBreakdown(store, stats.year, stats.asOfStr);
 
     const facts = [];
-    if (projMonthEnd !== null) facts.push({ k: "Projected month-end", kn: "this month", v: eur0(projMonthEnd) });
-    if (completedMonths > 0) facts.push({ k: "Average per month", kn: `${completedMonths} completed month${completedMonths === 1 ? "" : "s"}`, v: eur0(avgMonthly) });
-    if (monthRange) facts.push({ k: "Monthly range", kn: `${monthRange.minLabel} – ${monthRange.maxLabel}`, v: `${eur0(monthRange.min)}–${eur0(monthRange.max)}` });
+    if (projMonthEnd !== null) facts.push({ k: "Projected month-end", kn: "this month", v: eur0(projMonthEnd), tip: "fact-monthend", ctx: { projMonthEnd } });
+    if (completedMonths > 0) facts.push({ k: "Average per month", kn: `${completedMonths} completed month${completedMonths === 1 ? "" : "s"}`, v: eur0(avgMonthly), tip: "fact-avg", ctx: { avgMonthly, completedMonths } });
+    if (monthRange) facts.push({ k: "Monthly range", kn: `${monthRange.minLabel} – ${monthRange.maxLabel}`, v: `${eur0(monthRange.min)}–${eur0(monthRange.max)}`, tip: "fact-range", ctx: { monthRange } });
     if (!stats.isCurrent) facts.push({ k: "Monthly baseline", v: `${eur0(stats.ceiling / 12)}/mo` });
-    if (!stats.isFuture) facts.push({ k: "Total fun budget", kn: `${eur0(stats.funPlanAnnual / 12)}/mo`, v: `${eur0(stats.funPlanAnnual)}/yr` });
-    if (!stats.isFuture) facts.push({ k: "Total travel budget", kn: `${eur0(travelMonthly)}/mo`, v: `${eur0(travelPlanAnnual)}/yr` });
+    if (!stats.isFuture) facts.push({ k: "Total fun budget", kn: `${eur0(stats.funPlanAnnual / 12)}/mo`, v: `${eur0(stats.funPlanAnnual)}/yr`, tip: "fact-fun", ctx: { stats } });
+    if (!stats.isFuture) facts.push({ k: "Total travel budget", kn: `${eur0(travelMonthly)}/mo`, v: `${eur0(travelPlanAnnual)}/yr`, tip: "fact-travel", ctx: { travelMonthly, travelPlanAnnual } });
     if (stats.priorSpent > 0) {
       const diff = stats.spent - stats.priorSpent;
       facts.push({
         k: stats.complete ? `vs ${stats.year - 1} final` : `vs ${stats.year - 1} same point`,
         kn: signedPct(diff / stats.priorSpent), v: signedEur(diff),
         color: diff > 0 ? "var(--watch)" : "var(--good)",
+        tip: "fact-prior", ctx: { stats },
       });
     }
     const showFire = !stats.isFuture;
@@ -609,19 +613,19 @@
         {/* Primary metrics — bold figures, muted context */}
         <div className="metricrow">
               <div className="metric">
-                <div className="metric-label">{stats.complete ? "Total spent" : "Spent YTD"}</div>
+                <InfoTip id="metric-spent" ctx={{ stats }}><div className="metric-label">{stats.complete ? "Total spent" : "Spent YTD"}</div></InfoTip>
                 <div className="metric-val">{eur0(stats.spent)}</div>
                 <div className="metric-sub">{stats.upto.length} entries</div>
               </div>
               {!stats.isFuture && (
                 <div className="metric">
-                  <div className="metric-label">Daily spend</div>
+                  <InfoTip id="metric-daily" ctx={{ stats, dailyMedian }}><div className="metric-label">Daily spend</div></InfoTip>
                   <div className="metric-val">{eur0(stats.dailyRate)}<span style={{ fontSize: 13, color: "var(--muted)", fontWeight: 500 }}>/d</span></div>
                   <div className="metric-sub">{dailyMedian !== null ? `median ${eur0(dailyMedian)}/d` : "year-to-date avg"}</div>
                 </div>
               )}
               <div className="metric">
-                <div className="metric-label">Blended rate</div>
+                <InfoTip id="metric-blended" ctx={{ stats }}><div className="metric-label">Blended rate</div></InfoTip>
                 <div className="metric-val">{eur0(stats.trailingDailyRate)}<span style={{ fontSize: 13, color: "var(--muted)", fontWeight: 500 }}>/d</span></div>
                 <div className="metric-sub">{!stats.complete
                   ? `+${eur0(stats.bufferAmt)} buffer · ${Math.round(stats.buffer * 100)}%`
@@ -633,7 +637,7 @@
             {trend90 && (
               <div>
                 <div className="trend-head">
-                  <span className="lab">90-day trend</span>
+                  <InfoTip id="trend90-dir" ctx={{ recent45: trend90Recent45, prior45: trend90Prior45 }}><span className="lab">90-day trend</span></InfoTip>
                   <span className="val" style={{ color: trend90Color }}>{trend90}</span>
                 </div>
                 <Trend90Chart upto={stats.upto} asOf={stats.asOf} color={trend90Color} />
@@ -648,19 +652,21 @@
               <div className="innum-group">
                 <div className="innum-cap">Current velocity <span className="meta">day {stats.doy} of {stats.daysInYear}</span></div>
                 <div className="velo-primary">
-                  <span className="velo-num num">{eur0(stats.pace)}</span>
+                  <InfoTip id="velo-pace" ctx={{ stats }}><span className="velo-num num">{eur0(stats.pace)}</span></InfoTip>
                   <span className="velo-cap">on-pace by today · {eur0(stats.ceiling / 12)}/mo baseline</span>
                 </div>
                 <div className="velo-rows">
                   {neededMonthly !== null && (
                     <div className="velo-line">
-                      <span className="k">Adjusted monthly cap</span>
+                      <InfoTip id="velo-cap" ctx={{ stats, neededMonthly, spentBefore: spentBeforeThisMonth, monthsLeftCount }}><span className="k">Adjusted monthly cap</span></InfoTip>
                       <span className="v" style={{ color: avgMonthly > neededMonthly ? "var(--terra)" : "var(--sage)" }}>≤ {eur0(neededMonthly)}/mo</span>
                     </div>
                   )}
                   {realDailyTarget !== null && (
                     <div className="velo-line">
-                      <span className="k">{overCeiling ? "Daily target to recover" : "Daily room left"}</span>
+                      <InfoTip id="velo-daily" ctx={{ overCeiling, adjustedSpent, stats, daysLeftYear, realDailyTarget }}>
+                        <span className="k">{overCeiling ? "Daily target to recover" : "Daily room left"}</span>
+                      </InfoTip>
                       <span className="v" style={{ color: overCeiling ? "var(--terra)" : "var(--sage)" }}>
                         {overCeiling ? "≤ " : ""}{eur0(realDailyTarget)}/day <span style={{ color: "var(--muted)", fontWeight: 400 }}>· {daysLeftYear}d left</span>
                       </span>
@@ -668,12 +674,12 @@
                   )}
                   {dailyTargetThisMonth !== null && (
                     <div className="velo-line">
-                      <span className="k">Daily target this month</span>
+                      <InfoTip id="velo-daily-month" ctx={{ neededMonthly, spentThisMonth, daysLeftMonth, dailyTargetThisMonth }}><span className="k">Daily target this month</span></InfoTip>
                       <span className="v">≤ {eur0(dailyTargetThisMonth)}/day <span style={{ color: "var(--muted)", fontWeight: 400 }}>· {daysLeftMonth}d left</span></span>
                     </div>
                   )}
                   <div className="velo-line">
-                    <span className="k">Target fun · per person</span>
+                    <InfoTip id="velo-fun" ctx={{ stats, targetFunPerMo, numPeople, monthsLeft }}><span className="k">Target fun · per person</span></InfoTip>
                     <span className="v" style={{ color: targetFunPerMo === 0 ? "var(--terra)" : "var(--sage)" }}>{eur0(targetFunPerMo)}/mo</span>
                   </div>
                 </div>
@@ -696,7 +702,9 @@
                       <div className="factlist">
                         {facts.map((f, i) => (
                           <div className="factrow" key={i}>
-                            <span className="fact-k">{f.k}{f.kn && <span className="n">{f.kn}</span>}</span>
+                            {f.tip
+                              ? <InfoTip id={f.tip} ctx={f.ctx}><span className="fact-k">{f.k}{f.kn && <span className="n">{f.kn}</span>}</span></InfoTip>
+                              : <span className="fact-k">{f.k}{f.kn && <span className="n">{f.kn}</span>}</span>}
                             <span className="fact-v" style={f.color ? { color: f.color } : undefined}>{f.v}</span>
                           </div>
                         ))}
@@ -706,18 +714,20 @@
                     {/* FIRE portfolio — one cohesive widget instead of three tiles */}
                     {showFire && (
                       <div className="innum-group">
-                        <div className="innum-cap">FIRE portfolio target <span className="meta">to sustain {eur0(stats.projection)}/yr</span></div>
+                        <InfoTip id="fire-cap" ctx={{ stats }}>
+                          <div className="innum-cap">FIRE portfolio target <span className="meta">to sustain {eur0(stats.projection)}/yr</span></div>
+                        </InfoTip>
                         <div className="fire">
                           <div className="fire-row">
-                            <span className="lab">4% rule<span className="n">standard safe-withdrawal</span></span>
+                            <InfoTip id="fire-4" ctx={{ stats, firePortfolio }}><span className="lab">4% rule<span className="n">standard safe-withdrawal</span></span></InfoTip>
                             <span className="amt">{eurK(firePortfolio)}</span>
                           </div>
                           <div className="fire-row">
-                            <span className="lab">3.5% rule<span className="n">conservative</span></span>
+                            <InfoTip id="fire-35" ctx={{ stats, firePortfolio35 }}><span className="lab">3.5% rule<span className="n">conservative</span></span></InfoTip>
                             <span className="amt">{eurK(firePortfolio35)}</span>
                           </div>
                           <div className="fire-row">
-                            <span className="lab">3.5% with income<span className="n">net of {eur0(externalIncome)} external</span></span>
+                            <InfoTip id="fire-35i" ctx={{ stats, externalIncome, firePortfolio35Income }}><span className="lab">3.5% with income<span className="n">net of {eur0(externalIncome)} external</span></span></InfoTip>
                             <span className="amt">{eurK(firePortfolio35Income)}</span>
                           </div>
                         </div>
@@ -727,29 +737,31 @@
                     {/* Amortization — one unified section (figures + chart) */}
                     {showAmort && (
                       <div className="innum-group">
-                        <div className="innum-cap">Amortization <span className="meta">{stats.spent > 0 ? pct(am.ytd.total / stats.spent) + " of spend" : ""}</span></div>
+                        <InfoTip id="amort-cap" ctx={{ am, stats }}>
+                          <div className="innum-cap">Amortization <span className="meta">{stats.spent > 0 ? pct(am.ytd.total / stats.spent) + " of spend" : ""}</span></div>
+                        </InfoTip>
                         <div className="factlist">
                           <div className="factrow">
-                            <span className="fact-k">Amortized year-to-date</span>
+                            <InfoTip id="amort-ytd" ctx={{ am }}><span className="fact-k">Amortized year-to-date</span></InfoTip>
                             <span className="fact-v">{eur0(am.ytd.total)}</span>
                           </div>
                           <div className="factrow">
-                            <span className="fact-k">Real (cash)</span>
+                            <InfoTip id="amort-real" ctx={{ am }}><span className="fact-k">Real (cash)</span></InfoTip>
                             <span className="fact-v">{eur0(am.ytd.real)}</span>
                           </div>
                           <div className="factrow">
-                            <span className="fact-k">Virtual (no-cash)</span>
+                            <InfoTip id="amort-virtual" ctx={{ am }}><span className="fact-k">Virtual (no-cash)</span></InfoTip>
                             <span className="fact-v" style={{ color: "var(--sage)" }}>{eur0(am.ytd.virtual)}</span>
                           </div>
                           {stats.isCurrent && (
                             <div className="factrow">
-                              <span className="fact-k">This month{stats.byMonth[curMonth].amount > 0 && <span className="n">{pct(am.month.total / stats.byMonth[curMonth].amount)} of month</span>}</span>
+                              <InfoTip id="amort-month" ctx={{ am }}><span className="fact-k">This month{stats.byMonth[curMonth].amount > 0 && <span className="n">{pct(am.month.total / stats.byMonth[curMonth].amount)} of month</span>}</span></InfoTip>
                               <span className="fact-v">{eur0(am.month.total)}</span>
                             </div>
                           )}
                           {stats.isCurrent && (
                             <div className="factrow">
-                              <span className="fact-k">Committed<span className="n">rest of {stats.year}</span></span>
+                              <InfoTip id="amort-committed" ctx={{ am, stats }}><span className="fact-k">Committed<span className="n">rest of {stats.year}</span></span></InfoTip>
                               <span className="fact-v">{eur0(am.committedThisYear)}</span>
                             </div>
                           )}

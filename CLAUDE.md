@@ -199,6 +199,8 @@ completed-year mode. Sync wiring, callout→Analysis focus routing, and undo-on-
   are always computed from transactions, never stored as aggregates.
 - Match the surrounding inline-style + className idiom in each file; there is no CSS framework beyond
   `app.css` and the tokens.
+- Explanatory hover/tap tooltips use the shared `YUI.InfoTip` primitive + the central `YUI.TIP_CONTENT`
+  copy registry (both in `y/ui.jsx`) — never a bespoke tooltip. Detail: `docs/UI.md`.
 
 ## Documentation upkeep
 

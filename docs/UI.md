@@ -7,7 +7,8 @@ touching `ui.jsx`, `fun.jsx`, or a screen module. Engine/state internals are in
 ## `y/ui.jsx` (`window.YUI`) — shared primitives
 
 Exports: `StatusHero`, `CalloutCard`, `TxRow`, `CatIcon`, `DeltaChip`, `Sheet`, `SectionH`,
-`Toast`, `TxTag`, and `rich` (renders numbers inside text in the mono `.num` style).
+`Toast`, `TxTag`, `InfoTip`, `TIP_CONTENT`, and `rich` (renders numbers inside text in the mono
+`.num` style).
 
 `TxTag({ label, color })` — small pill badge (mono 9px uppercase, tinted background/border from
 `color`); used inline by `TxRow` for the Fun/Travel/`×Nmo`/`VIRTUAL` badges and reused directly by
@@ -15,6 +16,41 @@ Exports: `StatusHero`, `CalloutCard`, `TxRow`, `CatIcon`, `DeltaChip`, `Sheet`, 
 
 > The hero is fixed to numerals; the Overview monthly chart is `MonthCurve`, defined locally in
 > `home.jsx`.
+
+### `InfoTip` / `TIP_CONTENT` — hover/tap tooltip primitive
+
+`InfoTip({ id, ctx, children, hoverOnly, className })` is the one reusable way to attach an
+explanatory tooltip to a piece of copy. It wraps `children` in a `<span className="tip-trigger">`
+(dotted hairline underline, `cursor:help`) inside a `position:relative` host so the card can anchor
+to it. Content comes from `TIP_CONTENT`, a single registry object keyed by tip `id`: each entry is
+either a static `{ meaning, derivation }` object or a function `(ctx) => ({ meaning, derivation })`
+that reads live values off the `ctx` bag passed at the call site (`{ stats, store, am, ... }`).
+Copy leads with the plain-language `meaning`, then the `derivation` — a compact formula with live
+numbers sourced from `ctx` + `window.YCalc` formatters (`eur0`, `pct`, `signedEur`, `signedPct`).
+Renders bare `children` (no trigger, no card) when the `id` has no `TIP_CONTENT` entry, or when the
+resolved `meaning`/`derivation` are both empty — a row can opt out simply by omitting its id.
+
+Affordance: desktop shows the card on `pointerenter`/hides on `pointerleave`; mobile/tap toggles
+open via `onClick` (which calls `stopPropagation()` so a tip nested inside a button never fires the
+ancestor's `onClick`). Pass `hoverOnly` to disable the tap toggle where the trigger sits on top of
+the element's primary tap action (e.g. a list row that opens a sheet) — the tap then falls through
+to that action instead of opening the tip. Only one `InfoTip` is open at a time: opening dispatches
+a `document` `CustomEvent('ytip:open', { detail: <instance id> })`; every `InfoTip` listens and
+closes itself when it receives an event whose id isn't its own. Dismisses on outside `pointerdown`,
+`scroll` (capture), and `Escape`. On open, the card reads the trigger's `getBoundingClientRect()`
+and anchors `left:0` near the left viewport edge, `right:0` near the right edge, else centered
+(`left:50%; transform:translateX(-50%)`) — the card itself sits `bottom: calc(100% + 6px)` above the
+trigger. CSS: `.tip-trigger`, `.ytip`, `.ytip-meaning`, `.ytip-deriv` in `app.css`.
+
+`TIP_CONTENT` is the single source of truth for tooltip wording across the app — every screen adds
+its ids to this one object in `ui.jsx` rather than growing a separate registry per file. Overview
+(`StatusHero`, `analysis.jsx` `InNumbers`) instruments the hero projection/delta/band/draw/drawzone,
+the three metric tiles, the 90-day trend heading, the current-velocity rows, the More-context facts,
+the FIRE rows, and the amortization rows — see each id's entry in `TIP_CONTENT` for the exact
+derivation. Not instrumented: `ProjectionBar` (has its own `.projbar-tip`), the `InsightCard` line,
+and the SVG crosshair tooltips (`Trend90Chart`, the amortization `Am*` charts, the month curve) —
+those stay bespoke since a crosshair-follows-cursor interaction can't share a static-anchor
+primitive.
 
 ### `StatusHero`
 
