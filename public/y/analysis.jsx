@@ -158,19 +158,17 @@
           {!stats.complete && <div className="projbar-doy" style={{ left: doyPct + "%" }} />}
           <div className="projbar-ceil" style={{ left: ceilPct + "%" }} />
           {hover && (
-            <div className="projbar-tip">
-              <div className="projbar-tip-row">
-                <span>Spent</span><b>{eur0(stats.spent)}</b>
-                <span className="projbar-tip-pct">{stats.ceiling > 0 ? pct(stats.spent / stats.ceiling) : "0%"}</span>
+            <div className="ytip" style={{ left: "50%", transform: "translateX(-50%)" }}>
+              <div className="ytip-meaning">
+                Spent <b>{eur0(stats.spent)}</b> ({stats.ceiling > 0 ? pct(stats.spent / stats.ceiling) : "0%"})
               </div>
-              {showProj && (
-                <div className="projbar-tip-row" style={{ color: barColor }}>
-                  <span>Projected</span><b>{eur0(stats.projection)}</b>
-                  <span className="projbar-tip-pct">{stats.ceiling > 0 ? pct(stats.projection / stats.ceiling) : "0%"}</span>
-                </div>
-              )}
-              <div className="projbar-tip-row">
-                <span>Ceiling</span><b>{eur0(stats.ceiling)}</b>
+              <div className="ytip-deriv">
+                {showProj && (
+                  <div style={{ color: barColor }}>
+                    Projected {eur0(stats.projection)} ({stats.ceiling > 0 ? pct(stats.projection / stats.ceiling) : "0%"})
+                  </div>
+                )}
+                <div>Ceiling {eur0(stats.ceiling)}</div>
               </div>
             </div>
           )}

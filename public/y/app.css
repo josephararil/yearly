@@ -119,9 +119,6 @@ button, input, select, textarea { font-family: inherit; }
 .bullet-labels { position: relative; height: 18px; }
 .bullet-label { position: absolute; top: 0; font-family: var(--mono); font-size: 8.5px; color: var(--muted); white-space: nowrap; }
 .bullet-label.row2 { top: 13px; }
-.bullet-tip { position: absolute; bottom: calc(100% + 6px); background: var(--paper); border: 1px solid var(--hair-strong); border-radius: 4px; padding: 6px 10px; white-space: nowrap; z-index: 5; pointer-events: none; box-shadow: 0 1px 4px rgba(0,0,0,0.04); }
-.bullet-tip-main { font-family: var(--mono); font-size: 11px; color: var(--ink); font-weight: 600; }
-.bullet-tip-sub { font-family: var(--mono); font-size: 10px; color: var(--muted); margin-top: 2px; }
 
 /* InfoTip — reusable hover/tap tooltip primitive (y/ui.jsx window.YUI.InfoTip) */
 .tip-trigger { border-bottom: 1px dotted var(--hair-strong); cursor: help; }
@@ -423,11 +420,6 @@ textarea.inp { height: auto; padding: 11px 15px; resize: vertical; min-height: 4
 .projbar-labels { position: relative; height: 15px; margin-top: 9px; }
 .projbar-label { position: absolute; top: 0; font-family: var(--mono); font-size: 9px; letter-spacing: 0.04em; color: var(--muted); white-space: nowrap; }
 .projbar-label b { color: var(--ink); font-weight: 600; }
-.projbar-tip { position: absolute; left: 50%; bottom: calc(100% + 10px); transform: translateX(-50%); z-index: 5; pointer-events: none; white-space: nowrap; background: var(--paper); border: 0.8px solid var(--hair-strong); border-radius: 8px; padding: 8px 10px; box-shadow: 0 2px 8px rgba(0, 0, 0, 0.08); }
-.projbar-tip-row { display: flex; align-items: baseline; gap: 6px; font-family: var(--mono); font-size: 11px; color: var(--muted); }
-.projbar-tip-row + .projbar-tip-row { margin-top: 4px; }
-.projbar-tip-row b { color: var(--ink); font-weight: 600; }
-.projbar-tip-pct { margin-left: auto; font-size: 9.5px; }
 
 /* — Primary metric trio: bold figures, muted context — */
 .metricrow { display: grid; grid-auto-flow: column; grid-auto-columns: 1fr; border-top: 1px solid var(--hair); border-bottom: 1px solid var(--hair); }

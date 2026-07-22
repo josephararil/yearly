@@ -49,7 +49,8 @@ its ids to this one object in `ui.jsx` rather than growing a separate registry p
 (`StatusHero`, `analysis.jsx` `InNumbers`) instruments the hero projection/delta/band/draw/drawzone,
 the three metric tiles, the 90-day trend heading, the current-velocity rows, the More-context facts,
 the FIRE rows, and the amortization rows — see each id's entry in `TIP_CONTENT` for the exact
-derivation. Not instrumented: `ProjectionBar` (has its own `.projbar-tip`), the `InsightCard` line,
+derivation. Not instrumented: `ProjectionBar` (has its own hover tip, rendered on the shared `.ytip`
+card), the `InsightCard` line,
 and the SVG crosshair tooltips (`Trend90Chart`, the amortization `Am*` charts, the month curve) —
 those stay bespoke since a crosshair-follows-cursor interaction can't share a static-anchor
 primitive.
@@ -100,9 +101,11 @@ meaningfully ≠ ceiling). Tick labels render in a separate `.bullet-labels` row
 (mono 10px `--muted`) sorted left-to-right with alternating `top` (0 or 13px) to avoid horizontal
 collision; leftmost/rightmost labels clamp via `left:0` / `right:0` to prevent overflow. The spent
 figure is not duplicated here (it already appears in `.hero-spent`). The wrap is clickable
-(`onPointerDown` → `handleTap`); `.bullet-tip` appears above the rail with paper fill + hairline
-border. Tooltip x-anchors left/center/right based on `tip.x` to avoid edge overflow. Dismisses on
-second tap or pointerdown outside. State: `useState({open,x})` local to `StatusHero`.
+(`onPointerDown` → `handleTap`); a `.ytip` card (the same shared tooltip look as `InfoTip`) appears
+above the rail, with a `.ytip-meaning` over/remaining line and a `.ytip-deriv` fun-spent line.
+Tooltip x-anchors left/center/right based on `tip.x` to avoid edge overflow. Dismisses on second tap
+or pointerdown outside. State: `useState({open,x})` local to `StatusHero`, not wired through
+`InfoTip`/`TIP_CONTENT`.
 
 **Zone 3 — Monthly pulse** (current year only): two-row layout. Row 1 (`.pulse-r1`, `display:flex`
 `justify-content:space-between`) carries the mono month label (e.g. JUNE) on the left and the sans
@@ -425,7 +428,10 @@ Top-to-bottom the block is:
    just the bar: a solid fill to `spent`, a faded (opacity .3) projection remainder to `projection`,
    a hard black ceiling tick (`.projbar-ceil`), a day-of-year pace marker (`.projbar-doy`), and
    `spent`/`ceiling`/`proj` labels. Fill is terra when `projection > ceiling` else sage, so "over" is
-   obvious the instant the fill crosses the ceiling tick. Renders nothing for future years.
+   obvious the instant the fill crosses the ceiling tick. Renders nothing for future years. Hovering
+   (or, on touch, pressing) the rail shows a `.ytip` card — the same shared tooltip look as `InfoTip`
+   — with a `.ytip-meaning` Spent line and a `.ytip-deriv` Projected/Ceiling breakdown; own local
+   `hover` state, not wired through `InfoTip`/`TIP_CONTENT`.
 2. **Primary metric trio** (`.metricrow` — 2–3 equal columns, hairline top/bottom, mono figures):
    Spent YTD (+ entry count), Daily spend (`dailyRate`, median sub, hidden future), Blended rate
    (`trailingDailyRate` + `+€X buffer · Y%` sub, or "YTD avg" once complete).

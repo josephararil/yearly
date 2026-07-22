@@ -656,11 +656,11 @@
                 <div className="bullet-tick proj" style={{ left: projPct + '%' }} />
               )}
               {tip.open && (
-                <div className="bullet-tip" style={tipStyle}>
-                  <div className="bullet-tip-main">
+                <div className="ytip" style={tipStyle}>
+                  <div className="ytip-meaning">
                     {over ? `Over ceiling ${eur0(overBy)}` : `Remaining ${eur0(remaining)}`}
                   </div>
-                  <div className="bullet-tip-sub">
+                  <div className="ytip-deriv">
                     {`Fun ${eur0(stats.funSpent)} of ${eur0(totalSpent)} spent`}
                   </div>
                 </div>
