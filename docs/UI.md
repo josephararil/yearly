@@ -64,6 +64,17 @@ section's subtotal (`amz-subtotal`), and per amortized row the `×Nmo`/`VIRTUAL`
 line (`amz-remaining`) — the latter three `hoverOnly` since `AmortParentRow` is itself a button that
 opens the edit sheet.
 
+`fun.jsx`'s Fun tab instruments via `TIP_CONTENT` too: `PersonCard`'s monthly-rate value
+(`fun-rate`) and its "Balance"/"This month"/"All-time" stat labels (`fun-balance`/`fun-month`/
+`fun-alltime`), all plain tips (no button underneath); the per-wishlist-item ETA text
+(`fun-eta`, covering the "ready now"/no-rate/N-mo branches); `FunTab`'s "€X total" header
+(`fun-total`); and per fun-category row the amount (`fun-cat-amt`) and the combined "% of fun / N
+entries" sub (`fun-cat-share`) — both re-enable `pointer-events` locally since the row's own
+`pointerEvents: "none"` would otherwise block them. `FunStrip` (defined on `window.YFun` but not
+currently mounted anywhere) mirrors the balance/goal-% numbers as `fun-strip-balance`/
+`fun-strip-goal`, both `hoverOnly` since the whole strip is one tap target that navigates to the Fun
+tab.
+
 ### `StatusHero`
 
 Three-zone stack (current year shows all three; complete year hides pulse; future year shows

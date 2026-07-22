@@ -182,6 +182,58 @@
       meaning: "Amount and months still left to elapse for this purchase.",
       derivation: `${eur0(p.amount_eur)} total − ${eur0(p.spentSoFar)} spent so far = ${eur0(p.remainingAmt)} over ${p.remaining} mo left`,
     }),
+    "fun-rate": ({ p }) => ({
+      meaning: "This person's monthly fun allowance.",
+      derivation: `${eur0(p.monthlyRate)}/mo`,
+    }),
+    "fun-balance": {
+      meaning: "Unspent allowance banked; negative means overspent.",
+      derivation: "Accrued monthly allowance since tracking began − all-time fun spend, ± any manual adjustment.",
+    },
+    "fun-month": ({ p }) => ({
+      meaning: "Fun spent this month vs the monthly allowance.",
+      derivation: `${eur0(p.usedThisMonth)} spent − ${eur0(p.monthlyRate)} allowance = ${signedEur(p.usedThisMonth - p.monthlyRate)}`,
+    }),
+    "fun-alltime": ({ p }) => ({
+      meaning: "Total fun spend logged for this person since tracking began.",
+      derivation: `${eur0(p.spentAllTime)}`,
+    }),
+    "fun-eta": ({ item, p }) => {
+      const ready = p.balance >= item.price;
+      if (ready) return {
+        meaning: "This person's balance already covers this item.",
+        derivation: `${eur0(p.balance)} balance ≥ ${eur0(item.price)} price`,
+      };
+      if (!p.monthlyRate) return {
+        meaning: "Months until this person's balance covers this item.",
+        derivation: "No monthly rate set for this person, so no ETA can be projected.",
+      };
+      const months = Math.max(0, Math.ceil((item.price - p.balance) / p.monthlyRate));
+      return {
+        meaning: "Months until this person's balance covers this item.",
+        derivation: `(${eur0(item.price)} price − ${eur0(p.balance)} balance) / ${eur0(p.monthlyRate)} per mo = ${months} mo`,
+      };
+    },
+    "fun-total": ({ fun }) => ({
+      meaning: "Total fun spend logged this year.",
+      derivation: `${eur0(fun.funSpentYTD)}`,
+    }),
+    "fun-cat-amt": ({ c }) => ({
+      meaning: "Fun spend in this category this year.",
+      derivation: `${eur0(c.amount)}`,
+    }),
+    "fun-cat-share": ({ c }) => ({
+      meaning: "This category's share of fun spend, and how many entries make it up.",
+      derivation: `${pct(c.share)} of fun spend across ${c.count} ${c.count === 1 ? "entry" : "entries"}`,
+    }),
+    "fun-strip-balance": {
+      meaning: "Unspent allowance banked; negative means overspent.",
+      derivation: "Accrued monthly allowance since tracking began − all-time fun spend, ± any manual adjustment.",
+    },
+    "fun-strip-goal": ({ p, goal, goalPct }) => ({
+      meaning: "How close this person's balance is to affording their nearest wishlist goal.",
+      derivation: `${eur0(p.balance)} balance / ${eur0(goal.price)} ${goal.name} = ${Math.round(goalPct)}%`,
+    }),
   };
 
   let tipSeq = 0;
