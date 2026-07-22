@@ -33,8 +33,10 @@ resolved `meaning`/`derivation` are both empty — a row can opt out simply by o
 Affordance: desktop shows the card on `pointerenter`/hides on `pointerleave`; mobile/tap toggles
 open via `onClick` (which calls `stopPropagation()` so a tip nested inside a button never fires the
 ancestor's `onClick`). Pass `hoverOnly` to disable the tap toggle where the trigger sits on top of
-the element's primary tap action (e.g. a list row that opens a sheet) — the tap then falls through
-to that action instead of opening the tip. Only one `InfoTip` is open at a time: opening dispatches
+the element's primary tap action (e.g. a category/amortization row that expands/opens a sheet) — a
+`hoverOnly` tip skips its own `onClick` handling entirely (no `stopPropagation`), so the tap bubbles
+straight through to the row's own `onClick` (row still expands/opens) while a real mouse hover still
+shows the card via `pointerenter`. Only one `InfoTip` is open at a time: opening dispatches
 a `document` `CustomEvent('ytip:open', { detail: <instance id> })`; every `InfoTip` listens and
 closes itself when it receives an event whose id isn't its own. Dismisses on outside `pointerdown`,
 `scroll` (capture), and `Escape`. On open, the card reads the trigger's `getBoundingClientRect()`
@@ -51,6 +53,16 @@ derivation. Not instrumented: `ProjectionBar` (has its own `.projbar-tip`), the 
 and the SVG crosshair tooltips (`Trend90Chart`, the amortization `Am*` charts, the month curve) —
 those stay bespoke since a crosshair-follows-cursor interaction can't share a static-anchor
 primitive.
+
+`analysis.jsx`'s Activity tabs also instrument via `TIP_CONTENT`: `CategoriesTab`'s "€X total"
+header (`cat-total`) and, per category row, the "% of spend"/"N entries"/"±% MoM" subs
+(`cat-share`/`cat-entries`/`cat-mom`, all `hoverOnly` since the row itself is the expand button);
+`TransactionsTab`'s "X of Y entries" footer (`tx-count`, a plain tip — not a button); and
+`AmortizedTab`'s three `StatCard` labels (`amz-out-real`/`amz-out-virtual`/`amz-active`), each
+section's subtotal (`amz-subtotal`), and per amortized row the `×Nmo`/`VIRTUAL` tag
+(`amz-tag`), the "€X/mo · start→end" schedule (`amz-schedule`), and the "€X remaining · N mo left"
+line (`amz-remaining`) — the latter three `hoverOnly` since `AmortParentRow` is itself a button that
+opens the edit sheet.
 
 ### `StatusHero`
 

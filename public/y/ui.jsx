@@ -134,6 +134,54 @@
       meaning: "Not-yet-elapsed amortized slices due later this year.",
       derivation: `${eur0(am.committedThisYear)} committed for the rest of ${stats.year}`,
     }),
+    "cat-total": ({ stats }) => ({
+      meaning: "Total spend across all categories year-to-date.",
+      derivation: `${stats.catList.length} categories = ${eur0(stats.spent)}`,
+    }),
+    "cat-share": ({ c, stats }) => ({
+      meaning: "This category's share of total spend.",
+      derivation: `${eur0(c.amount)} / ${eur0(stats.spent)} = ${pct(c.share)}`,
+    }),
+    "cat-entries": ({ c }) => ({
+      meaning: "Number of transactions logged in this category this year.",
+      derivation: `${c.count} entries`,
+    }),
+    "cat-mom": ({ arr, lastFull, prior, mv }) => ({
+      meaning: "This month vs the last full month, for this category.",
+      derivation: `${eur0(arr[lastFull])} vs ${eur0(arr[prior])} = ${signedPct(mv)}`,
+    }),
+    "tx-count": ({ shown, total }) => ({
+      meaning: "Filtered rows shown vs the year's total entries.",
+      derivation: `${shown} of ${total} entries`,
+    }),
+    "amz-out-real": ({ am }) => ({
+      meaning: "Cash amortization not yet elapsed, across every active purchase (all years).",
+      derivation: `${eur0(am.totals.real)} of future real slices remaining`,
+    }),
+    "amz-out-virtual": ({ am }) => ({
+      meaning: "No-cash amortization not yet elapsed (e.g. depreciation), across all years.",
+      derivation: `${eur0(am.totals.virtual)} of future virtual slices remaining`,
+    }),
+    "amz-active": ({ am }) => ({
+      meaning: "Amortized purchases whose schedule overlaps this year.",
+      derivation: `${am.parents.length} active`,
+    }),
+    "amz-subtotal": ({ title, subtotal, count }) => ({
+      meaning: `Full ticket price of this year's ${title.toLowerCase()} purchases, not just what's outstanding.`,
+      derivation: `${eur0(subtotal)} across ${count} purchase${count === 1 ? "" : "s"}`,
+    }),
+    "amz-tag": ({ p }) => ({
+      meaning: "Spread evenly over N months; virtual entries have no cash outflow.",
+      derivation: `${p.virtual ? "Virtual (no-cash)" : "Real (cash)"} · spread over ${p.amortize_months} months`,
+    }),
+    "amz-schedule": ({ p }) => ({
+      meaning: "The monthly slice this purchase adds, and the span it covers.",
+      derivation: `${eur0(p.amount_eur)} / ${p.amortize_months} mo = ${eur0(p.monthly)}/mo · ${p.startYm} → ${p.endYm}`,
+    }),
+    "amz-remaining": ({ p }) => ({
+      meaning: "Amount and months still left to elapse for this purchase.",
+      derivation: `${eur0(p.amount_eur)} total − ${eur0(p.spentSoFar)} spent so far = ${eur0(p.remainingAmt)} over ${p.remaining} mo left`,
+    }),
   };
 
   let tipSeq = 0;
@@ -188,8 +236,8 @@
     };
 
     const onClick = (e) => {
+      if (hoverOnly) return; // let the tap fall through to the underlying row/button
       e.stopPropagation();
-      if (hoverOnly) return;
       if (open) {
         setOpen(false);
       } else {

@@ -791,7 +791,9 @@
         <div>
           <div className="section-h" style={{ marginTop: 0, marginBottom: 6 }}>
             <h2>Where it's going</h2><span className="spacer" />
-            <span className="muted" style={{ fontSize: 12 }}>{eur0(stats.spent)} total</span>
+            <span className="muted" style={{ fontSize: 12 }}>
+              <InfoTip id="cat-total" ctx={{ stats }}>{eur0(stats.spent)} total</InfoTip>
+            </span>
           </div>
           {stats.catList.map((c) => {
             const cat = YData.cat(c.id);
@@ -810,10 +812,12 @@
                     </span>
                     <span className="catbar-track"><span className="catbar-fill" style={{ width: Math.max(3, (c.amount / max) * 100) + "%", background: cat.color }} /></span>
                     <span className="catbar-sub">
-                      <span>{pct(c.share)} of spend</span>
-                      <span>{c.count} entries</span>
+                      <InfoTip id="cat-share" ctx={{ c, stats }} hoverOnly><span>{pct(c.share)} of spend</span></InfoTip>
+                      <InfoTip id="cat-entries" ctx={{ c }} hoverOnly><span>{c.count} entries</span></InfoTip>
                       {mv != null && Math.abs(mv) > 0.05 && (
-                        <span style={{ color: mv > 0 ? "var(--amber)" : "var(--sage)" }}>{signedPct(mv)} MoM</span>
+                        <InfoTip id="cat-mom" ctx={{ arr, lastFull, prior, mv }} hoverOnly>
+                          <span style={{ color: mv > 0 ? "var(--amber)" : "var(--sage)" }}>{signedPct(mv)} MoM</span>
+                        </InfoTip>
                       )}
                     </span>
                   </span>
@@ -980,7 +984,9 @@
             <div className="txlist">{list.map((t) => <TxRow key={t.id} t={t} onClick={() => onEditTx(t)} people={people} />)}</div>
           ) : <div className="empty">No matching transactions.</div>}
         </div>
-        <div className="muted" style={{ textAlign: "center", fontFamily: "var(--mono)", fontSize: 11 }}>{list.length} of {rawTxns.length} entries</div>
+        <div className="muted" style={{ textAlign: "center", fontFamily: "var(--mono)", fontSize: 11 }}>
+          <InfoTip id="tx-count" ctx={{ shown: list.length, total: rawTxns.length }}>{list.length} of {rawTxns.length} entries</InfoTip>
+        </div>
       </div>
     );
   }
@@ -1000,14 +1006,16 @@
           <span className="catbar-top">
             <span className="catbar-name" style={{ display: "flex", alignItems: "center", gap: 6, minWidth: 0 }}>
               <span style={{ overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{p.description}</span>
-              <TxTag label={(p.virtual ? "VIRTUAL " : "") + "×" + p.amortize_months + "mo"} color="var(--terra)" />
+              <InfoTip id="amz-tag" ctx={{ p }} hoverOnly>
+                <TxTag label={(p.virtual ? "VIRTUAL " : "") + "×" + p.amortize_months + "mo"} color="var(--terra)" />
+              </InfoTip>
             </span>
             <span className="catbar-amt num">{eurAuto(p.amount_eur)}</span>
           </span>
           <span className="catbar-track"><span className="catbar-fill" style={{ width: width + "%", background: fillColor }} /></span>
           <span className="catbar-sub" style={{ flexDirection: "column", alignItems: "flex-start", gap: 2 }}>
-            <span>{eur0(p.monthly)}/mo · {p.startYm}→{p.endYm}</span>
-            <span>{eur0(p.remainingAmt)} remaining · {p.remaining} mo left</span>
+            <InfoTip id="amz-schedule" ctx={{ p }} hoverOnly><span>{eur0(p.monthly)}/mo · {p.startYm}→{p.endYm}</span></InfoTip>
+            <InfoTip id="amz-remaining" ctx={{ p }} hoverOnly><span>{eur0(p.remainingAmt)} remaining · {p.remaining} mo left</span></InfoTip>
           </span>
         </span>
       </button>
@@ -1021,7 +1029,9 @@
       <div>
         <div style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline", marginBottom: 2 }}>
           <div className="eyebrow">{title}</div>
-          <span className="muted num" style={{ fontSize: 12 }}>{eurAuto(subtotal)}</span>
+          <span className="muted num" style={{ fontSize: 12 }}>
+            <InfoTip id="amz-subtotal" ctx={{ title, subtotal, count: list.length }}>{eurAuto(subtotal)}</InfoTip>
+          </span>
         </div>
         {list.map((p) => <AmortParentRow key={p.id} p={p} store={store} onEditTx={onEditTx} />)}
       </div>
@@ -1041,9 +1051,9 @@
     return (
       <div className="stagger" style={{ display: "flex", flexDirection: "column", gap: 16 }}>
         <div className="statgrid">
-          <StatCard label="Outstanding real" value={eur0(am.totals.real)} sub="cash" />
-          <StatCard label="Outstanding virtual" value={eur0(am.totals.virtual)} sub="no-cash" color="var(--sage)" />
-          <StatCard label="Active amortizations" value={String(am.parents.length)} mono={false} />
+          <StatCard label={<InfoTip id="amz-out-real" ctx={{ am }}>Outstanding real</InfoTip>} value={eur0(am.totals.real)} sub="cash" />
+          <StatCard label={<InfoTip id="amz-out-virtual" ctx={{ am }}>Outstanding virtual</InfoTip>} value={eur0(am.totals.virtual)} sub="no-cash" color="var(--sage)" />
+          <StatCard label={<InfoTip id="amz-active" ctx={{ am }}>Active amortizations</InfoTip>} value={String(am.parents.length)} mono={false} />
         </div>
         <AmortSection title="Real (cash)" list={real} store={store} onEditTx={onEditTx} />
         <AmortSection title="Virtual (no-cash)" list={virtual} store={store} onEditTx={onEditTx} />
