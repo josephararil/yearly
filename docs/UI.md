@@ -257,6 +257,25 @@ screen with zero clicks. Regions, top to bottom:
    quiet muted "—" when `plan.portfolio >= floor`, terracotta "breached" otherwise (from
    `YCalc.checkTriggers`). Purely a checklist; no notifications, no callout integration.
 
+`plan.jsx` instruments via `TIP_CONTENT` too: the header strip's "Portfolio"/"Income" labels
+(`plan-portfolio`/`plan-income`, plain tips explaining what each input is — the tap-to-edit figure
+below each stays untouched so the tip never fights the edit tap) and the "This year implies" label
+(`plan-thisyear`, live draw derivation); the comparison axis's 2.0/3.5/4.5 tick labels (`plan-bands`,
+one generic id shared by all three, since the ticks are static). In the builder: the "baseline"/
+"income" inline words next to `InlineTapNum` (`plan-baseline`/`plan-income-lever` — the tip sits on
+the word, not the tap-to-edit figure) and the Spend/Deficit/Draw stat labels
+(`plan-spend`/`plan-deficit`/`plan-draw`, all live off `liveRow`). In the lever library: each
+`LeverRow`'s amount (`plan-lever-amt`) and its reversibility/horizon/beneficiary/durability meta line
+(`plan-lever-meta`, explains what each attribute means rather than repeating the values already
+shown) — both plain tips since the library row itself isn't a tap target. In the triggers block:
+each `TriggerRow`'s portfolio floor (`plan-trigger-floor`) and breached/"—" status
+(`plan-trigger-breach`, live against `plan.portfolio`). Form labels in `LeverEditForm`/
+`TriggerEditForm` — Reversibility, Durability, Scale, Portfolio floor (`plan-form-reversibility`/
+`plan-form-durability`/`plan-form-scale`/`plan-form-floor`) — carry a tip on the `<label>` text, apart
+from the input. Not instrumented: the comparison strip's scenario dots (select buttons), inline-edit
+values themselves (`InlineEditNum`/`InlineTapNum`/`NullableNumInput` — tips sit on the adjacent label/
+word instead), and the zone-verdict banner (already explanatory prose).
+
 `ConfirmDelete` (module-local) is the shared two-step delete control used throughout the tab.
 
 ## Screens

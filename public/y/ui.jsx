@@ -278,6 +278,82 @@
       meaning: "Monthly travel allowance, and how much has been spent this month.",
       derivation: `${eur0(travel.monthlyRate)}/mo · ${eur0(travel.usedThisMonth)} used this month`,
     }),
+    "plan-portfolio": {
+      meaning: "The investment portfolio your plan draws down against. Tap the figure below to edit.",
+      derivation: "Denominator for every draw-rate calculation on this tab.",
+    },
+    "plan-income": {
+      meaning: "External income assumed to reduce the amount drawn from the portfolio. Tap the figure below to edit.",
+      derivation: "Subtracted from spend before dividing by the portfolio.",
+    },
+    "plan-thisyear": ({ stats, plan, thisYearDraw }) => ({
+      meaning: "Portfolio withdrawal rate this year's projection implies.",
+      derivation: thisYearDraw != null
+        ? `(${eur0(stats.projection)} projected − ${eur0(plan.externalIncome || 0)} income) / ${eur0(plan.portfolio)} portfolio = ${(thisYearDraw * 100).toFixed(1)}%`
+        : "Set a portfolio above to see the implied draw.",
+    }),
+    "plan-spend": ({ liveRow }) => ({
+      meaning: "This scenario's total annual spend: baseline plus every enabled lever.",
+      derivation: `${eur0(liveRow.baseline)} baseline + ${eur0(liveRow.levSum)} levers = ${eur0(liveRow.spend)}`,
+    }),
+    "plan-deficit": ({ liveRow }) => ({
+      meaning: "Spend not covered by income.",
+      derivation: `max(0, ${eur0(liveRow.spend)} spend − ${eur0(liveRow.income)} income) = ${eur0(liveRow.deficit)}`,
+    }),
+    "plan-draw": ({ liveRow, plan }) => ({
+      meaning: "This scenario's deficit as a share of the portfolio.",
+      derivation: liveRow.draw != null
+        ? `${eur0(liveRow.deficit)} deficit / ${eur0(plan.portfolio)} portfolio = ${(liveRow.draw * 100).toFixed(1)}%`
+        : "No portfolio set — draw is undefined.",
+    }),
+    "plan-baseline": ({ currentCeiling, sandbox }) => ({
+      meaning: "Scenario baseline spend — defaults to this year's live ceiling unless overridden.",
+      derivation: sandbox.baselineOverride != null
+        ? `overridden to ${eur0(sandbox.baselineOverride)}`
+        : `defaults to the live ceiling, ${eur0(currentCeiling)}`,
+    }),
+    "plan-income-lever": ({ plan, sandbox }) => ({
+      meaning: "Income assumed for this scenario — defaults to the header income unless overridden.",
+      derivation: sandbox.incomeOverride != null
+        ? `overridden to ${eur0(sandbox.incomeOverride)}`
+        : `defaults to the header income, ${eur0(plan.externalIncome || 0)}`,
+    }),
+    "plan-bands": {
+      meaning: "Thresholds against the 4%-rule draw-rate envelope.",
+      derivation: "≤2.0% conservative · ≤3.5% sustainable · ≤4.5% at the limit · above is unsustainable.",
+    },
+    "plan-lever-amt": ({ lever }) => ({
+      meaning: "This lever's annual cost or saving, added to baseline spend when enabled.",
+      derivation: `${eur0(lever.amount)}/yr`,
+    }),
+    "plan-lever-meta": ({ lever }) => ({
+      meaning: "How reversible the change is, its expected time frame, who it affects, and how long the change persists.",
+      derivation: "reversibility: instant/medium/low ease of undoing · horizon: expected duration · beneficiary: who it affects · durability: high/medium/low persistence.",
+    }),
+    "plan-trigger-floor": ({ trow }) => ({
+      meaning: "Portfolio level below which this trigger fires.",
+      derivation: `${eur0(trow.portfolioFloor)} floor`,
+    }),
+    "plan-trigger-breach": ({ trow, plan }) => ({
+      meaning: "Breached when the current portfolio is below this trigger's floor.",
+      derivation: `${eur0(plan.portfolio)} portfolio ${trow.breached ? "<" : "≥"} ${eur0(trow.portfolioFloor)} floor → ${trow.breached ? "breached" : "not breached"}`,
+    }),
+    "plan-form-reversibility": {
+      meaning: "How easily this change can be undone.",
+      derivation: "instant · medium · low",
+    },
+    "plan-form-durability": {
+      meaning: "How long the change's effect persists.",
+      derivation: "high · medium · low",
+    },
+    "plan-form-scale": {
+      meaning: "Optional slider range for adjusting this lever's amount live in the builder.",
+      derivation: "min / max / step",
+    },
+    "plan-form-floor": {
+      meaning: "Portfolio value below which this trigger is considered breached.",
+      derivation: "Compared against the current portfolio value in the header above.",
+    },
   };
 
   let tipSeq = 0;
