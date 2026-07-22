@@ -430,9 +430,9 @@ textarea.inp { height: auto; padding: 11px 15px; resize: vertical; min-height: 4
 .metricrow { display: grid; grid-auto-flow: column; grid-auto-columns: 1fr; border-top: 1px solid var(--hair); border-bottom: 1px solid var(--hair); }
 .metric { padding: 15px 0; min-width: 0; }
 .metric + .metric { padding-left: 16px; border-left: 1px solid var(--hair); }
-.metric-label { font-family: var(--mono); font-size: 9.5px; letter-spacing: 0.12em; text-transform: uppercase; color: var(--muted); margin-bottom: 7px; }
+.metric-label { font-family: var(--mono); font-size: 9px; letter-spacing: 0.08em; text-transform: uppercase; color: var(--muted); margin-bottom: 7px; white-space: nowrap; }
 .metric-val { font-family: var(--mono); font-size: 21px; font-weight: 600; letter-spacing: -0.02em; color: var(--ink); line-height: 1; }
-.metric-sub { font-family: var(--mono); font-size: 10.5px; color: var(--muted); margin-top: 6px; }
+.metric-sub { font-family: var(--mono); font-size: 10px; color: var(--muted); margin-top: 6px; white-space: nowrap; }
 
 /* — Current velocity: one primary number + muted supporting lines — */
 .velo-primary { display: flex; align-items: baseline; gap: 10px; flex-wrap: wrap; }

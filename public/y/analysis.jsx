@@ -551,6 +551,10 @@
     const firePortfolio35 = stats.projection / 0.035;
     const externalIncome = (store && store.externalIncome) || 0;
     const firePortfolio35Income = Math.max(0, stats.projection - externalIncome) / 0.035;
+    // Inverse of the rows above: the annual spend the current portfolio + income could sustain at
+    // 3.5%. Dormant (null) until a portfolio is configured in Settings.
+    const portfolioVal = (store && store.portfolio) || 0;
+    const impliedSpend = portfolioVal > 0 ? portfolioVal * 0.035 + externalIncome : null;
 
     // Travel budget — mirrors the fun-budget row. Travel uses a single household allowance (no
     // per-person split), so the annual figure is the current monthly rate × 12.
@@ -571,6 +575,8 @@
     const adjustedSpent = stats.spent + stats.bufferAmt;
     const overCeiling = stats.isCurrent && daysLeftYear > 0 ? stats.projection > stats.ceiling : null;
     const realDailyTarget = overCeiling !== null ? Math.max(0, (stats.ceiling - adjustedSpent) / daysLeftYear) : null;
+    // Box 3 framing: running ahead of the ideal pace ("To recover", terra) vs under it ("Available", sage).
+    const runningBehind = stats.isCurrent && stats.spent > stats.pace;
     const daysLeftMonth = stats.isCurrent
       ? new Date(stats.asOf.getFullYear(), curMonth + 1, 0).getDate() - stats.asOf.getDate()
       : 0;
@@ -584,7 +590,10 @@
 
     const facts = [];
     if (projMonthEnd !== null) facts.push({ k: "Projected month-end", kn: "this month", v: eur0(projMonthEnd), tip: "fact-monthend", ctx: { projMonthEnd } });
-    if (completedMonths > 0) facts.push({ k: "Average per month", kn: `${completedMonths} completed month${completedMonths === 1 ? "" : "s"}`, v: eur0(avgMonthly), tip: "fact-avg", ctx: { avgMonthly, completedMonths } });
+    if (!stats.isFuture) facts.push({ k: "Daily spend", kn: dailyMedian != null ? `median ${eur0(dailyMedian)}/d` : null, v: `${eur0(stats.dailyRate)}/d`, tip: "metric-daily", ctx: { stats, dailyMedian } });
+    if (!stats.isFuture) facts.push({ k: "Blended rate", kn: !stats.complete ? `+${eur0(stats.bufferAmt)} buffer · ${Math.round(stats.buffer * 100)}%` : null, v: `${eur0(stats.trailingDailyRate)}/d`, tip: "metric-blended", ctx: { stats } });
+    if (dailyTargetThisMonth !== null) facts.push({ k: "Daily target this month", kn: `${daysLeftMonth}d left`, v: `≤ ${eur0(dailyTargetThisMonth)}/day`, tip: "velo-daily-month", ctx: { neededMonthly, spentThisMonth, daysLeftMonth, dailyTargetThisMonth } });
+    if (stats.isCurrent) facts.push({ k: "Target fun · per person", v: `${eur0(targetFunPerMo)}/mo`, color: targetFunPerMo === 0 ? "var(--terra)" : "var(--sage)", tip: "velo-fun", ctx: { stats, targetFunPerMo, numPeople, monthsLeft } });
     if (monthRange) facts.push({ k: "Monthly range", kn: `${monthRange.minLabel} – ${monthRange.maxLabel}`, v: `${eur0(monthRange.min)}–${eur0(monthRange.max)}`, tip: "fact-range", ctx: { monthRange } });
     if (!stats.isCurrent) facts.push({ k: "Monthly baseline", v: `${eur0(stats.ceiling / 12)}/mo` });
     if (!stats.isFuture) facts.push({ k: "Total fun budget", kn: `${eur0(stats.funPlanAnnual / 12)}/mo`, v: `${eur0(stats.funPlanAnnual)}/yr`, tip: "fact-fun", ctx: { stats } });
@@ -610,10 +619,35 @@
 
         {/* Primary metrics — bold figures, muted context */}
         <div className="metricrow">
+          {stats.isCurrent ? (
+            <>
+              {/* Box 1 — actual spend so far, with its monthly average */}
               <div className="metric">
-                <InfoTip id="metric-spent" ctx={{ stats }}><div className="metric-label">{stats.complete ? "Total spent" : "Spent YTD"}</div></InfoTip>
+                <InfoTip id="metric-spent" ctx={{ stats, avgMonthly, completedMonths }}><div className="metric-label">Spent YTD</div></InfoTip>
                 <div className="metric-val">{eur0(stats.spent)}</div>
-                <div className="metric-sub">{stats.upto.length} entries</div>
+                <div className="metric-sub">avg {eur0(avgMonthly)}/mo</div>
+              </div>
+              {/* Box 2 — ideal spend to date (counterpoint to Box 1) */}
+              <div className="metric">
+                <InfoTip id="velo-pace" ctx={{ stats }}><div className="metric-label">Ideal velocity</div></InfoTip>
+                <div className="metric-val">{eur0(stats.pace)}</div>
+                <div className="metric-sub">base {eur0(stats.ceiling / 12)}/mo</div>
+              </div>
+              {/* Box 3 — what it takes to reconcile Box 1 with Box 2 */}
+              <div className="metric">
+                <InfoTip id="metric-recover" ctx={{ stats, neededMonthly, realDailyTarget, daysLeftYear, behind: runningBehind, spentBefore: spentBeforeThisMonth, monthsLeftCount }}>
+                  <div className="metric-label">{runningBehind ? "To recover" : "Available"}</div>
+                </InfoTip>
+                <div className="metric-val" style={{ color: runningBehind ? "var(--terra)" : "var(--sage)", whiteSpace: "nowrap" }}><span style={{ fontSize: 15, color: "var(--muted)", fontWeight: 500 }}>≤ </span>{eur0(neededMonthly)}<span style={{ fontSize: 13, color: "var(--muted)", fontWeight: 500 }}>/mo</span></div>
+                <div className="metric-sub">{runningBehind ? "≤ " : ""}{eur0(realDailyTarget)}/d × {daysLeftYear}d</div>
+              </div>
+            </>
+          ) : (
+            <>
+              <div className="metric">
+                <InfoTip id="metric-spent" ctx={{ stats, avgMonthly, completedMonths }}><div className="metric-label">{stats.complete ? "Total spent" : "Spent YTD"}</div></InfoTip>
+                <div className="metric-val">{eur0(stats.spent)}</div>
+                <div className="metric-sub">{completedMonths > 0 ? `avg ${eur0(avgMonthly)}/mo` : `${stats.upto.length} entries`}</div>
               </div>
               {!stats.isFuture && (
                 <div className="metric">
@@ -629,7 +663,14 @@
                   ? `+${eur0(stats.bufferAmt)} buffer · ${Math.round(stats.buffer * 100)}%`
                   : `YTD avg ${eur0(stats.dailyRate)}/d`}</div>
               </div>
+            </>
+          )}
             </div>
+            {!stats.isFuture && (
+              <div style={{ textAlign: "center", fontSize: 11, color: "var(--muted)", fontFamily: "var(--mono)", marginTop: 2 }}>
+                {stats.upto.length} entries{stats.isCurrent ? ` · day ${stats.doy} of ${stats.daysInYear}` : ""}
+              </div>
+            )}
 
             {/* 90-day trend — chart flush to the container edges */}
             {trend90 && (
@@ -644,45 +685,6 @@
 
             {/* Rotating insight card — the single "voice" line, one-per-day rotation */}
             <InsightCard callouts={callouts} onCallout={onCallout} />
-
-            {/* Current velocity — merges monthly target, on-pace, and daily targets */}
-            {stats.isCurrent && (
-              <div className="innum-group">
-                <div className="innum-cap">Current velocity <span className="meta">day {stats.doy} of {stats.daysInYear}</span></div>
-                <div className="velo-primary">
-                  <InfoTip id="velo-pace" ctx={{ stats }}><span className="velo-num num">{eur0(stats.pace)}</span></InfoTip>
-                  <span className="velo-cap">on-pace by today · {eur0(stats.ceiling / 12)}/mo baseline</span>
-                </div>
-                <div className="velo-rows">
-                  {neededMonthly !== null && (
-                    <div className="velo-line">
-                      <InfoTip id="velo-cap" ctx={{ stats, neededMonthly, spentBefore: spentBeforeThisMonth, monthsLeftCount }}><span className="k">Adjusted monthly cap</span></InfoTip>
-                      <span className="v" style={{ color: avgMonthly > neededMonthly ? "var(--terra)" : "var(--sage)" }}>≤ {eur0(neededMonthly)}/mo</span>
-                    </div>
-                  )}
-                  {realDailyTarget !== null && (
-                    <div className="velo-line">
-                      <InfoTip id="velo-daily" ctx={{ overCeiling, adjustedSpent, stats, daysLeftYear, realDailyTarget }}>
-                        <span className="k">{overCeiling ? "Daily target to recover" : "Daily room left"}</span>
-                      </InfoTip>
-                      <span className="v" style={{ color: overCeiling ? "var(--terra)" : "var(--sage)" }}>
-                        {overCeiling ? "≤ " : ""}{eur0(realDailyTarget)}/day <span style={{ color: "var(--muted)", fontWeight: 400 }}>· {daysLeftYear}d left</span>
-                      </span>
-                    </div>
-                  )}
-                  {dailyTargetThisMonth !== null && (
-                    <div className="velo-line">
-                      <InfoTip id="velo-daily-month" ctx={{ neededMonthly, spentThisMonth, daysLeftMonth, dailyTargetThisMonth }}><span className="k">Daily target this month</span></InfoTip>
-                      <span className="v">≤ {eur0(dailyTargetThisMonth)}/day <span style={{ color: "var(--muted)", fontWeight: 400 }}>· {daysLeftMonth}d left</span></span>
-                    </div>
-                  )}
-                  <div className="velo-line">
-                    <InfoTip id="velo-fun" ctx={{ stats, targetFunPerMo, numPeople, monthsLeft }}><span className="k">Target fun · per person</span></InfoTip>
-                    <span className="v" style={{ color: targetFunPerMo === 0 ? "var(--terra)" : "var(--sage)" }}>{eur0(targetFunPerMo)}/mo</span>
-                  </div>
-                </div>
-              </div>
-            )}
 
             {/* Collapsible "More context" — default collapsed; hides everything from the secondary
                 facts down through the amortization/composition breakdown */}
@@ -728,6 +730,12 @@
                             <InfoTip id="fire-35i" ctx={{ stats, externalIncome, firePortfolio35Income }}><span className="lab">3.5% with income<span className="n">net of {eur0(externalIncome)} external</span></span></InfoTip>
                             <span className="amt">{eurK(firePortfolio35Income)}</span>
                           </div>
+                          {impliedSpend !== null && (
+                            <div className="fire-row">
+                              <InfoTip id="fire-implied" ctx={{ stats, externalIncome, portfolioVal, impliedSpend }}><span className="lab">Implied spend<span className="n">3.5% of {eurK(portfolioVal)} + income</span></span></InfoTip>
+                              <span className="amt" style={{ color: impliedSpend >= stats.projection ? "var(--sage)" : "var(--terra)" }}>{eurK(impliedSpend)}</span>
+                            </div>
+                          )}
                         </div>
                       </div>
                     )}
