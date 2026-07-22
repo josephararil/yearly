@@ -234,6 +234,50 @@
       meaning: "How close this person's balance is to affording their nearest wishlist goal.",
       derivation: `${eur0(p.balance)} balance / ${eur0(goal.price)} ${goal.name} = ${Math.round(goalPct)}%`,
     }),
+    "trv-rate": ({ travel }) => ({
+      meaning: "Household travel allowance per month.",
+      derivation: `${eur0(travel.monthlyRate)}/mo`,
+    }),
+    "trv-balance": ({ travel }) => ({
+      meaning: "Unspent travel allowance banked; negative means owed back.",
+      derivation: `${eur0(travel.accrued)} accrued − ${eur0(travel.spentAllTime)} spent all-time = ${eur0(travel.balance)}`,
+    }),
+    "trv-month": ({ travel }) => ({
+      meaning: "Travel spent this month vs the monthly allowance.",
+      derivation: `${eur0(travel.usedThisMonth)} spent − ${eur0(travel.monthlyRate)} allowance = ${signedEur(travel.usedThisMonth - travel.monthlyRate)}`,
+    }),
+    "trv-ytd": ({ travel }) => ({
+      meaning: "Total travel spend logged this year.",
+      derivation: `${eur0(travel.travelSpentYTD)}`,
+    }),
+    "trv-proj": ({ travel }) => ({
+      meaning: "Linear forecast of travel spend by year-end.",
+      derivation: "YTD travel spend ÷ day-of-year × days in year, extended in a straight line.",
+    }),
+    "trv-trip-total": ({ trip }) => ({
+      meaning: "Total spend tagged to this trip.",
+      derivation: `${eur0(trip.total)}`,
+    }),
+    "trv-trip-lock": ({ trip }) => ({
+      meaning: "Trips with logged expenses can't be deleted — remove or retag the expenses first.",
+      derivation: `${trip.count} ${trip.count === 1 ? "expense" : "expenses"} tagged to this trip`,
+    }),
+    "trv-cat-amt": ({ c }) => ({
+      meaning: "Spend in this category for this trip.",
+      derivation: `${eur0(c.amount)}`,
+    }),
+    "trv-cat-share": ({ c }) => ({
+      meaning: "This category's share of the trip's spend, and how many entries make it up.",
+      derivation: `${pct(c.share)} of trip spend across ${c.count} ${c.count === 1 ? "entry" : "entries"}`,
+    }),
+    "trv-strip-balance": ({ travel }) => ({
+      meaning: "Unspent travel allowance banked; negative means owed back.",
+      derivation: `${eur0(travel.accrued)} accrued − ${eur0(travel.spentAllTime)} spent all-time = ${eur0(travel.balance)}`,
+    }),
+    "trv-strip-meta": ({ travel }) => ({
+      meaning: "Monthly travel allowance, and how much has been spent this month.",
+      derivation: `${eur0(travel.monthlyRate)}/mo · ${eur0(travel.usedThisMonth)} used this month`,
+    }),
   };
 
   let tipSeq = 0;

@@ -175,6 +175,17 @@ Internal: `TripCreateSheet`, `TripBreakdown`, `TripRow`, `tripDateRange(trip)`.
 
 Trip *selection* when logging an expense lives in `y/addflow.jsx` (`TripField`, see below).
 
+`travel.jsx` instruments via `TIP_CONTENT` too: `TravelTab`'s monthly-rate value (`trv-rate`) and
+its "Available"/"This month"/"Spent YTD" stat labels (`trv-balance`/`trv-month`/`trv-ytd`, plain
+tips, no button underneath), plus the "~€X/yr" projection line (`trv-proj`, generic — day-of-year
+math isn't plugged in). Per `TripRow`, the collapsed total (`trv-trip-total`) is `hoverOnly` since
+the row summary is itself the expand/collapse button; the "Has N expenses — can't delete" note is a
+plain tip (`trv-trip-lock`). Per `TripBreakdown` category row, the amount (`trv-cat-amt`) and the
+combined "% of trip / N entries" sub (`trv-cat-share`) re-enable `pointer-events` locally since the
+row's own `pointerEvents: "none"` would otherwise block them. `TravelStrip` mirrors the
+balance/meta numbers as `trv-strip-balance`/`trv-strip-meta`, both `hoverOnly` since the whole strip
+is one tap target that navigates to the Travel tab.
+
 ## `y/plan.jsx` (`window.YPlan`) — the Plan tab
 
 `PlanTab({ store, setStore, stats })`, rendered on Analysis's fourth (last) top pill (`Activity |
