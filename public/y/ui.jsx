@@ -28,9 +28,17 @@
       meaning: "Where this draw rate sits against the 4% rule.",
       derivation: `≤2% conservative · ≤3.5% sustainable · ≤4% at the limit · above is high — ${(draw * 100).toFixed(1)}% is ${drawZone.label}.`,
     }),
-    "metric-spent": ({ stats }) => ({
+    "metric-spent": ({ stats, avgMonthly, completedMonths }) => ({
       meaning: stats.complete ? "Total logged for the year." : "Total logged so far this year.",
-      derivation: `${stats.upto.length} entries = ${eur0(stats.spent)}`,
+      derivation: (completedMonths > 0)
+        ? `${stats.upto.length} entries = ${eur0(stats.spent)} · averaging ${eur0(avgMonthly)}/mo across ${completedMonths} completed month${completedMonths === 1 ? "" : "s"}`
+        : `${stats.upto.length} entries = ${eur0(stats.spent)}`,
+    }),
+    "metric-recover": ({ stats, neededMonthly, realDailyTarget, daysLeftYear, behind, spentBefore, monthsLeftCount }) => ({
+      meaning: behind
+        ? "You're running ahead of the ideal pace — the max average monthly spend for the rest of the year to still land on the ceiling."
+        : "You're running under the ideal pace — the average monthly spend still available while landing on the ceiling.",
+      derivation: `(${eur0(stats.ceiling)} ceiling − ${eur0(spentBefore)} spent before this month) / ${monthsLeftCount} months left = ${eur0(neededMonthly)}/mo · ${eur0(realDailyTarget)}/day over ${daysLeftYear} days left`,
     }),
     "metric-daily": ({ stats, dailyMedian }) => ({
       meaning: "Average daily spend year-to-date.",
@@ -107,6 +115,13 @@
     "fire-35i": ({ stats, externalIncome, firePortfolio35Income }) => ({
       meaning: "Portfolio needed under the 3.5% rule, net of external income.",
       derivation: `(${eur0(stats.projection)} − ${eur0(externalIncome)} income) / 3.5% = ${eur0(firePortfolio35Income)}`,
+    }),
+    "fire-implied": ({ stats, externalIncome, portfolioVal, impliedSpend }) => ({
+      meaning: "What your current portfolio and income could sustainably fund per year at 3.5% — the inverse of the rows above.",
+      derivation: `${eur0(portfolioVal)} × 3.5% + ${eur0(externalIncome)} income = ${eur0(impliedSpend)}`
+        + (impliedSpend >= stats.projection
+          ? ` — above your ${eur0(stats.projection)} projection, so there's room to spare`
+          : ` — below your ${eur0(stats.projection)} projection, so you're spending beyond it`),
     }),
     "amort-cap": ({ am, stats }) => ({
       meaning: "Share of year-to-date spend that comes from spread-out (amortized) purchases.",

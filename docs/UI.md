@@ -444,29 +444,36 @@ Top-to-bottom the block is:
    (or, on touch, pressing) the rail shows a `.ytip` card — the same shared tooltip look as `InfoTip`
    — with a `.ytip-meaning` Spent line and a `.ytip-deriv` Projected/Ceiling breakdown; own local
    `hover` state, not wired through `InfoTip`/`TIP_CONTENT`.
-2. **Primary metric trio** (`.metricrow` — 2–3 equal columns, hairline top/bottom, mono figures):
-   Spent YTD (+ entry count), Daily spend (`dailyRate`, median sub, hidden future), Blended rate
-   (`trailingDailyRate` + `+€X buffer · Y%` sub, or "YTD avg" once complete).
+2. **Primary metric trio** (`.metricrow` — 3 equal columns, hairline top/bottom, mono figures). For
+   the **current year** the three boxes are a deliberate actual-vs-ideal-vs-corrective triptych:
+   **Spent YTD** (`spent`, `avg €X/mo` sub = `avgMonthly`), **Ideal velocity** (`stats.pace`, `base €X/mo`
+   sub = `ceiling/12`), and **To recover / Available** (`neededMonthlyCap` as `≤ €X/mo`, `≤ €X/d × Nd`
+   daily sub = the local floored `(ceiling − (spent+bufferAmt)) / daysRemaining`). The third box flips
+   label + colour on `runningBehind` (`spent > pace`): "To recover"/terra when ahead of the ideal
+   pace, "Available"/sage when under it. For **completed / future** years the trio falls back to Spent
+   YTD, Daily spend (`dailyRate`, median sub, hidden future), and Blended rate (`trailingDailyRate` +
+   `+€X buffer · Y%`, or "YTD avg" once complete). A small centred mono caption under the row carries
+   the figures dropped from the boxes — `N entries` plus `· day X of Y` on the current year.
 3. **`InsightCard`** — the rotating one-per-day insight (see its own section above), between the trio
    and the trend.
 4. **90-day trend** (`.trend-head` + `Trend90Chart`) — current-year with ≥90 days of data; label +
    coloured verdict, then the sparkline rendered **flush to the container edges**.
-5. **Current velocity** (`.innum-group`, current year only) — one card: serif primary =
-   `stats.pace`, then `.velo-line`
-   rows for Adjusted monthly cap (`neededMonthlyCap`, sage/terra vs `avgMonthly`), Daily room/target
-   (`(ceiling − (spent + bufferAmt)) / daysRemaining`, floored 0 — local to `analysis.jsx`), Daily
-   target this month (`(neededMonthly − spentThisMonth) / daysLeftInMonth`, floored 0), and Target
-   fun / person.
-6. **Collapsible "More context"** (`.innum-toggle` button + `.innum-more`, **default collapsed**) —
+5. **Collapsible "More context"** (`.innum-toggle` button + `.innum-more`, **default collapsed**) —
    the toggle (chevron + label + a hairline rule filling the row) shows/hides everything below it.
    Rendered only when there is content (`hasMore`). Expanded it holds:
    - a `.factlist` of secondary facts, each conditional: Projected month-end (`projectedMonthEnd`,
-     current year), Average per month, Monthly range (`historicalMonthRange`, excludes `t.virtual`),
-     Monthly baseline (`ceiling/12`, only when *not* current), **Total fun budget** (`funPlanAnnual`),
-     **Total travel budget** (`travel.monthlyRate × 12`, mirrors the fun row; hidden future),
-     vs prior year (`stats.priorSpent > 0`, watch/good coloured);
+     current year), **Daily spend** (`dailyRate`, median sub) and **Blended rate** (`trailingDailyRate`
+     + buffer sub) — the run-rate figures no longer in the trio, Daily target this month
+     (`(neededMonthly − spentThisMonth) / daysLeftInMonth`, floored 0), Target fun · per person
+     (sage/terra), Monthly range (`historicalMonthRange`, excludes `t.virtual`), Monthly baseline
+     (`ceiling/12`, only when *not* current), **Total fun budget** (`funPlanAnnual`), **Total travel
+     budget** (`travel.monthlyRate × 12`, mirrors the fun row; hidden future), vs prior year
+     (`stats.priorSpent > 0`, watch/good coloured);
    - the **FIRE portfolio target** `.fire` widget (hidden future) — 4% (`projection/0.04`), 3.5%
-     (`projection/0.035`), 3.5% with income (`max(0, projection − externalIncome)/0.035`);
+     (`projection/0.035`), 3.5% with income (`max(0, projection − externalIncome)/0.035`), and, **only
+     when a portfolio is configured**, **Implied spend** — the inverse row: `portfolio × 0.035 +
+     externalIncome` = the annual spend the current portfolio could sustain, coloured sage when it
+     meets/exceeds `projection` (room to spare) and terra when below it;
    - the **Amortization** section (below).
 
 `StatCard` is used by `AmortizedTab` but not `InNumbers`.
