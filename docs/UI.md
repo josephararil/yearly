@@ -21,28 +21,40 @@ Exports: `StatusHero`, `CalloutCard`, `TxRow`, `CatIcon`, `DeltaChip`, `Sheet`, 
 
 `InfoTip({ id, ctx, children, hoverOnly, className })` is the one reusable way to attach an
 explanatory tooltip to a piece of copy. It wraps `children` in a `<span className="tip-trigger">`
-(dotted hairline underline, `cursor:help`) inside a `position:relative` host so the card can anchor
-to it. Content comes from `TIP_CONTENT`, a single registry object keyed by tip `id`: each entry is
-either a static `{ meaning, derivation }` object or a function `(ctx) => ({ meaning, derivation })`
-that reads live values off the `ctx` bag passed at the call site (`{ stats, store, am, ... }`).
-Copy leads with the plain-language `meaning`, then the `derivation` — a compact formula with live
-numbers sourced from `ctx` + `window.YCalc` formatters (`eur0`, `pct`, `signedEur`, `signedPct`).
-Renders bare `children` (no trigger, no card) when the `id` has no `TIP_CONTENT` entry, or when the
-resolved `meaning`/`derivation` are both empty — a row can opt out simply by omitting its id.
+(subtle dotted underline `rgba(34,28,18,0.15)`, `cursor:help`, `user-select`/`touch-callout`
+disabled for clean long-press). A trigger whose children are **only a figure** (currency / number /
+percent, detected by `isNumericOnly(nodeText(children))`) gets the extra `.tip-plain` class and no
+underline — underlines are reserved for text (incl. text-with-numbers like "4% rule"). Content comes
+from `TIP_CONTENT`, a single registry object keyed by tip `id`: each entry is either a static
+`{ meaning, derivation }` object or a function `(ctx) => ({ meaning, derivation })` that reads live
+values off the `ctx` bag passed at the call site (`{ stats, store, am, ... }`). Copy leads with the
+plain-language `meaning`, then the `derivation` — a compact formula with live numbers sourced from
+`ctx` + `window.YCalc` formatters (`eur0`, `pct`, `signedEur`, `signedPct`). Renders bare `children`
+(no trigger, no card) when the `id` has no `TIP_CONTENT` entry, or when the resolved
+`meaning`/`derivation` are both empty — a row can opt out simply by omitting its id.
 
-Affordance: desktop shows the card on `pointerenter`/hides on `pointerleave`; mobile/tap toggles
-open via `onClick` (which calls `stopPropagation()` so a tip nested inside a button never fires the
-ancestor's `onClick`). Pass `hoverOnly` to disable the tap toggle where the trigger sits on top of
-the element's primary tap action (e.g. a category/amortization row that expands/opens a sheet) — a
-`hoverOnly` tip skips its own `onClick` handling entirely (no `stopPropagation`), so the tap bubbles
-straight through to the row's own `onClick` (row still expands/opens) while a real mouse hover still
-shows the card via `pointerenter`. Only one `InfoTip` is open at a time: opening dispatches
-a `document` `CustomEvent('ytip:open', { detail: <instance id> })`; every `InfoTip` listens and
-closes itself when it receives an event whose id isn't its own. Dismisses on outside `pointerdown`,
-`scroll` (capture), and `Escape`. On open, the card reads the trigger's `getBoundingClientRect()`
-and anchors `left:0` near the left viewport edge, `right:0` near the right edge, else centered
-(`left:50%; transform:translateX(-50%)`) — the card itself sits `bottom: calc(100% + 6px)` above the
-trigger. CSS: `.tip-trigger`, `.ytip`, `.ytip-meaning`, `.ytip-deriv` in `app.css`.
+Affordance: desktop shows the card on `pointerenter`/hides on `pointerleave` (mouse only). Touch
+reveals via **long-press** (500ms `pointerdown` timer) so a plain tap keeps working; a click toggles
+the card only for touch/pen pointers (`lastPtr`), never for mouse, so a click never fights the hover
+that already governs the desktop card. Pass `hoverOnly` where the trigger sits on top of the
+element's primary tap action (e.g. a category/amortization row that expands/opens a sheet): a short
+tap falls straight through to the row's own `onClick` (row still expands/opens), while a completed
+long-press opens the card **and** swallows the trailing tap (`preventDefault`/`stopPropagation`) so
+the row doesn't also fire. Only one `InfoTip` is open at a time: opening dispatches a `document`
+`CustomEvent('ytip:open', { detail: <instance id> })`; every `InfoTip` listens and closes itself on
+any event whose id isn't its own. Dismisses on outside `pointerdown`, `scroll` (capture), and
+`Escape`.
+
+Positioning: the card renders as `.ytip.ytip-pop` (`position:fixed`, `width:max-content` capped at
+`min(300px, 100vw − 24px)` so copy stays readable and never collapses into a narrow column). A
+`useLayoutEffect` measures the rendered card, centers it horizontally on the trigger clamped to the
+viewport, prefers placement **above** the trigger and flips **below** when there isn't room up top,
+and points a `.ytip-caret` at the trigger (`arrowLeft`, `top`/`bottom` variant per placement); it
+stays hidden (`visibility`) for the one frame before measurement. The card resets
+`text-transform`/`letter-spacing`/`font-style` so it is never uppercased by an ancestor label (e.g. a
+`text-transform:uppercase` column header). CSS: `.tip-trigger`, `.tip-trigger.tip-plain`, `.ytip`,
+`.ytip-pop`, `.ytip-meaning`, `.ytip-deriv`, `.ytip-caret` in `app.css`. The bullet-bar and
+`ProjectionBar` tips reuse the base `.ytip` look (absolute, above their rail) without `.ytip-pop`.
 
 `TIP_CONTENT` is the single source of truth for tooltip wording across the app — every screen adds
 its ids to this one object in `ui.jsx` rather than growing a separate registry per file. Overview
