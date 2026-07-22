@@ -406,14 +406,36 @@
 
   let tipSeq = 0;
 
-  // InfoTip — reusable hover/tap tooltip. Wraps children in a dotted-underline trigger; shows a card
-  // above the trigger with a plain-language meaning + a live derivation, sourced from TIP_CONTENT.
+  // pull all text out of a React node tree — used to decide whether a trigger wraps only a figure
+  function nodeText(n) {
+    if (n == null || typeof n === "boolean") return "";
+    if (typeof n === "string" || typeof n === "number") return String(n);
+    if (Array.isArray(n)) return n.map(nodeText).join("");
+    if (n.props && n.props.children != null) return nodeText(n.props.children);
+    return "";
+  }
+  // a trigger wrapping only a figure (currency / number / percent, incl. unit suffixes) skips the
+  // text underline; anything with a real word ("168 entries", "4% rule") keeps it.
+  const TIP_NUM_NOISE = /[€$£%+\-−±×xX()\/.,:\s\d]|\b(mo|yr|day|d|k|K|M)\b/g;
+  function isNumericOnly(txt) {
+    const t = (txt || "").trim();
+    if (!t || !/\d/.test(t)) return false;
+    return t.replace(TIP_NUM_NOISE, "").trim() === "";
+  }
+
+  // InfoTip — reusable hover/tap tooltip. Wraps children in a trigger; shows a viewport-anchored card
+  // (a plain-language meaning + a live derivation, from TIP_CONTENT). Desktop reveals on hover; touch
+  // reveals via long-press (so hoverOnly taps still fall through to the underlying row/button).
   function InfoTip({ id, ctx, children, hoverOnly, className }) {
     const entry = TIP_CONTENT[id];
     const [open, setOpen] = React.useState(false);
-    const [anchor, setAnchor] = React.useState({});
+    const [pos, setPos] = React.useState(null);
     const instanceId = React.useRef("ytip-" + (++tipSeq));
     const hostRef = React.useRef(null);
+    const cardRef = React.useRef(null);
+    const pressTimer = React.useRef(null);
+    const longFired = React.useRef(false);
+    const lastPtr = React.useRef(null);
 
     React.useEffect(() => {
       const onOtherOpen = (e) => { if (e.detail !== instanceId.current) setOpen(false); };
@@ -435,53 +457,85 @@
       };
     }, [open]);
 
+    // position the card against the viewport once it's rendered & measured: centered on the trigger,
+    // clamped to stay on-screen, preferring above but flipping below when there isn't room up top.
+    React.useLayoutEffect(() => {
+      if (!open) { setPos(null); return; }
+      const host = hostRef.current, card = cardRef.current;
+      if (!host || !card) return;
+      const r = host.getBoundingClientRect();
+      const cw = card.offsetWidth, ch = card.offsetHeight;
+      const vw = window.innerWidth, vh = window.innerHeight;
+      const M = 8, GAP = 8;
+      let left = r.left + r.width / 2 - cw / 2;
+      left = Math.max(M, Math.min(left, vw - cw - M));
+      let placement = "top";
+      let top = r.top - GAP - ch;
+      if (top < M) { placement = "bottom"; top = r.bottom + GAP; }
+      if (placement === "bottom" && top + ch > vh - M) top = Math.max(M, vh - ch - M);
+      const arrowLeft = Math.max(14, Math.min(r.left + r.width / 2 - left, cw - 14));
+      setPos({ left, top, placement, arrowLeft });
+    }, [open]);
+
     if (!entry) return children;
-    const { meaning, derivation } = typeof entry === "function" ? entry(ctx || {}) : entry;
+    const resolved = typeof entry === "function" ? entry(ctx || {}) : entry;
+    const { meaning, derivation } = resolved || {};
     if (!meaning && !derivation) return children;
 
-    const computeAnchor = () => {
-      const el = hostRef.current;
-      if (!el) return {};
-      const rect = el.getBoundingClientRect();
-      const w = window.innerWidth;
-      if (rect.left < w * 0.2) return { left: 0 };
-      if (rect.right > w * 0.8) return { right: 0 };
-      return { left: "50%", transform: "translateX(-50%)" };
-    };
+    const emitOpen = () => document.dispatchEvent(new CustomEvent("ytip:open", { detail: instanceId.current }));
+    const openTip = () => { setOpen(true); emitOpen(); };
 
-    const openTip = () => {
-      setAnchor(computeAnchor());
-      setOpen(true);
-      document.dispatchEvent(new CustomEvent("ytip:open", { detail: instanceId.current }));
+    // hover is a mouse affordance only; touch drives the tip through long-press below
+    const onEnter = (e) => { if (e.pointerType === "mouse") openTip(); };
+    const onLeave = (e) => { if (e.pointerType === "mouse") setOpen(false); };
+
+    const clearPress = () => { if (pressTimer.current) { clearTimeout(pressTimer.current); pressTimer.current = null; } };
+    const onDown = (e) => {
+      e.stopPropagation();
+      lastPtr.current = e.pointerType;
+      if (!hoverOnly || e.pointerType === "mouse") return;
+      longFired.current = false;
+      clearPress();
+      pressTimer.current = setTimeout(() => { longFired.current = true; openTip(); }, 500);
     };
 
     const onClick = (e) => {
-      if (hoverOnly) return; // let the tap fall through to the underlying row/button
-      e.stopPropagation();
-      if (open) {
-        setOpen(false);
-      } else {
-        setAnchor(computeAnchor());
-        setOpen(true);
-        document.dispatchEvent(new CustomEvent("ytip:open", { detail: instanceId.current }));
+      if (hoverOnly) {
+        // a completed long-press swallows the tap so the row/button underneath doesn't also fire
+        if (longFired.current) { e.preventDefault(); e.stopPropagation(); longFired.current = false; }
+        return;
       }
+      e.stopPropagation();
+      // on desktop, hover already opens/closes the tip — a click must not fight it. only touch/pen taps toggle.
+      if (lastPtr.current === "mouse") return;
+      if (open) setOpen(false); else openTip();
     };
 
+    const plain = isNumericOnly(nodeText(children));
+
     return (
-      <span ref={hostRef} style={{ position: "relative", display: "inline" }}>
+      <span ref={hostRef} className="tip-host" style={{ position: "relative", display: "inline" }}>
         <span
-          className={"tip-trigger" + (className ? " " + className : "")}
-          onPointerEnter={openTip}
-          onPointerLeave={() => setOpen(false)}
-          onPointerDown={(e) => e.stopPropagation()}
+          className={"tip-trigger" + (plain ? " tip-plain" : "") + (className ? " " + className : "")}
+          onPointerEnter={onEnter}
+          onPointerLeave={(e) => { onLeave(e); clearPress(); }}
+          onPointerDown={onDown}
+          onPointerUp={clearPress}
+          onPointerCancel={clearPress}
+          onContextMenu={(e) => { if (hoverOnly) e.preventDefault(); }}
           onClick={onClick}
         >
           {children}
         </span>
         {open && (
-          <div className="ytip" style={anchor}>
+          <div
+            ref={cardRef}
+            className="ytip ytip-pop"
+            style={{ left: pos ? pos.left : 0, top: pos ? pos.top : 0, visibility: pos ? "visible" : "hidden" }}
+          >
             {meaning && <div className="ytip-meaning">{meaning}</div>}
             {derivation && <div className="ytip-deriv">{derivation}</div>}
+            {pos && <span className={"ytip-caret " + pos.placement} style={{ left: pos.arrowLeft }} />}
           </div>
         )}
       </span>

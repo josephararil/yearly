@@ -121,10 +121,15 @@ button, input, select, textarea { font-family: inherit; }
 .bullet-label.row2 { top: 13px; }
 
 /* InfoTip — reusable hover/tap tooltip primitive (y/ui.jsx window.YUI.InfoTip) */
-.tip-trigger { border-bottom: 1px dotted var(--hair-strong); cursor: help; }
-.ytip { position: absolute; bottom: calc(100% + 6px); z-index: 20; max-width: 240px; background: var(--paper); border: 0.8px solid var(--hair-strong); border-radius: 8px; padding: 8px 10px; box-shadow: 0 2px 8px rgba(0,0,0,0.08); pointer-events: none; }
-.ytip-meaning { font-family: var(--sans); font-size: 12px; color: var(--ink); line-height: 1.35; }
-.ytip-deriv { font-family: var(--mono); font-size: 10.5px; color: var(--muted); margin-top: 5px; line-height: 1.4; }
+.tip-trigger { border-bottom: 1px dotted rgba(34, 28, 18, 0.15); cursor: help; -webkit-user-select: none; user-select: none; -webkit-touch-callout: none; }
+.tip-trigger.tip-plain { border-bottom: 0; }  /* figures/numbers carry no underline */
+.ytip { position: absolute; bottom: calc(100% + 6px); z-index: 40; max-width: 240px; background: var(--paper); border: 0.8px solid var(--hair-strong); border-radius: 9px; padding: 9px 11px; box-shadow: 0 6px 20px rgba(34, 28, 18, 0.13); pointer-events: none; text-transform: none; letter-spacing: normal; font-style: normal; text-align: left; }
+.ytip-pop { position: fixed; bottom: auto; width: max-content; min-width: 172px; max-width: min(300px, calc(100vw - 24px)); }  /* viewport-anchored popover (JS-positioned) */
+.ytip-meaning { font-family: var(--sans); font-size: 12.5px; color: var(--ink); line-height: 1.4; }
+.ytip-deriv { font-family: var(--mono); font-size: 10.5px; color: var(--muted); margin-top: 6px; padding-top: 6px; border-top: 0.8px solid rgba(34, 28, 18, 0.1); line-height: 1.45; }
+.ytip-caret { position: absolute; width: 9px; height: 9px; margin-left: -4.5px; background: var(--paper); border: 0.8px solid var(--hair-strong); transform: rotate(45deg); }
+.ytip-caret.top { bottom: -5px; border-top: 0; border-left: 0; }
+.ytip-caret.bottom { top: -5px; border-bottom: 0; border-right: 0; }
 
 /* Zone 3 — monthly pulse (two deliberate rows) */
 .pulse {}
