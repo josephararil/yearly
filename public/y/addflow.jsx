@@ -113,6 +113,7 @@
     oneOff, setOneOff, saveAsTemplate, setSaveAsTemplate, store, showOneOff, showSaveAsTemplate,
     tripId, setTripId, trips, onCreateTrip, dateField,
     showAmortize, amortizeOn, setAmortizeOn, amortizeMonths, setAmortizeMonths, virtualOn, setVirtualOn,
+    funAllocs, setFunAllocs, amountValue,
   }) {
     const people = (store && store.people) || [];
     const tiles = [
@@ -129,8 +130,12 @@
         caption: "Excluded from the spending-trend forecast — still counts in totals. Large amounts are excluded automatically.",
       },
       showAmortize && {
-        key: "amortize", icon: "clock", label: "Amortize", chip: "AMORTIZE", on: amortizeOn, toggle: () => setAmortizeOn(!amortizeOn),
-        caption: "Spread evenly over the coming months instead of hitting this month in full.",
+        key: "amortize", icon: "clock", label: "Amortize", chip: "AMORTIZE", on: amortizeOn,
+        disabled: funAllocs !== null,
+        toggle: () => { if (funAllocs === null) setAmortizeOn(!amortizeOn); },
+        caption: funAllocs !== null
+          ? "Turn off split to amortize."
+          : "Spread evenly over the coming months instead of hitting this month in full.",
       },
       showSaveAsTemplate && {
         key: "template", icon: "layers", label: "Save as template", chip: "TEMPLATE", on: saveAsTemplate, toggle: () => setSaveAsTemplate(!saveAsTemplate),
@@ -159,7 +164,8 @@
             <div className="opt-tiles" style={{ gridTemplateColumns: "repeat(" + tiles.length + ", 1fr)" }}>
               {tiles.map((t) => (
                 <button key={t.key} type="button" className={"opt-tile" + (t.on ? " on" : "")}
-                  onClick={t.toggle} aria-pressed={t.on}>
+                  onClick={t.toggle} aria-pressed={t.on} disabled={t.disabled}
+                  style={t.disabled ? { opacity: 0.5 } : undefined}>
                   {t.on && <span className="opt-tile-check"><window.Icon name="check" size={9} /></span>}
                   <window.Icon name={t.icon} size={20} />
                   <span className="opt-tile-label">{t.label}</span>
@@ -169,12 +175,22 @@
             {activeTiles.length > 0 && (
               <div className="opt-details">
                 {activeTiles.map((t) => <p key={t.key} className="toggle-caption">{t.caption}</p>)}
-                {funOn && people.length > 0 && (
-                  <div style={{ display: "flex", gap: 7, flexWrap: "wrap" }}>
+                {funOn && people.length > 0 && funAllocs === null && (
+                  <div style={{ display: "flex", gap: 7, flexWrap: "wrap", alignItems: "center" }}>
                     {people.map((p) => (
                       <Chip key={p.id} pressed={funPerson === p.id} onClick={() => setFunPerson(p.id)}>{p.name}</Chip>
                     ))}
+                    {!amortizeOn && people.length > 1 && (
+                      <button type="button" className="tpl-seeall"
+                        onClick={() => setFunAllocs([{ person: funPerson, amount: "" }])}>
+                        Split / partial amount…
+                      </button>
+                    )}
                   </div>
+                )}
+                {funOn && funAllocs !== null && (
+                  <FunAllocationField funAllocs={funAllocs} setFunAllocs={setFunAllocs}
+                    people={people} totalAmount={amountValue} />
                 )}
                 {travelOn && (
                   <TripField tripId={tripId} onChange={setTripId} trips={trips} onCreateTrip={onCreateTrip} />
@@ -334,6 +350,56 @@
     );
   }
 
+  // Per-person fun allocation rows for a partial/split fun tx: each row is a person picker
+  // (only people not already allocated) + a euro amount; unallocated remainder stays non-fun spend.
+  function FunAllocationField({ funAllocs, setFunAllocs, people, totalAmount }) {
+    const total = parseFloat(totalAmount) || 0;
+    const sum = funAllocs.reduce((s, a) => s + (parseFloat(a.amount) || 0), 0);
+    const remainder = Math.round((total - sum) * 100) / 100;
+    const over = sum > total + 1e-9;
+
+    const setRow = (idx, patch) => setFunAllocs(funAllocs.map((a, i) => (i === idx ? { ...a, ...patch } : a)));
+    const removeRow = (idx) => {
+      const next = funAllocs.filter((_, i) => i !== idx);
+      setFunAllocs(next.length ? next : null);
+    };
+    const addRow = () => {
+      const used = new Set(funAllocs.map((a) => a.person));
+      const next = people.find((p) => !used.has(p.id));
+      if (next) setFunAllocs([...funAllocs, { person: next.id, amount: "" }]);
+    };
+
+    return (
+      <div>
+        {funAllocs.map((a, idx) => {
+          const choices = people.filter((p) => p.id === a.person || !funAllocs.some((o) => o.person === p.id));
+          return (
+            <div key={idx} style={{ display: "flex", gap: 7, alignItems: "center", marginBottom: 6, flexWrap: "wrap" }}>
+              {choices.map((p) => (
+                <Chip key={p.id} pressed={a.person === p.id} onClick={() => setRow(idx, { person: p.id })}>{p.name}</Chip>
+              ))}
+              <input className="inp" type="number" min="0" step="0.01" value={a.amount} placeholder="0.00"
+                style={{ width: 90, height: 36 }} onChange={(e) => setRow(idx, { amount: e.target.value })} />
+              <button type="button" className="opt-tile" style={{ width: 32, height: 32, padding: 0 }}
+                onClick={() => removeRow(idx)} aria-label="Remove person">
+                <window.Icon name="x" size={14} />
+              </button>
+            </div>
+          );
+        })}
+        <div style={{ display: "flex", gap: 14, alignItems: "center", flexWrap: "wrap" }}>
+          {funAllocs.length < people.length && (
+            <button type="button" className="tpl-seeall" onClick={addRow}>+ Add person</button>
+          )}
+          <button type="button" className="tpl-seeall" onClick={() => setFunAllocs(null)}>Use whole amount</button>
+        </div>
+        <p className="toggle-caption" style={over ? { color: "var(--terra)" } : undefined}>
+          {over ? "Allocations exceed the total amount" : "€" + remainder.toFixed(2) + " not counted as fun"}
+        </p>
+      </div>
+    );
+  }
+
   // Horizontal-scroll strip of template tiles at the top of the sheet — Quick is an accelerator on the
   // one unified form, not a separate mode. "See all" expands the full grid inline.
   function TemplateStrip({ templates, selectedId, onPick, allOpen, setAllOpen }) {
@@ -394,6 +460,7 @@
     const defaultPerson = () => (store.people && store.people[0] && store.people[0].id) || "marti";
     const [funOn, setFunOn] = React.useState(false);
     const [funPerson, setFunPerson] = React.useState(defaultPerson());
+    const [funAllocs, setFunAllocs] = React.useState(null);
     const [travelOn, setTravelOn] = React.useState(false);
     const [tripId, setTripId] = React.useState(null);
     const [oneOff, setOneOff] = React.useState(false);
@@ -407,11 +474,15 @@
     React.useEffect(() => {
       if (open) {
         setTpl(null); setAllTplOpen(false); setAmount(""); setDraft(blank());
-        setFunOn(false); setFunPerson(defaultPerson()); setTravelOn(false); setTripId(null); setOneOff(false);
+        setFunOn(false); setFunPerson(defaultPerson()); setFunAllocs(null); setTravelOn(false); setTripId(null); setOneOff(false);
         setAmortizeOn(false); setAmortizeMonths(12); setVirtualOn(false);
         setSaveAsTemplate(false); setOptsOpen(false); setError(null);
       }
     }, [open]);
+
+    const cleanAllocs = () => funAllocs
+      .map((a) => ({ person: a.person, amount: Math.round(parseFloat(a.amount) * 100) / 100 }))
+      .filter((a) => a.amount > 0);
 
     const commit = (t) => {
       try {
@@ -421,7 +492,13 @@
           amount_eur: Math.round(parseFloat(t.amount) * 100) / 100, category: t.category,
           note: t.note || undefined, source: "manual",
         };
-        if (funOn) { tx.fun = true; tx.person = funPerson; }
+        if (funOn && funAllocs === null) { tx.fun = true; tx.person = funPerson; }
+        else if (funOn && funAllocs !== null) {
+          const clean = cleanAllocs();
+          if (clean.length && clean.reduce((s, a) => s + a.amount, 0) <= tx.amount_eur + 1e-9) {
+            tx.fun = true; tx.person = clean[0].person; tx.funAllocations = clean;
+          }
+        }
         if (travelOn) { tx.travel = true; tx.trip_id = tripId; }
         if (oneOff) tx.oneoff = true;
         if (amortizeOn && amortizeMonths >= 2) {
@@ -447,7 +524,12 @@
       setAmount(t.defaultAmount ? String(t.defaultAmount) : "");
     };
 
-    const valid = parseFloat(amount) > 0 && (!travelOn || !!tripId) && (!amortizeOn || amortizeMonths >= 2);
+    const allocsValid = funAllocs === null ? true : (() => {
+      const clean = cleanAllocs();
+      return clean.length > 0 && clean.length === funAllocs.length
+        && clean.reduce((s, a) => s + a.amount, 0) <= (parseFloat(amount) || 0) + 1e-9;
+    })();
+    const valid = parseFloat(amount) > 0 && (!travelOn || !!tripId) && (!amortizeOn || amortizeMonths >= 2) && allocsValid;
     const body = (
       <div>
         <TemplateStrip templates={store.templates} selectedId={tpl && tpl.id} onPick={applyTemplate}
@@ -466,7 +548,9 @@
         </div>
         <OptionsDisclosure
           open={optsOpen} setOpen={setOptsOpen}
-          funOn={funOn} setFunOn={setFunOn} funPerson={funPerson} setFunPerson={setFunPerson}
+          funOn={funOn} setFunOn={(v) => { setFunOn(v); if (!v) setFunAllocs(null); }}
+          funPerson={funPerson} setFunPerson={setFunPerson}
+          funAllocs={funAllocs} setFunAllocs={setFunAllocs} amountValue={amount}
           travelOn={travelOn} setTravelOn={setTravelOn}
           oneOff={oneOff} setOneOff={setOneOff} saveAsTemplate={saveAsTemplate} setSaveAsTemplate={setSaveAsTemplate}
           store={store} showOneOff={true} showSaveAsTemplate={true}
@@ -490,7 +574,10 @@
         </Button>
         {!valid && !error && (
           <p className="add-helper">
-            {travelOn && !tripId ? "Select a trip" : amortizeOn && amortizeMonths < 2 ? "Spread over at least 2 months" : "Enter an amount"}
+            {travelOn && !tripId ? "Select a trip"
+              : amortizeOn && amortizeMonths < 2 ? "Spread over at least 2 months"
+              : !allocsValid ? "Enter a valid split (each amount > 0, total ≤ the expense amount)"
+              : "Enter an amount"}
           </p>
         )}
       </div>
@@ -508,6 +595,7 @@
     const defaultPerson = () => (store && store.people && store.people[0] && store.people[0].id) || "marti";
     const [funOn, setFunOn] = React.useState(false);
     const [funPerson, setFunPerson] = React.useState(defaultPerson());
+    const [funAllocs, setFunAllocs] = React.useState(null);
     const [travelOn, setTravelOn] = React.useState(false);
     const [tripId, setTripId] = React.useState(null);
     const [oneOff, setOneOff] = React.useState(false);
@@ -520,6 +608,9 @@
         setDraft({ description: txn.description, amount: String(txn.amount_eur), category: txn.category, date: txn.date, note: txn.note || "" });
         setFunOn(!!txn.fun);
         setFunPerson(txn.person || defaultPerson());
+        setFunAllocs(Array.isArray(txn.funAllocations) && txn.funAllocations.length
+          ? txn.funAllocations.map((a) => ({ person: a.person, amount: String(a.amount) }))
+          : null);
         setTravelOn(!!txn.travel);
         setTripId(txn.trip_id || null);
         setOneOff(!!txn.oneoff);
@@ -531,7 +622,15 @@
     }, [txn]);
     const set = (patch) => setDraft((d) => ({ ...d, ...patch }));
     if (!draft) return <Sheet open={open} onClose={onClose} title="Edit" />;
-    const valid = parseFloat(draft.amount) > 0 && (!travelOn || !!tripId) && (!amortizeOn || amortizeMonths >= 2);
+    const cleanAllocs = () => (funAllocs || [])
+      .map((a) => ({ person: a.person, amount: Math.round(parseFloat(a.amount) * 100) / 100 }))
+      .filter((a) => a.amount > 0);
+    const allocsValid = funAllocs === null ? true : (() => {
+      const clean = cleanAllocs();
+      return clean.length > 0 && clean.length === funAllocs.length
+        && clean.reduce((s, a) => s + a.amount, 0) <= (parseFloat(draft.amount) || 0) + 1e-9;
+    })();
+    const valid = parseFloat(draft.amount) > 0 && (!travelOn || !!tripId) && (!amortizeOn || amortizeMonths >= 2) && allocsValid;
 
     const body = (
       <div>
@@ -549,7 +648,9 @@
         </div>
         <OptionsDisclosure
           open={optsOpen} setOpen={setOptsOpen}
-          funOn={funOn} setFunOn={setFunOn} funPerson={funPerson} setFunPerson={setFunPerson}
+          funOn={funOn} setFunOn={(v) => { setFunOn(v); if (!v) setFunAllocs(null); }}
+          funPerson={funPerson} setFunPerson={setFunPerson}
+          funAllocs={funAllocs} setFunAllocs={setFunAllocs} amountValue={draft.amount}
           travelOn={travelOn} setTravelOn={setTravelOn}
           oneOff={oneOff} setOneOff={setOneOff} saveAsTemplate={false} setSaveAsTemplate={() => {}}
           store={store} showOneOff={true} showSaveAsTemplate={false}
@@ -574,7 +675,14 @@
               const updated = { ...txn, description: draft.description, amount_eur: Math.round(parseFloat(draft.amount) * 100) / 100, category: draft.category, date: draft.date, note: draft.note || undefined };
               const newTs = tsForEdit(txn, draft.date);
               if (newTs != null) updated.ts = newTs; else delete updated.ts;
-              if (funOn) { updated.fun = true; updated.person = funPerson; } else { delete updated.fun; delete updated.person; }
+              if (funOn && funAllocs === null) {
+                updated.fun = true; updated.person = funPerson; delete updated.funAllocations;
+              } else if (funOn && funAllocs !== null) {
+                const clean = cleanAllocs();
+                if (clean.length && clean.reduce((s, a) => s + a.amount, 0) <= updated.amount_eur + 1e-9) {
+                  updated.fun = true; updated.person = clean[0].person; updated.funAllocations = clean;
+                }
+              } else { delete updated.fun; delete updated.person; delete updated.funAllocations; }
               if (travelOn) { updated.travel = true; updated.trip_id = tripId; } else { delete updated.travel; delete updated.trip_id; }
               if (oneOff) { updated.oneoff = true; } else { delete updated.oneoff; }
               if (amortizeOn && amortizeMonths >= 2) { updated.amortize_months = amortizeMonths; } else { delete updated.amortize_months; }

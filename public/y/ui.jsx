@@ -785,6 +785,9 @@ function TxTag({ label, color }) {
   function TxRow({ t, onClick, people }) {
     const c = YData.cat(t.category);
     const personName = t.person && people ? (people.find((p) => p.id === t.person) || {}).name : null;
+    const funLabel = Array.isArray(t.funAllocations) && t.funAllocations.length > 1
+      ? "Fun (split)"
+      : (personName ? `Fun (${personName})` : "Fun");
     const isManual = t.source !== 'revolut';
     return (
       <button className="txrow" onClick={onClick}>
@@ -802,7 +805,7 @@ function TxTag({ label, color }) {
         <span className="tx-main">
           <div className="tx-desc" style={{ display: 'flex', alignItems: 'center', gap: 5, minWidth: 0 }}>
             <span style={{ minWidth: 0, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{t.description}</span>
-            {t.fun && <TxTag label={personName ? `Fun (${personName})` : "Fun"} color="var(--amber)" />}
+            {t.fun && <TxTag label={funLabel} color="var(--amber)" />}
             {t.travel && <TxTag label="Travel" color={YData.cat('travel').color} />}
             {t.amortize_months && <TxTag label={(t.virtual ? "VIRTUAL " : "") + "×" + t.amortize_months + "mo"} color="var(--terra)" />}
           </div>

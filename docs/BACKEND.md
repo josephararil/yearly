@@ -7,10 +7,10 @@ that talks to these endpoints is documented in [ARCHITECTURE.md](ARCHITECTURE.md
 
 ## D1 schema (`migrations/`)
 
-Four tables, applied via `npx wrangler d1 migrations apply yearly-db --remote`. Nine migration
+Four tables, applied via `npx wrangler d1 migrations apply yearly-db --remote`. Ten migration
 files: `0001_init.sql`, `0002_revolut_fields.sql`, `0003_oneoff_flag.sql`,
 `0004_fix_updated_at_seconds.sql`, `0005_meta.sql`, `0006_travel_flag.sql`, `0007_trip_id.sql`,
-`0008_amortize.sql`, `0009_tx_ts.sql`.
+`0008_amortize.sql`, `0009_tx_ts.sql`, `0010_fun_allocations.sql`.
 
 > **⚠️ Wrangler migration tracking on remote is out of sync.** The remote `d1_migrations` table
 > doesn't record 0002–0004 as applied, so `wrangler d1 migrations apply --remote` will try to replay
@@ -54,6 +54,11 @@ transactions(id TEXT PK, date TEXT NOT NULL, description TEXT,
 --              startedDate; manual writes logging-time/local-noon. Pipeline-authoritative, so a
 --              re-import backfills it onto date-only legacy rows.)
 
+-- 0010_fun_allocations.sql
+-- fun_allocations TEXT  (nullable; JSON-serialised array of {person, amount} that refines the
+--                        fun-budget overlay for partial/split transactions — see README "Partial
+--                        and split fun allocation". User-owned, like fun/person.)
+
 -- 0005_meta.sql (pipeline-written key/value store)
 meta(key TEXT PRIMARY KEY, value INTEGER NOT NULL)
 -- Populated only by the pipeline. Current rows:
@@ -72,7 +77,9 @@ settings(id INTEGER PK CHECK(id=1), blob TEXT, updated_at INTEGER)
 `amount_eur` is stored as `REAL` (mirrors the JS field directly). `fun`, `deleted`, `e_commerce`,
 `oneoff`, `travel`, and `virtual` are `0`/`1` integers. `trip_id` is a nullable `TEXT` (no FK — trips
 live in the settings blob, not a table). `amortize_months` is a nullable `INTEGER` (int ≥ 2, or
-`NULL` when the tx isn't amortized). `updated_at` is a **server-stamped ms epoch** on every write.
+`NULL` when the tx isn't amortized). `fun_allocations` is a nullable `TEXT` holding a JSON-serialised
+`{person, amount}[]` array, or `NULL` when the tx isn't split/partial. `updated_at` is a
+**server-stamped ms epoch** on every write.
 `"migrations_dir": "migrations"` is set in `wrangler.jsonc`'s `d1_databases[0]`.
 
 ## API endpoints (`src/index.js`)
@@ -105,7 +112,8 @@ Key implementation notes:
   `description`, `amount_eur`, `source`, `original_amount`, `original_currency`, `revolut_category`,
   `merchant_mcc`, `merchant_city`, `merchant_country`, `merchant_logo`, `card_label`, `tx_type`,
   `e_commerce`, `fee_eur`, `updated_at`) and never touches user-owned columns (`category`, `fun`,
-  `person`, `note`, `deleted`, `oneoff`, `travel`, `trip_id`, `amortize_months`, `virtual`) —
+  `person`, `note`, `deleted`, `oneoff`, `travel`, `trip_id`, `amortize_months`, `virtual`,
+  `fun_allocations`) —
   mirroring `revolut_clean.py`'s `PRESERVE_ON_CONFLICT`. New ids still get every column set from the
   incoming row (a fresh import cannot arrive pre-amortized). Same body
   validation and `txToBinds` reuse as `POST /api/transactions`; the batch also stamps

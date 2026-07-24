@@ -238,12 +238,12 @@
 
   // ---- computeStats helpers ----
 
-  function aggregateByCategory(upto, spent) {
+  function aggregateByCategory(upto, spent, valueOf = (t) => t.amount_eur) {
     const byCat = {};
     const byCatCount = {};
     upto.forEach((t) => {
       const cid = window.YData.normalizeCategory(t.category);
-      byCat[cid] = (byCat[cid] || 0) + t.amount_eur;
+      byCat[cid] = (byCat[cid] || 0) + valueOf(t);
       byCatCount[cid] = (byCatCount[cid] || 0) + 1;
     });
     const catList = Object.entries(byCat)
@@ -275,6 +275,19 @@
     return rate;
   }
 
+  // funAllocations refines the fun overlay for partial/split transactions; absent means the
+  // whole amount goes to t.person (or none, if t.fun is falsy).
+  function funTotal(t) {
+    if (Array.isArray(t.funAllocations) && t.funAllocations.length)
+      return t.funAllocations.reduce((s, a) => s + (a.amount || 0), 0);
+    return t.fun ? t.amount_eur : 0;
+  }
+  function funShareOf(t, personId) {
+    if (Array.isArray(t.funAllocations) && t.funAllocations.length)
+      return t.funAllocations.filter((a) => a.person === personId).reduce((s, a) => s + (a.amount || 0), 0);
+    return (t.fun && t.person === personId) ? t.amount_eur : 0;
+  }
+
 // Linear fun extrapolation, capped by what the allowance system permits this year:
 // YTD fun spend + positive carryover balances + accruals still to come through December.
 function funProjectionFor(store, year, doy, funSpentYTD, asOfStr) {
@@ -289,8 +302,8 @@ function funProjectionFor(store, year, doy, funSpentYTD, asOfStr) {
       ym = m === 12 ? (y + 1) + "-01" : y + "-" + String(m + 1).padStart(2, "0");
     }
     const spentAll = (store.transactions || [])
-      .filter((t) => t.fun && t.person === p.id && t.date <= asOfStr && t.date >= p.startMonth + "-01")
-      .reduce((a, t) => a + t.amount_eur, 0);
+      .filter((t) => t.fun && t.date <= asOfStr && t.date >= p.startMonth + "-01")
+      .reduce((a, t) => a + funShareOf(t, p.id), 0);
     balances += accrued - spentAll + (p.balanceAdjustment || 0);
     for (let m = 1; m <= 12; m++) {
       const ymm = String(year) + "-" + String(m).padStart(2, "0");
@@ -341,7 +354,7 @@ function computeStats(store, year, asOfDate, staleDays = 0) {
       }
     }
     const mainTarget = ceiling - funPlanAnnual;
-    const funSpent = isFuture ? 0 : upto.filter((t) => t.fun).reduce((a, t) => a + t.amount_eur, 0);
+    const funSpent = isFuture ? 0 : upto.filter((t) => t.fun).reduce((a, t) => a + funTotal(t), 0);
     const mainSpent = spent - funSpent;
 
     // Lump-sum winsorization: transactions above T.LUMP_PCT of ceiling, or explicitly
@@ -599,20 +612,20 @@ function computeStats(store, year, asOfDate, staleDays = 0) {
         const [y, m] = ym.split("-").map(Number);
         ym = m === 12 ? (y + 1) + "-01" : y + "-" + String(m + 1).padStart(2, "0");
       }
-      const allFunTxns = (store.transactions || []).filter((t) => t.fun && t.person === p.id && t.date <= asOfStr && t.date >= p.startMonth + "-01");
-      const spentAllTime = allFunTxns.reduce((a, t) => a + t.amount_eur, 0);
+      const allFunTxns = (store.transactions || []).filter((t) => t.fun && t.date <= asOfStr && t.date >= p.startMonth + "-01");
+      const spentAllTime = allFunTxns.reduce((a, t) => a + funShareOf(t, p.id), 0);
       const balance = accrued - spentAllTime + (p.balanceAdjustment || 0);
       const monthlyRate = rateForMonth(p, currentYM);
       const usedThisMonth = allFunTxns
         .filter((t) => t.date.slice(0, 7) === currentYM)
-        .reduce((a, t) => a + t.amount_eur, 0);
+        .reduce((a, t) => a + funShareOf(t, p.id), 0);
       return { id: p.id, name: p.name, balance, monthlyRate, usedThisMonth, spentAllTime };
     });
 
     // Fun figures for the current year
     const yearStr = String(year);
     const funYearTxns = (store.transactions || []).filter((t) => t.fun && t.date.slice(0, 4) === yearStr && t.date <= asOfStr);
-    const funSpentYTD = funYearTxns.reduce((a, t) => a + t.amount_eur, 0);
+    const funSpentYTD = funYearTxns.reduce((a, t) => a + funTotal(t), 0);
     const realYear = asOf.getFullYear();
     const isCurrent = year === realYear;
     const complete = year < realYear;
@@ -620,7 +633,7 @@ function computeStats(store, year, asOfDate, staleDays = 0) {
     // Fun projection capped by the allowance system (accruals + carryover balances)
     const funProjection = isFuture ? 0 : complete ? funSpentYTD : funProjectionFor(store, year, doy, funSpentYTD, asOfStr);
 
-    const { catList: funCatList } = aggregateByCategory(funYearTxns, funSpentYTD);
+    const { catList: funCatList } = aggregateByCategory(funYearTxns, funSpentYTD, funTotal);
 
     return { people: personData, funSpentYTD, funProjection, funCatList };
   }
@@ -1099,7 +1112,7 @@ function computeStats(store, year, asOfDate, staleDays = 0) {
     MONTHS, MONTHS_LONG, eur0, eur2, eurAuto, signedEur, pct, signedPct,
     dayOfYear, daysInYear, parseDate, localISO, fmtDateShort, fmtDateLong, yearTxns,
     cumulativeByDay, priorYearCumulative, burnDownSeries, aggregateByCategory, expandAmortized, amortizationBreakdown,
-    rateForMonth, computeStats, computeFun, computeTravel, impliedDraw, drawZone, projectionAsOf, projectionHistory, buildCallouts,
+    rateForMonth, funTotal, funShareOf, computeStats, computeFun, computeTravel, impliedDraw, drawZone, projectionAsOf, projectionHistory, buildCallouts,
     requiredDailyToHit, dailyHeadroom, neededMonthlyCap, projectedMonthEnd, monthEndBand,
     medianDailySpendYTD, historicalMonthRange,
     computeScenario, computeScenarios, checkTriggers,
