@@ -39,6 +39,7 @@ function rowToTx(row) {
     trip_id:           row.trip_id,
     amortize_months:   row.amortize_months,
     virtual:           row.virtual,
+    fun_allocations:   row.fun_allocations,
   };
 }
 
@@ -72,6 +73,7 @@ function txToBinds(tx, now) {
     tx.trip_id      ?? null,
     tx.amortize_months ?? null,
     tx.virtual      ? 1 : 0,
+    typeof tx.fun_allocations === "string" ? tx.fun_allocations : null,
     now,
   ];
 }
@@ -164,8 +166,8 @@ export default {
              original_amount,original_currency,deleted,
              revolut_category,merchant_mcc,merchant_city,merchant_country,
              merchant_logo,card_label,tx_type,e_commerce,fee_eur,
-             oneoff,travel,trip_id,amortize_months,virtual,updated_at)
-          VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)
+             oneoff,travel,trip_id,amortize_months,virtual,fun_allocations,updated_at)
+          VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)
           ON CONFLICT(id) DO UPDATE SET
             date=excluded.date, ts=excluded.ts, description=excluded.description,
             amount_eur=excluded.amount_eur, category=excluded.category,
@@ -188,6 +190,7 @@ export default {
             trip_id=excluded.trip_id,
             amortize_months=excluded.amortize_months,
             virtual=excluded.virtual,
+            fun_allocations=excluded.fun_allocations,
             updated_at=excluded.updated_at
         `;
 
@@ -222,8 +225,8 @@ export default {
              original_amount,original_currency,deleted,
              revolut_category,merchant_mcc,merchant_city,merchant_country,
              merchant_logo,card_label,tx_type,e_commerce,fee_eur,
-             oneoff,travel,trip_id,amortize_months,virtual,updated_at)
-          VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)
+             oneoff,travel,trip_id,amortize_months,virtual,fun_allocations,updated_at)
+          VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)
           ON CONFLICT(id) DO UPDATE SET
             date=excluded.date, ts=excluded.ts, description=excluded.description,
             amount_eur=excluded.amount_eur,

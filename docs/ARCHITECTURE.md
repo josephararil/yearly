@@ -63,6 +63,13 @@ formula, status thresholds, and each callout detector.
   it can't disagree with the headline projection. Leap-safe via `stats.daysInYear`.
 - `rateForMonth(person, ym)` → number (latest applicable rate for a person in a "YYYY-MM";
   0 before startMonth).
+- `funTotal(t)` → number — a transaction's total fun portion: sum of `t.funAllocations[].amount` if
+  present, else `t.amount_eur` if `t.fun`, else 0.
+- `funShareOf(t, personId)` → number — one person's fun credit on a transaction: sum of their
+  `funAllocations` entries if present, else the whole `t.amount_eur` if `t.fun && t.person ===
+  personId`, else 0. Every fun read-site filters on `t.fun` (unchanged) and sums via these two
+  helpers instead of raw `t.amount_eur`, so partial/split allocations refine the decomposition
+  without touching `spent`/`projection` (which always sum full `amount_eur`).
 - `computeFun(store, asOfDate?)` → per-person fun ledger (see below).
 - `computeTravel(store, asOfDate?)` → family-wide travel ledger (see below).
 - `impliedDraw(store, projection)` → number | null — the implied portfolio draw rate,
@@ -261,7 +268,16 @@ Exported, uses `store.currentYear` for YTD figures. Returns: `people[]` (per-per
 §6.2), `funCatList` (category breakdown). **Balance** only counts fun txns with `t.date >=
 p.startMonth + "-01"` — pre-startMonth transactions are excluded (no matching accrual). **Year
 classification** (current / complete / future) is relative to `asOf.getFullYear()`, not `new
-Date().getFullYear()`, so historical `asOfDate` values classify consistently.
+Date().getFullYear()`, so historical `asOfDate` values classify consistently. Per-person sums
+(`spentAllTime`, `usedThisMonth`) use `funShareOf(t, p.id)` and `funSpentYTD` uses `funTotal(t)`, so
+a `funAllocations`-bearing transaction credits only its per-person portions, not the whole
+`amount_eur`, to each person's ledger — see README "Partial and split fun allocation".
+
+`aggregateByCategory(upto, spent, valueOf = (t) => t.amount_eur)` takes an optional per-transaction
+value accessor; `computeFun` passes `funTotal` when building `funCatList` so the fun category bars
+sum to `funSpentYTD` (the fun **portion** of each transaction, bucketed by that transaction's own
+category) rather than each transaction's full amount. All other callers omit `valueOf` and get the
+original full-`amount_eur` behavior.
 
 ### `computeTravel(store, asOfDate?)`
 

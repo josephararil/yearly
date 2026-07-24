@@ -135,7 +135,9 @@ category icon (colored square + SVG icon, `CatIcon`-style inline) if absent or o
 renders inline next to the title so tagged rows are scannable at a glance: Travel shows the Travel
 category's blue "Travel" (per-trip detail is left to the edit sheet); Fun shows amber
 `"Fun (person)"` when `t.person` resolves to a name, else plain `"Fun"` — the assigned person is no
-longer repeated in the `tx-meta` line below.
+longer repeated in the `tx-meta` line below. When `t.funAllocations` has more than one person, the
+tag reads `"Fun (split)"` instead; the row's amount always shows the transaction's full
+`amount_eur`, never the fun portion.
 
 ### `Toast`
 
@@ -159,8 +161,11 @@ unused; the full fun UI lives on the Analysis → Fun tab (`FunTab`).
 - Fun category breakdown: catbar-* rows fed from `fun.funCatList` (non-interactive). Each category
   row is followed by its individual transactions (description + amount, sans 11px / mono 11px,
   sorted newest-first), fetched by filtering `store.transactions` for `fun:true` + current year +
-  matching normalised category. The catbar-row `borderBottom` is suppressed when transactions
-  follow; the transaction block carries the hairline instead.
+  matching normalised category. The amount shown is the transaction's fun **portion**
+  (`YCalc.funTotal(t)`), not its full `amount_eur`; the person label joins the allocated people's
+  names (e.g. "Joseph / Marti") when `t.funAllocations` is set, else the single owner's name. The
+  catbar-row `borderBottom` is suppressed when transactions follow; the transaction block carries
+  the hairline instead.
 
 Internal: `WishlistAddSheet` (name + price + owner Chip picker), `PersonCard` (stats + wishlist).
 
@@ -596,9 +601,25 @@ TRAVEL · ONE-OFF · AMORTIZE · TEMPLATE); expands to a row of icon tiles (`.op
 per flag — entertainment/travel/calendar/clock/layers icons), each toggled by tapping the tile (active
 state = terra border/tint + a small check badge, no separate switch control). Captions for whichever
 tiles are active stack below the row (`.opt-details`), each stating the consequence:
-- **Fun budget** — reveals a Chip owner picker (Joseph/Marti) below the tile row when on. `commit()`/
-  `onSave()` write `fun:true` + `person`; `EditSheet` pre-populates from `txn.fun`/`txn.person` and
-  deletes both keys when toggled off.
+- **Fun budget** — reveals a Chip owner picker (Joseph/Marti) below the tile row when on, plus a
+  "Split / partial amount…" link (hidden while Amortize is on). In simple mode (the default),
+  `commit()`/`onSave()` write `fun:true` + `person`, exactly as before. Tapping the link switches
+  the sheet's `funAllocs` state from `null` to an array and renders `FunAllocationField` instead:
+  one row per allocation (a person Chip picker limited to people not already chosen, plus a euro
+  `<input type="number">`), a "+ Add person" row (up to `store.people.length`), a per-row remove
+  (×) — removing the last row returns to simple mode — a "Use whole amount" link to collapse back
+  discarding the allocations, and a live caption showing the unallocated remainder or an
+  over-allocation error. On save, amounts are parsed to cents and blank/≤0 rows dropped; if the
+  cleaned list is non-empty and its sum is ≤ the transaction total, `commit()`/`onSave()` write
+  `fun:true`, `person:<first allocation's person>`, and `funAllocations:<cleaned list>` instead of
+  the single-person write. `valid` additionally requires, in split mode, every row have an amount
+  `> 0` and the sum be ≤ the total (footer helper: "Enter a valid split…"). The Amortize tile is
+  disabled whenever a split is active (caption "Turn off split to amortize") since allocation
+  euros are absolute and don't scale per amortized slice. `EditSheet` pre-populates `funAllocs`
+  from `txn.funAllocations` (stringifying each amount for the input) when present, else `null`, and
+  deletes `funAllocations` (along with `fun`/`person`) whenever fun is toggled off or the sheet
+  reverts to simple mode. See README "Partial and split fun allocation" for the data model and
+  `docs/ARCHITECTURE.md` for the `funTotal`/`funShareOf` read-side helpers.
 - **Travel budget** — family-wide (no owner picker), and requires a specific trip: when on,
   `TripField` renders below the caption (collapsed "TRIP — <name or 'Select a trip'>" row, modeled on
   `CategoryField`). Expanded body shows the 3 most-recent trips (sort key `startDate || createdAt`,

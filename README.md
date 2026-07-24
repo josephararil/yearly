@@ -251,6 +251,26 @@ The balance is **all-time and as-of-now** — it doesn't change when you view a 
 go negative** ("buy now, earn it back"); the UI shows negatives explicitly and never clamps them
 (progress bars do clamp to 0–100%).
 
+### Partial and split fun allocation
+
+A fun-tagged transaction normally credits its **whole** `amount_eur` to one person. An optional
+`funAllocations: [{ person, amount }]` array refines this for the two cases that don't fit that
+model: a bill where only part of the amount is fun (the rest is ordinary household spend), or a
+bill split across both people.
+
+- **Absent** → today's behavior: the whole amount goes to `t.person`.
+- **Present** → source of truth. Person *p*'s fun credit on the transaction is the sum of their
+  allocations; the transaction's total fun portion is the sum of all allocations; whatever's left
+  of `amount_eur` after that is ordinary (non-fun) household spend.
+- Writing allocations also sets `t.fun = true` and `t.person` to the first allocation's person, so
+  older code paths that only check those two fields still degrade to a sensible single-person
+  attribution.
+- Invariants (enforced in the Add/Edit sheet): each allocation amount is `> 0`; the allocations sum
+  to at most `amount_eur`; at most one allocation per person; mutually exclusive with Amortize.
+
+This only refines the fun/main **decomposition** — `spent`/`projection` still sum the transaction's
+full `amount_eur` regardless of how (or whether) it's split.
+
 ### Dated rate schedule
 
 `person.rates` is a **forward-only** sorted list of `{ from: "YYYY-MM", amount }`. Changing the
@@ -644,6 +664,7 @@ Persisted to `localStorage` under `yearly:store:v1` (and mirrored to D1 via sync
   note?: string;
   fun?: true;                   // present on fun-budget tx only
   person?: "joseph" | "marti";  // required when fun === true
+  funAllocations?: { person: "joseph" | "marti"; amount: number }[]; // optional partial/split fun refinement — see "Partial and split fun allocation"
   travel?: true;                // present on travel-budget tx only (family-wide, no owner)
   trip_id?: string;             // references a Trip.id; present iff travel === true
   oneoff?: true;                // excluded from the trend rate (still counts in spent)

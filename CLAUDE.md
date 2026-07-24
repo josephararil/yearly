@@ -120,6 +120,11 @@ The essentials every session needs:
 - `spent` / `projection` (in stats) — **total household spend (main + fun)**; measured vs `ceiling`.
 - `mainSpent` / `funSpent` — decomposition fields for the Fun tab and ceiling-callout advice only.
 - `funProjection` — capped fun projection (allowance-limited); used in the Fun tab and the "trim fun" callout advice.
+- `t.funAllocations` — optional `{person, amount}[]` on a transaction that refines the fun/main
+  decomposition for a partial or split fun spend (absent = whole amount to `t.person`, as before).
+  `YCalc.funTotal(t)`/`YCalc.funShareOf(t, personId)` are the only read sites that need to know about
+  it; `spent`/`projection` always sum the transaction's full `amount_eur` regardless. See README
+  "Partial and split fun allocation".
 - **Travel budget** — a second, family-wide overlay that mirrors fun but with a single household
   allowance (`store.travel = { rates[], startMonth, balanceAdjustment }`, no per-person split) and
   its own transaction tag `t.travel`. `computeTravel(store)` returns the all-time `balance`
